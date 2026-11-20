@@ -1,0 +1,5 @@
+# The bake's NumPy for published builds, pinned by SHA-256 (the cp314 macOS arm64 wheels); .github/workflows/release.yml installs
+# it with --require-hashes, so every published stock is baked with the same NumPy as the owner's .venv.
+numpy==2.5.3 \
+    --hash=sha256:012e66aca395d795496446e52aeeb5866312a5d4d3f27da270e5a0b43f70dc5c \
+    --hash=sha256:adc1ada2662f8a5f960b8a10d9986897e7499ef07e06d4cfe7197f8cce923c07

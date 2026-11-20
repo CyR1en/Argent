@@ -26,8 +26,8 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 45
     concurrency:
-      group: build-${{ github.ref }}
-      # A newer push to a branch replaces its build; a tag's build always finishes.
+      group: build-${{ github.event_name }}-${{ github.ref }}
+      # A newer push to a branch replaces its build; a tag's build always finishes. Run workflow never cancels a nightly.
       cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
     env:
       # The Xcode the app is built with locally; the image's default is older.
@@ -36,6 +36,7 @@ jobs:
       kind: ${{ steps.kind.outputs.kind }}
       version: ${{ steps.dmg.outputs.version }}
       artifact: ${{ steps.dmg.outputs.artifact }}
+      previous_tag: ${{ steps.kind.outputs.previous_tag }}
     steps:
       # The whole history and its tags: the version is the newest v* tag, the build number the commit count.
       - uses: actions/checkout@v7
@@ -52,7 +53,12 @@ jobs:
                 echo "::error::tag $GITHUB_REF_NAME is not vN.N.N or vN.N.N-suffix"; exit 1
               fi
               kind=release
-              echo "ARGENT_VERSION=$version" >> "$GITHUB_ENV" ;;
+              echo "ARGENT_VERSION=$version" >> "$GITHUB_ENV"
+              # The release's notes start from the newest well-formed v* tag before this commit, never from nightly.
+              previous=$(git -c versionsort.suffix=- tag --merged "$GITHUB_SHA^" --list 'v[0-9]*' --sort=-version:refname \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' | head -n 1)
+              echo "previous_tag=$previous" >> "$GITHUB_OUTPUT"
+              echo "previous release: ${previous:-none}" ;;
             push:refs/heads/main) kind=nightly ;;
             *) kind=check ;;
           esac
@@ -72,11 +78,11 @@ jobs:
           xcodebuild -version
           swift --version
 
-      # The stock bake's NumPy; build-dmg.sh makes dmgbuild's own venv from this Python.
+      # The stock bake's NumPy, pinned by hash (bake/requirements.lock); build-dmg.sh makes dmgbuild's own venv from this Python.
       - name: Python environment
         run: |
           python -m venv .venv
-          .venv/bin/pip install --quiet --disable-pip-version-check numpy
+          .venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r bake/requirements.lock
 
       # The certificate goes into a keychain of the run's own, which codesign may use without asking. A published build
       # must have it, so that every copy has the same identity; a pull request from a fork has no secrets and goes ad-hoc.
@@ -141,44 +147,69 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: publish-${{ needs.build.outputs.kind }}
+      # One queue a ref: nightlies publish in order, and tags pushed together each publish.
+      group: publish-${{ github.ref }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       KIND: ${{ needs.build.outputs.kind }}
       VERSION: ${{ needs.build.outputs.version }}
+      PREVIOUS_TAG: ${{ needs.build.outputs.previous_tag }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.artifact }}
           path: dist
 
+      # One line a paragraph: GitHub shows a release body's line breaks. The nightly's notes are rewritten with each publish, so
+      # they carry its checksum; a release's stay as first published, so its checksum is only in the .sha256 beside the image.
       - name: Release notes
         run: |
           {
             if [[ $KIND == nightly ]]; then
-              echo "The newest build of \`main\`, at ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d)). It is replaced by every push to \`main\`."
+              echo "The newest build of \`main\`, at ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d)). Every push to \`main\` replaces it."
               echo
             fi
-            echo "**Install:** open the disk image and drag Argent to Applications. Argent is self-signed, not notarized, so the"
-            echo "first time it opens, macOS asks: allow it in System Settings › Privacy & Security › Open Anyway."
+            echo "**Install:** open the disk image and drag Argent to Applications. Argent is self-signed, not notarized, so the first time it opens, macOS asks: allow it in System Settings › Privacy & Security › Open Anyway."
             echo
-            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable,"
-            echo "Subject uses Vision, and Remove has no model."
-            echo
-            echo '```'
-            cat dist/*.sha256
-            echo '```'
+            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable, Subject uses Vision, and Remove has no model."
+            if [[ $KIND == nightly ]]; then
+              echo
+              echo '```'
+              cat dist/*.sha256
+              echo '```'
+            fi
           } > notes.md
           cat notes.md
 
+      # Updated in place, so the nightly's link never goes missing: the tag is moved to this commit first, then the assets are
+      # replaced and the title and notes rewritten. A run of an older commit (a re-run) leaves the nightly to main's newest.
       - name: Publish the nightly
         if: env.KIND == 'nightly'
         run: |
-          gh release delete nightly --yes --cleanup-tag || true
-          gh release create nightly dist/* --prerelease --latest=false --target "$GITHUB_SHA" \
-            --title "Nightly $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})" --notes-file notes.md
+          head=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
+          if [[ $head != "$GITHUB_SHA" ]]; then
+            echo "main is at ${head::7}, not ${GITHUB_SHA::7}: its own run publishes the nightly"
+            exit 0
+          fi
+          if gh api "repos/$GH_REPO/git/ref/tags/nightly" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh api -X POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/nightly -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          title="Nightly $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})"
+          if gh release view nightly > /dev/null 2>&1; then
+            gh release upload nightly dist/* --clobber
+            gh release edit nightly --title "$title" --notes-file notes.md --prerelease --latest=false --draft=false
+          else
+            gh release create nightly dist/* --verify-tag --prerelease --latest=false --title "$title" --notes-file notes.md
+          fi
+          tagged=$(gh api "repos/$GH_REPO/git/ref/tags/nightly" --jq .object.sha)
+          if [[ $tagged != "$GITHUB_SHA" ]]; then
+            echo "::error::the nightly tag is at $tagged, not $GITHUB_SHA"
+            exit 1
+          fi
 
       - name: Publish the release
         if: env.KIND == 'release'
@@ -186,8 +217,10 @@ jobs:
           tag=v$VERSION
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --draft=false
           else
-            prerelease=$([[ $VERSION == *-* ]] && echo --prerelease || true)
-            gh release create "$tag" dist/* --verify-tag --title "Argent $VERSION" \
-              --notes-file notes.md --generate-notes $prerelease
+            args=(--verify-tag --title "Argent $VERSION" --notes-file notes.md)
+            if [[ $VERSION == *-* ]]; then args+=(--prerelease); fi
+            if [[ -n $PREVIOUS_TAG ]]; then args+=(--generate-notes --notes-start-tag "$PREVIOUS_TAG"); fi
+            gh release create "$tag" dist/* "${args[@]}"
           fi

@@ -60,14 +60,19 @@ cp "$bin/Argent" "$app/Contents/MacOS/Argent"
 # Remove's helper, beside the app's binary: the app starts it as its child when the model is wanted (docs/remove-plan.md, 4.5).
 cp "$bin/argent-remove" "$app/Contents/MacOS/argent-remove"
 cp App/Info.plist "$app/Contents/Info.plist"
-# The version, from the tag (.github/workflows/dmg.yml): ARGENT_VERSION when set (CI sets it from the v* tag it builds), else the
-# newest v* tag behind HEAD without its v, else App/Info.plist's. CFBundleShortVersionString takes its numbers only (0.2.0 of
-# 0.2.0-beta.1); ArgentVersion keeps the whole. CFBundleVersion is the commit count, which only grows along main. ArgentChannel
-# is release, nightly or dev (ARGENT_CHANNEL, dev by default), and ArgentCommit the commit built; AboutView shows them.
+# The version, from the tag (.github/workflows/release.yml): ARGENT_VERSION when set (CI sets it from the v* tag it builds), else
+# the highest well-formed vN.N.N[-suffix] tag behind HEAD without its v (a pre-release below its release; a malformed tag is
+# passed over), else App/Info.plist's. CFBundleShortVersionString takes its numbers only (0.2.0 of 0.2.0-beta.1); ArgentVersion
+# keeps the whole. CFBundleVersion is the commit count, which only grows along main. ArgentChannel is release, nightly or dev
+# (ARGENT_CHANNEL, dev by default), and ArgentCommit the commit built; AboutView shows them.
 version=${ARGENT_VERSION:-}
 if [[ -z $version ]]; then
-  tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
-  version=${tag#v}
+  for tag in ${(f)"$(git -c versionsort.suffix=- tag --merged HEAD --list 'v[0-9]*' --sort=-version:refname 2>/dev/null)"}; do
+    if [[ $tag =~ '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$' ]]; then
+      version=${tag#v}
+      break
+    fi
+  done
 fi
 [[ -n $version ]] || version=$(plutil -extract CFBundleShortVersionString raw App/Info.plist)
 short=${version%%-*}
