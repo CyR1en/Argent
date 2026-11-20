@@ -135,6 +135,12 @@ final class SmartMasks {
         defaults.set(kept, forKey: Self.keptKey)
     }
 
+    /// The models changed under the running app (the Subject models were downloaded): ask the engine again.
+    func modelsChanged() {
+        cachedAvailability = [:]
+        cachedPins = nil
+    }
+
     /// Stops every run and forgets the session's: another roll, or quitting.
     func reset() {
         inference?.cancelAll()
@@ -222,9 +228,10 @@ struct SmartRowStatus: Equatable, Sendable {
                        detail: "Finding \(kind.object) stopped before it finished. Until it is found the mask changes nothing, and the frame cannot be developed.")
     }
 
-    /// A seed Vision made because a Subject model is absent from this build (`AppleSegmentation.fallback`): the row says so, quietly. Once the models are back the seed is stale and Update is offered.
+    /// A seed Vision made, in an earlier build, because a Subject model was absent (its provenance's `fallback`; no build makes one now): the row says so,
+    /// quietly. With the models here the seed is stale and Update is offered.
     static func visionFallback(_ kind: SmartKind) -> SmartRowStatus {
-        SmartRowStatus(text: "Found by Vision", detail: "This build of Argent was made without the subject models, so Vision found this selection, with the edge it always had.")
+        SmartRowStatus(text: "Found by Vision", detail: "Argent did not have the Subject models when this was found, so Vision found this selection, with the edge it always had.")
     }
 
     static func stale(_ kind: SmartKind) -> SmartRowStatus {

@@ -16,10 +16,10 @@ extension RollModel {
         smartMasks.availability(of: kind) ?? .unavailable("Smart masks need the film previews, which need a stock.")
     }
 
-    /// The queue the app makes: the film previews' input pictures and the bundled models, whose ledger sits beside the recipes.
+    /// The queue the app makes: the film previews' input pictures, and the app's models and the downloaded Subject models, whose ledger sits beside the recipes.
     func makeMaskInference() -> MaskInference? {
         guard let films else { return nil }
-        let models = MaskModels(ledgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
+        let models = MaskModels(appLedgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
         return MaskInference(engine: BundledSmartMasks(films: films, models: models, app: Self.software), turns: films.decodeTurns)
     }
 

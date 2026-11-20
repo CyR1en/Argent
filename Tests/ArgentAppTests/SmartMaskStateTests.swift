@@ -564,6 +564,11 @@ final class SessionSmartEngine: SmartMaskEngine, @unchecked Sendable {
         #expect(MaskTileAvailability.of(.sky, frame: "Balancing roll…", smart: noModels) == .unavailable(noModels.reason!))
         #expect(MaskTileAvailability.of(.person, frame: "Balancing roll…", smart: .available) == .waiting("Balancing roll…"))
         #expect(MaskTileAvailability.of(.subject, frame: nil, smart: nil).reason != nil)
+        // Without the Subject models the tile offers them, whatever the frame, and a click on it opens their screen rather than making a mask.
+        let needs = SmartAvailability.needsModels(BundledSmartMasks.needsModels(.subject))
+        #expect(MaskTileAvailability.of(.subject, frame: "Balancing roll…", smart: needs) == .offersModels(needs.reason!))
+        #expect(MaskTileAvailability.of(.background, frame: nil, smart: needs).isEnabled && !MaskTileAvailability.of(.background, frame: nil, smart: needs).isLive)
+        #expect(!MaskTileAvailability.of(.sky, frame: nil, smart: noModels).isEnabled)
     }
 
     @Test func aBuildWithoutTheModelsSaysWhySkyIsUnavailable() async throws {

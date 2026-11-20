@@ -123,8 +123,12 @@ done
 if [[ -d $app/Contents/Resources/Models && -d build/models/licences ]]; then
   cp -R build/models/licences "$app/Contents/Resources/Models/Licences"
 fi
+# The models' licence texts, in every build: the Subject models' screen shows them before the user agrees to download them
+# (SubjectModelsSheet), so they are there in a build without the models too.
+rm -rf "$app/Contents/Resources/Model Licences"
+cp -R scripts/models/licences "$app/Contents/Resources/Model Licences"
 if (( ${#missing} )); then
-  echo "note: not in build/models: ${(j:, :)missing}. The app builds; Sky says it is unavailable, and Subject falls back to Vision." >&2
+  echo "note: not in build/models: ${(j:, :)missing}. The app builds; Sky says it is unavailable, and Subject and Background offer the Subject models' download." >&2
   echo "      Build the models with scripts/convert-da3-sky.zsh, scripts/convert-eomt.zsh, scripts/convert-s3od.zsh and scripts/convert-vitmatte.zsh (scripts/README.md)." >&2
 fi
 # Remove's four graphs and the prompt's fixed states (docs/remove-plan.md, 4.5), built once by scripts/convert-objectclear.zsh into

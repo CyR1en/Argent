@@ -243,8 +243,11 @@ public final class MaskModels: @unchecked Sendable {
     /// The app's own models.
     public static var bundledDirectory: URL? { Bundle.main.resourceURL?.appendingPathComponent("Models", isDirectory: true) }
 
-    /// Where the models are looked for; `nil` when there is no such folder.
-    public let directory: URL?
+    /// Where the models are looked for, in order: the app's own folder, then the downloaded models' (`SubjectModelPack`). A model is taken from
+    /// the first folder that holds its file.
+    public let directories: [URL]
+    /// The first folder looked in, `nil` when there is none.
+    public var directory: URL? { directories.first }
     /// The ledger of compiled copies: for each model, the file, macOS build and options it was last prepared for, and the bookmark
     /// that names that compiled copy (`AIModel.bookmarkData`, about 181 bytes).
     public let ledgerFile: URL
@@ -255,11 +258,21 @@ public final class MaskModels: @unchecked Sendable {
     private let lock = NSLock()
     private var preparing: Task<MaskPreparationReport, any Error>?
 
-    /// `directory` holds `<model>.aimodel` and `<model>.manifest.json` for each model; `ledgerFile` lives in the app's Application
+    /// `directories` hold `<model>.aimodel` and `<model>.manifest.json` for each model; `ledgerFile` lives in the app's Application
     /// Support (a test's in a temporary folder of its own).
-    public init(directory: URL? = MaskModels.bundledDirectory, ledgerFile: URL) {
-        self.directory = directory
+    public init(directories: [URL], ledgerFile: URL) {
+        self.directories = directories
         self.ledgerFile = ledgerFile
+    }
+
+    /// One folder, the app's own by default.
+    public convenience init(directory: URL? = MaskModels.bundledDirectory, ledgerFile: URL) {
+        self.init(directories: directory.map { [$0] } ?? [], ledgerFile: ledgerFile)
+    }
+
+    /// The first folder that holds `model`'s file, `nil` when none does.
+    public func folder(of model: BundledMaskModel) -> URL? {
+        directories.first { FileManager.default.fileExists(atPath: $0.appendingPathComponent(model.fileName, isDirectory: true).appendingPathComponent("main.hash").path) }
     }
 
     // MARK: Which models
@@ -267,16 +280,16 @@ public final class MaskModels: @unchecked Sendable {
     /// The model's file, or why it cannot be used: absent, or built by another recipe than the pins name.
     public func url(of model: BundledMaskModel) throws -> URL {
         _ = try identity(of: model)
-        return directory!.appendingPathComponent(model.fileName, isDirectory: true)
+        return folder(of: model)!.appendingPathComponent(model.fileName, isDirectory: true)
     }
 
     /// Which conversion of `model` is here, after checking its manifest against the pins.
     public func identity(of model: BundledMaskModel) throws -> MaskModelIdentity {
         let script = model.script
-        guard let directory else { throw MaskModelError.unavailable(model, "the app has no Models folder; build the models with \(script), then the app") }
-        let file = directory.appendingPathComponent(model.fileName, isDirectory: true)
-        guard let hash = try? Data(contentsOf: file.appendingPathComponent("main.hash")), hash.count == 32 else {
-            throw MaskModelError.unavailable(model, "\(model.fileName) is not in the app; build it with \(script), then the app")
+        guard !directories.isEmpty else { throw MaskModelError.unavailable(model, "the app has no Models folder; build the models with \(script), then the app") }
+        guard let directory = folder(of: model),
+              let hash = try? Data(contentsOf: directory.appendingPathComponent(model.fileName, isDirectory: true).appendingPathComponent("main.hash")), hash.count == 32 else {
+            throw MaskModelError.unavailable(model, "\(model.fileName) is neither in the app nor downloaded; build it with \(script), then the app")
         }
         struct Manifest: Decodable {
             var recipeID: String, weights: String, canary: String

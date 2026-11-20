@@ -21,6 +21,7 @@ import UserNotifications
 ///     develop-page show|close|press|folder FOLDER|state  the Develop page: shown, closed, its button pressed, FOLDER as if chosen, what it says
 ///     card open|dismiss          presses a button in the card bar
 ///     snapshot NAME              each window as a PNG in the container's tmp folder
+///     subject-models show|texts|close|start|cancel|state  the Subject models' licence screen: shown, its texts, closed, its download started or stopped
 ///     appearance light|dark|system  sets Mode, as Settings > Appearance does
 ///     theme ID [DARK]            selects a theme by its catalog id, and its dark version DARK, as Settings does
 ///     backdrop on|off            whether the Rolls page shows its backdrop, as Settings does
@@ -392,6 +393,22 @@ enum Automation {
                         + "\(model.rollCovers[roll.id]?.count ?? 0) covers\(model.unavailableRolls.contains(roll.id) ? ", not reached" : "")"
                 }
                 reply("rolls", "page \(model.workspacePage), sheet \(model.isImportSourceShown): " + rolls.joined(separator: " | "))
+            }
+        case "subject-models":
+            let download = model.subjectModels
+            switch argument {
+            case "show": download.show()
+            case "texts": download.show(); download.showsTexts = true
+            case "close": download.close()
+            case "start": download.start()
+            case "cancel": download.cancel()
+            case "state", "": break
+            default:
+                reply("error", "subject-models show|texts|close|start|cancel|state")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                reply("subject-models", "shown \(download.isShown), phase \(download.phase), subject \(model.smartAvailability(.subject))")
             }
         case "notifications":
             UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
@@ -1279,8 +1296,8 @@ enum Automation {
             }
             return total / 1_000_000
         }
-        let models = MaskModels(ledgerFile: ApplicationSupport.folder.appendingPathComponent("Mask models.json"))
-        say("bundled \(models.directory?.path ?? "none"), Sky available \(models.isSkyAvailable) \(models.unavailable.map(\.description)), "
+        let models = MaskModels(appLedgerFile: ApplicationSupport.folder.appendingPathComponent("Mask models.json"))
+        say("folders \(models.directories.map(\.path)), Sky available \(models.isSkyAvailable) \(models.unavailable.map(\.description)), "
             + "macOS \(MaskModels.osBuild), needs preparation \(models.needsPreparation), coreai-cache \(cacheMB()) MB, footprint \(mb()) MB")
         guard models.isSkyAvailable else { say("done"); return }
         do {

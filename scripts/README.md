@@ -25,6 +25,13 @@ scripts/convert-vitmatte.zsh       # ViTMatte-S: the same venv, a 113 MB downloa
 scripts/build-app.sh               # clones all four into Argent.app/Contents/Resources/Models with cp -c
 ```
 
+**The Subject models' download.** A public build carries no model. Subject and Background offer S3OD-sod, EoMT and
+ViTMatte-S as one download, after a screen with their terms (`SubjectModelsSheet`), installed in Application Support's
+`Models` (`SubjectModelPack`). `PIN=1 scripts/build-subject-models.zsh` packs the three from `build/models` with the
+licence texts into `build/argent-subject-models-<version>.aar` (about 841 MB) and pins its size and SHA-256 in
+`Sources/ArgentRoll/SubjectModelPackPins.swift`. Upload that very file as a release asset under the tag
+`subject-models-<version>`; the app refuses any other. The conditions it is offered on are in `models/licences/README.md`.
+
 They need macOS 27 on Apple silicon, Homebrew Python 3.14 (`brew install python@3.14`) and the network
 once: PyPI for the 29 packages of `models/requirements.lock` (each pinned by SHA-256, one venv for both),
 Hugging Face for the weights and GitHub for DA3's source, each checked against its pinned SHA-256 before

@@ -211,6 +211,8 @@ final class RollModel {
     let maskEditor = MaskEditor()
     /// Smart masks' selections under way and what they came to (`RollModel+SmartMasks`).
     let smartMasks = SmartMasks()
+    /// The Subject models' licence screen and download (`SubjectModelsSheet`).
+    let subjectModels = SubjectModelsDownload()
     /// The Remove tab's state that is not in the frame's edit (`RemoveState.swift`).
     let remove = RemoveSession()
     /// Remove's steps, its runs under way and what its patches say of themselves (`RollModel+Remove`).
@@ -488,6 +490,7 @@ final class RollModel {
         self.library = bookmarks.rolls
         maskEditor.model = self
         smartMasks.makeInference = { [weak self] in self?.makeMaskInference() }
+        subjectModels.onInstalled = { [weak self] in self?.smartMasks.modelsChanged() }
         removalRuns.makeSteps = { [weak self] in self?.makeRemovalSteps() }
         (maskEditor.overlay.field as? MaskSeedCoverage)?.seeds = maskSeeds
         (maskEditor.overlay.field as? MaskSeedCoverage)?.refined = films

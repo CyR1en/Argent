@@ -26,9 +26,16 @@ public enum SmartStage: Sendable, Equatable {
 public enum SmartAvailability: Sendable, Equatable {
     case available
     case unavailable(String)
+    /// Not until the Subject models are downloaded (`SubjectModelPack`): why, in the tile's words. The tile offers the download.
+    case needsModels(String)
 
     public var isAvailable: Bool { self == .available }
-    public var reason: String? { if case .unavailable(let why) = self { return why } else { return nil } }
+    public var reason: String? {
+        switch self {
+        case .available: return nil
+        case .unavailable(let why), .needsModels(let why): return why
+        }
+    }
 }
 
 /// What a selection came to.

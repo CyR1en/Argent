@@ -105,21 +105,6 @@ public enum AppleSegmentation {
         return .seed(SmartSeed(kind: .subject, raster: raster, provenance: provenance))
     }
 
-    /// Vision's result standing in for the new Subject because a model is absent: `why`, in the row's words, on its provenance (`RasterProvenance.parameters["fallback"]`). Today's seed
-    /// and edge, untouched.
-    public static func fallback(_ result: SmartResult, why: String) -> SmartResult {
-        switch result {
-        case .seed(let seed):
-            var provenance = seed.provenance
-            provenance.parameters["fallback"] = why
-            return .seed(SmartSeed(kind: seed.kind, raster: seed.raster, provenance: provenance, edge: .guided))
-        case .nothingFound(let kind, let provenance):
-            var provenance = provenance
-            provenance.parameters["fallback"] = why
-            return .nothingFound(kind, provenance)
-        }
-    }
-
     /// Background: Subject's raster with the kind `.background`, which the coverage reads as `1 − v`. It is not a second raster:
     /// both name the same pixels and the same provenance. `.nothingFound` when there is no subject to set it apart, since the
     /// inverse of nothing is the whole frame (R2).

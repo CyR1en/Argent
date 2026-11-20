@@ -18,8 +18,9 @@ struct SubjectClickTests {
         try #require(await RollScanner.scan(MaskCanary.sample.deletingLastPathComponent()).frames.first { $0.name == MaskCanary.cc0 })
     }
 
-    /// A build without S3OD or ViTMatte (a "lost model"): Subject falls back to Vision with today's edge, the row's reason on its provenance, no model loaded, no preparation.
-    @Test func aLostModelFallsBackToVisionsAndSaysWhy() async throws {
+    /// A build without the Subject models: Subject and Background offer their download instead of a Vision stand-in, and a click that comes anyway fails
+    /// and says which model is missing, with no model loaded and no preparation.
+    @Test func withoutItsModelsSubjectOffersTheDownloadAndNeverFallsBackToVision() async throws {
         let support = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-lost-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: support) }
@@ -27,17 +28,16 @@ struct SubjectClickTests {
         #expect(!models.isSubjectAvailable && models.subjectMissing != nil && !models.needsPreparation)
         let engine = BundledSmartMasks(films: try Self.film(in: support), models: models, app: "tests")
         let inference = MaskInference(engine: engine, turns: DecodeTurns())
-        #expect(inference.availability(of: .subject).isAvailable, "Subject is still offered, through Vision")
+        #expect(inference.availability(of: .subject) == .needsModels(BundledSmartMasks.needsModels(.subject)))
+        #expect(inference.availability(of: .background) == .needsModels(BundledSmartMasks.needsModels(.background)))
+        #expect(inference.availability(of: .person).isAvailable, "Person needs no Subject model")
         let frame = try await Self.frame()
         let stages = StageLog()
         let outcome = await inference.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default, stage: { stages.add($0) }).outcome.value
         #expect(!stages.all.contains { if case .preparing = $0 { true } else { false } }, "no preparing without models")
         switch outcome {
-        case .found(let seed, _):
-            #expect(seed.edge == .guided && seed.provenance.engine == AppleSegmentation.subjectEngine && seed.provenance.parameters["fallback"] != nil)
-        case .nothingFound(_, let provenance, _):
-            #expect(provenance.parameters["fallback"] != nil)
-        case .failed(let why): Issue.record("\(why)")
+        case .failed(let why): #expect(why.contains("s3od-sod-sq1024-f16") || why.contains("eomt") || why.contains("vitmatte"), "\(why)")
+        case .found, .nothingFound: Issue.record("Subject made a selection without its models")
         case .cancelled: Issue.record("cancelled")
         }
         #expect(!engine.takeReleasedModels(), "nothing was loaded, so no settle is needed")

@@ -41,7 +41,8 @@ public final class BundledSmartMasks: SmartMaskEngine, @unchecked Sendable {
     // MARK: Availability
 
     /// Sky needs its two bundled models (the veto is part of it, decision 4); the rest need Vision's requests at the revisions
-    /// `AppleSegmentation` pins. Subject is offered without its models too: it falls back to Vision and says why (`AppleSegmentation.fallback`).
+    /// `AppleSegmentation` pins. Subject and Background need the Subject models too, and offer their download until they are here: there is no Vision
+    /// stand-in (the owner, 2026-11-20).
     public func availability(of kind: SmartKind) -> SmartAvailability {
         switch kind {
         case .sky:
@@ -50,6 +51,7 @@ public final class BundledSmartMasks: SmartMaskEngine, @unchecked Sendable {
             }
             return Self.visionAvailability(VNClassifyImageRequest.self, revision: VNClassifyImageRequestRevision2, for: "Sky")
         case .subject, .background:
+            if models.subjectMissing != nil { return .needsModels(Self.needsModels(kind)) }
             return Self.visionAvailability(VNGenerateForegroundInstanceMaskRequest.self,
                                            revision: VNGenerateForegroundInstanceMaskRequestRevision1, for: kind.title)
         case .person:
@@ -63,6 +65,11 @@ public final class BundledSmartMasks: SmartMaskEngine, @unchecked Sendable {
                        skySquare: SkyModelRunner.squareRecipe,
                        subject: models.isSubjectAvailable ? (try? models.identity(of: .subject)).map(ModelProvenance.init) : nil,
                        matte: models.isSubjectAvailable ? (try? models.identity(of: .matte)).map(ModelProvenance.init) : nil)
+    }
+
+    /// The tile's words while the Subject models are not here.
+    public static func needsModels(_ kind: SmartKind) -> String {
+        "\(kind.title) needs the Subject models, a one-time download. Click to see their licences and download them."
     }
 
     private static func visionAvailability(_ request: VNRequest.Type, revision: Int, for title: String) -> SmartAvailability {
@@ -112,13 +119,12 @@ public final class BundledSmartMasks: SmartMaskEngine, @unchecked Sendable {
         }
     }
 
-    /// The new Subject: the frozen design (`SmartSeed.subject`), or, in a build without S3OD, EoMT or ViTMatte, Vision with today's edge and why, in the row's words. "Preparing masks"
-    /// first when the models were not prepared for this Mac and macOS. S3OD and ViTMatte are loaded, run and let go inside the click.
+    /// The new Subject: the frozen design (`SmartSeed.subject`). Without S3OD, EoMT or ViTMatte it fails and says which: the tile offers the models first
+    /// (`availability(of:)`). "Preparing masks" first when the models were not prepared for this Mac and macOS. S3OD and ViTMatte are loaded, run and let
+    /// go inside the click.
     private func subject(_ picture: Picture, frame: Frame, source: SeedSource, stage: @escaping @Sendable (SmartStage) -> Void) async throws -> SmartResult {
+        if let missing = models.subjectMissing { throw missing }
         let visionResult = try AppleSegmentation.subject(picture.vision, source: source)
-        if let missing = models.subjectMissing {
-            return AppleSegmentation.fallback(visionResult, why: "\(missing)")
-        }
         if models.needsPreparation {
             stage(.preparing(0))
             try await models.prepare { progress in stage(.preparing(progress.fraction)) }
