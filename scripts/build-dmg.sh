@@ -2,8 +2,9 @@
 # Packs Argent.app into a drag-to-Applications disk image, build/Argent-<version>.dmg: the app beside an
 # Applications link, over the background in App/DMG (rendered by design/dmg/background.py), with the app's icon on
 # the volume. dmgbuild, pinned by hash in scripts/dmg/requirements.lock, writes the window's layout, so Finder is
-# never scripted. The app keeps its ad-hoc signature: there is no notarization (docs/deferred.md), so a Mac that
-# downloads the image asks once, in System Settings > Privacy & Security > Open Anyway, as the background says.
+# never scripted. The app keeps build-app.sh's signature, self-signed or ad-hoc (scripts/sign-identity.sh): there is no
+# notarization (docs/deferred.md), so a Mac that downloads the image asks once, in System Settings > Privacy & Security > Open
+# Anyway, as the background says.
 #
 # The image carries the smart masks' and Remove's models that build/Argent.app holds, about 7 GB, so it takes
 # minutes. Their weights must not go to anyone else until cleared (decision 24, scripts/README.md): for an image
@@ -34,7 +35,9 @@ app=build/Argent.app
 [[ -d $app ]] || { echo "error: $app is missing; run scripts/build-app.sh release" >&2; exit 1; }
 codesign --verify --strict "$app"
 
-version=$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")
+# ArgentVersion, the whole version scripts/build-app.sh took from the tag (0.2.0-beta.1), else the short one.
+version=$(plutil -extract ArgentVersion raw "$app/Contents/Info.plist" 2>/dev/null \
+  || plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")
 work=build/dmg
 dmg=build/Argent-$version.dmg
 
@@ -57,8 +60,8 @@ cp -c -R "$app" "$stage/"
 staged=$stage/Argent.app
 if (( ! with_models )) && [[ -d $staged/Contents/Resources/Models ]]; then
   rm -rf "$staged/Contents/Resources/Models"
-  # The helper's own signature is untouched; only the app's seal over its resources changes.
-  codesign --force --sign - --options runtime --entitlements App/Argent.entitlements "$staged"
+  # The helper's own signature is untouched; only the app's seal over its resources changes, with build-app.sh's identity.
+  codesign --force --sign "$(scripts/sign-identity.sh)" --options runtime --entitlements App/Argent.entitlements "$staged"
 fi
 codesign --verify --deep --strict "$staged"
 xattr -cr "$staged"

@@ -1,9 +1,10 @@
 #!/bin/zsh
 # Builds Argent.app from the SwiftPM ArgentApp target: the binary, its resource bundles,
 # App/Info.plist, the icon compiled from App/Argent.icon, the baked stocks, the smart masks' four models
-# when build/models holds them, Remove's helper (argent-remove) and its four graphs when build/models holds them, and an ad-hoc
-# signature with App/Argent.entitlements, so the app runs sandboxed, the helper with App/ArgentRemoveHelper.entitlements. Ad-hoc signing is all this one-Mac app needs; there is no release
-# signing or notarization (docs/deferred.md).
+# when build/models holds them, Remove's helper (argent-remove) and its four graphs when build/models holds them, the version from
+# the newest v* tag, and a signature with App/Argent.entitlements, so the app runs sandboxed, the helper with
+# App/ArgentRemoveHelper.entitlements. The signature is the self-signed "Argent Self-Signed" when a keychain holds it, else ad-hoc
+# (scripts/sign-identity.sh); there is no Developer ID signing or notarization (docs/deferred.md).
 #
 # The stocks are baked with the Python bake tool at 65 cubed into build/stocks, and baked
 # again only when bake/ changes. Only the manifests and the binary LUTs go into the bundle;
@@ -59,6 +60,28 @@ cp "$bin/Argent" "$app/Contents/MacOS/Argent"
 # Remove's helper, beside the app's binary: the app starts it as its child when the model is wanted (docs/remove-plan.md, 4.5).
 cp "$bin/argent-remove" "$app/Contents/MacOS/argent-remove"
 cp App/Info.plist "$app/Contents/Info.plist"
+# The version, from the tag (.github/workflows/dmg.yml): ARGENT_VERSION when set (CI sets it from the v* tag it builds), else the
+# newest v* tag behind HEAD without its v, else App/Info.plist's. CFBundleShortVersionString takes its numbers only (0.2.0 of
+# 0.2.0-beta.1); ArgentVersion keeps the whole. CFBundleVersion is the commit count, which only grows along main. ArgentChannel
+# is release, nightly or dev (ARGENT_CHANNEL, dev by default), and ArgentCommit the commit built; AboutView shows them.
+version=${ARGENT_VERSION:-}
+if [[ -z $version ]]; then
+  tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+  version=${tag#v}
+fi
+[[ -n $version ]] || version=$(plutil -extract CFBundleShortVersionString raw App/Info.plist)
+short=${version%%-*}
+[[ $short =~ '^[0-9]+(\.[0-9]+){0,2}$' ]] || { echo "error: version $version is not N.N.N, optionally with a -suffix" >&2; exit 1; }
+build_number=$(git rev-list --count HEAD 2>/dev/null || plutil -extract CFBundleVersion raw App/Info.plist)
+commit=$(git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
+[[ $commit == unknown ]] || git diff --quiet HEAD -- 2>/dev/null || commit+="-dirty"
+channel=${ARGENT_CHANNEL:-dev}
+plist=$app/Contents/Info.plist
+plutil -replace CFBundleShortVersionString -string "$short" "$plist"
+plutil -replace CFBundleVersion -string "$build_number" "$plist"
+plutil -replace ArgentVersion -string "$version" "$plist"
+plutil -replace ArgentChannel -string "$channel" "$plist"
+plutil -replace ArgentCommit -string "$commit" "$plist"
 # Develops to HEIC stay under 2 GB only with malloc's large cache off (docs/M2-shell.md section 10).
 [[ $(plutil -extract LSEnvironment.MallocLargeCache raw "$app/Contents/Info.plist") == 0 ]] \
   || { echo "error: Info.plist lacks LSEnvironment MallocLargeCache 0" >&2; exit 1; }
@@ -120,10 +143,13 @@ else
   echo "      Build them with scripts/convert-objectclear.zsh." >&2
 fi
 # The helper first: the app's signature seals it. Sandboxed and inheriting, it runs in the app's sandbox and container.
-codesign --force --sign - --options runtime --entitlements App/ArgentRemoveHelper.entitlements "$app/Contents/MacOS/argent-remove"
-codesign --force --sign - --options runtime --entitlements App/Argent.entitlements "$app"
+# The identity is "Argent Self-Signed" when a keychain holds it, else ad-hoc (scripts/sign-identity.sh).
+identity=$(scripts/sign-identity.sh)
+codesign --force --sign "$identity" --options runtime --entitlements App/ArgentRemoveHelper.entitlements "$app/Contents/MacOS/argent-remove"
+codesign --force --sign "$identity" --options runtime --entitlements App/Argent.entitlements "$app"
 codesign --verify --strict "$app"
-echo "built $app ($configuration)"
+[[ $identity == - ]] && signed_by="ad-hoc" || signed_by="signed by $identity"
+echo "built $app ($configuration, $version $channel, build $build_number, $commit, $signed_by)"
 
 if [[ ${2:-} == open ]]; then
   open "$app"

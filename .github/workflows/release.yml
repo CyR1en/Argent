@@ -1,0 +1,193 @@
+# Builds Argent's disk image with scripts/build-dmg.sh --no-models and publishes it:
+#   a push to main      the "nightly" pre-release, replaced each time, its image at releases/download/nightly/Argent-nightly.dmg
+#   a pushed v* tag     the release of that version (v0.2.0 -> Argent 0.2.0; v0.2.0-beta.1 is marked a pre-release)
+#   a pull request, or Run workflow   the image as a workflow artifact only
+#
+# The version comes from the tag (scripts/build-app.sh): a release is its tag's version, a nightly the newest v* tag's,
+# both with the commit count as the build number. The app is signed with the self-signed "Argent Self-Signed" certificate
+# from the secrets SIGNING_P12 (base64 of the .p12) and SIGNING_P12_PASSWORD, so every build has the same designated
+# requirement (scripts/sign-identity.sh); it is not notarized, so a downloaded copy asks once in Privacy & Security >
+# Open Anyway. The smart masks' and Remove's models are not in Git and not in these images.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # macOS 27 on Apple silicon with Xcode 27 (actions/runner-images, xcode-27-arm64).
+    runs-on: xcode-27
+    timeout-minutes: 45
+    concurrency:
+      group: build-${{ github.ref }}
+      # A newer push to a branch replaces its build; a tag's build always finishes.
+      cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    env:
+      # The Xcode the app is built with locally; the image's default is older.
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    outputs:
+      kind: ${{ steps.kind.outputs.kind }}
+      version: ${{ steps.dmg.outputs.version }}
+      artifact: ${{ steps.dmg.outputs.artifact }}
+    steps:
+      # The whole history and its tags: the version is the newest v* tag, the build number the commit count.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: What this run publishes
+        id: kind
+        run: |
+          case "$GITHUB_EVENT_NAME:$GITHUB_REF" in
+            push:refs/tags/v*)
+              version=${GITHUB_REF_NAME#v}
+              if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+                echo "::error::tag $GITHUB_REF_NAME is not vN.N.N or vN.N.N-suffix"; exit 1
+              fi
+              kind=release
+              echo "ARGENT_VERSION=$version" >> "$GITHUB_ENV" ;;
+            push:refs/heads/main) kind=nightly ;;
+            *) kind=check ;;
+          esac
+          channel=$([[ $kind == check ]] && echo dev || echo "$kind")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "KIND=$kind" >> "$GITHUB_ENV"
+          echo "ARGENT_CHANNEL=$channel" >> "$GITHUB_ENV"
+          echo "$kind build, channel $channel"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      # The stock bake's NumPy; build-dmg.sh makes dmgbuild's own venv from this Python.
+      - name: Python environment
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --quiet --disable-pip-version-check numpy
+
+      # The certificate goes into a keychain of the run's own, which codesign may use without asking. A published build
+      # must have it, so that every copy has the same identity; a pull request from a fork has no secrets and goes ad-hoc.
+      - name: Signing identity
+        env:
+          SIGNING_P12: ${{ secrets.SIGNING_P12 }}
+          SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+        run: |
+          if [[ -z $SIGNING_P12 ]]; then
+            if [[ $KIND != check ]]; then
+              echo "::error::SIGNING_P12 is not set; a $KIND build must be signed with Argent Self-Signed"; exit 1
+            fi
+            echo "no signing secrets: ad-hoc"
+            echo "ARGENT_SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(openssl rand -hex 24)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$SIGNING_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$SIGNING_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "ARGENT_SIGN_IDENTITY=Argent Self-Signed" >> "$GITHUB_ENV"
+
+      - name: Build the disk image
+        id: dmg
+        run: |
+          scripts/build-dmg.sh --no-models
+          plist=build/Argent.app/Contents/Info.plist
+          version=$(plutil -extract ArgentVersion raw "$plist")
+          codesign -d -r- build/Argent.app
+          mkdir dist
+          case $KIND in
+            nightly) name=Argent-nightly.dmg ;;
+            *) name=Argent-$version.dmg ;;
+          esac
+          mv "build/Argent-$version.dmg" "dist/$name"
+          (cd dist && shasum -a 256 "$name" > "$name.sha256")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifact=Argent-$version-$KIND-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.dmg.outputs.artifact }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove the signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+
+  publish:
+    needs: build
+    if: needs.build.outputs.kind != 'check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: publish-${{ needs.build.outputs.kind }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      KIND: ${{ needs.build.outputs.kind }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: dist
+
+      - name: Release notes
+        run: |
+          {
+            if [[ $KIND == nightly ]]; then
+              echo "The newest build of \`main\`, at ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d)). It is replaced by every push to \`main\`."
+              echo
+            fi
+            echo "**Install:** open the disk image and drag Argent to Applications. Argent is self-signed, not notarized, so the"
+            echo "first time it opens, macOS asks: allow it in System Settings › Privacy & Security › Open Anyway."
+            echo
+            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable,"
+            echo "Subject uses Vision, and Remove has no model."
+            echo
+            echo '```'
+            cat dist/*.sha256
+            echo '```'
+          } > notes.md
+          cat notes.md
+
+      - name: Publish the nightly
+        if: env.KIND == 'nightly'
+        run: |
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly dist/* --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "Nightly $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})" --notes-file notes.md
+
+      - name: Publish the release
+        if: env.KIND == 'release'
+        run: |
+          tag=v$VERSION
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            prerelease=$([[ $VERSION == *-* ]] && echo --prerelease || true)
+            gh release create "$tag" dist/* --verify-tag --title "Argent $VERSION" \
+              --notes-file notes.md --generate-notes $prerelease
+          fi

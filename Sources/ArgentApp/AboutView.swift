@@ -12,11 +12,21 @@ struct AboutView: View {
         Portra Natural reduces Portra 160's coupling for gentler skin colour. None is fitted to lab scans.
         """
 
+    /// "Version 0.2.0 (412)" for a release; a nightly or a local build names its channel and commit,
+    /// "Version 0.1.0 nightly (412 · a1b2c3d)". scripts/build-app.sh writes the keys from the v* tag.
     private var version: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "development"
+        let short = info?["ArgentVersion"] as? String
+            ?? info?["CFBundleShortVersionString"] as? String ?? "development"
         let build = info?["CFBundleVersion"] as? String
-        return build.map { "Version \(short) (\($0))" } ?? "Version \(short)"
+        let channel = info?["ArgentChannel"] as? String
+        let commit = info?["ArgentCommit"] as? String
+        var text = "Version \(short)"
+        if let channel, channel != "release" { text += " \(channel)" }
+        var detail = [build].compactMap(\.self)
+        if channel != "release", let commit { detail.append(commit) }
+        if !detail.isEmpty { text += " (\(detail.joined(separator: " · ")))" }
+        return text
     }
 
     var body: some View {
