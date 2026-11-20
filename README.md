@@ -22,7 +22,7 @@ Argent turns a folder of RAW files into a roll of finished film-look images. Cho
 let Auto find the print exposure and lab balance, and refine only the frames that need it.
 The photograph stays at the centre, in a native SwiftUI interface built around the roll.
 
-**Open source (Apache 2.0) · No binary release · macOS 27 · Apple silicon**
+**Open source (Apache 2.0) · [Nightly and tagged builds](https://github.com/CyR1en/Argent/releases) · macOS 27 · Apple silicon**
 
 ## Film, not a filter
 
@@ -56,7 +56,9 @@ starting point, not a guarantee of identical brightness across reframings.
 
 ## Build locally
 
-Argent is built locally for the owner's Mac, not distributed as a signed, notarized release.
+Argent is self-signed, not notarized. [Releases](https://github.com/CyR1en/Argent/releases) carry a disk image
+of every `v*` tag and a nightly of `main`, without the smart masks' or Remove's models; the first time a downloaded copy
+opens, macOS asks once, in System Settings › Privacy & Security › Open Anyway. To build it yourself:
 
 - **macOS 27** on Apple silicon.
 - **Xcode 27** with Swift 6.4; Command Line Tools alone cannot build the app.
@@ -70,7 +72,7 @@ python3 -m venv .venv
 scripts/build-app.sh debug open
 ```
 
-The script bakes the stock library, builds and ad-hoc signs `build/Argent.app`, then opens it.
+The script bakes the stock library, builds and signs `build/Argent.app` (ad-hoc unless the keychain holds "Argent Self-Signed"), then opens it.
 Import a roll in the app, or open one directly:
 
 ```sh
@@ -79,7 +81,7 @@ open -a "$PWD/build/Argent.app" /path/to/roll
 
 `scripts/build-dmg.sh` packs a release build into `build/Argent-<version>.dmg`, a drag-to-Applications
 image with the models `build/Argent.app` holds; `--no-models` leaves them out for a copy that goes to
-anyone else. The app stays ad-hoc signed, so a Mac that downloads it asks once, in System Settings ›
+anyone else. The app is self-signed or ad-hoc, never notarized, so a Mac that downloads it asks once, in System Settings ›
 Privacy & Security › Open Anyway.
 
 Smart masks and model-backed Remove need separately converted models. The app builds without
@@ -89,7 +91,12 @@ before enabling them; some weights must not be sold or distributed unless cleare
 <details>
 <summary>Development and validation</summary>
 
-Local checks are the gate; there is no hosted CI.
+Local checks are the gate. The one hosted workflow, [`.github/workflows/release.yml`](.github/workflows/release.yml), runs
+`scripts/build-dmg.sh --no-models` on GitHub's Xcode 27 runner: a push to `main` replaces the `nightly` pre-release, a pushed
+`v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) publishes that version, and a pull request keeps the image as a
+workflow artifact. It runs no tests. The app's version is the newest `v*` tag and its build number the commit count
+(`scripts/build-app.sh`); builds are signed with the self-signed "Argent Self-Signed" certificate when the keychain holds it
+(`scripts/sign-identity.sh`), in CI from the `SIGNING_P12` secrets, else ad-hoc.
 
 ```sh
 swift test

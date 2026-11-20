@@ -35,6 +35,8 @@
 	<string>Argent</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- The version only until the first v* tag: scripts/build-app.sh writes the tag's version, the commit
+	     count as CFBundleVersion, and ArgentVersion, ArgentChannel and ArgentCommit into the built app. -->
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
