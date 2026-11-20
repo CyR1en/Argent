@@ -17,3 +17,6 @@ were removed from the tree; they are in `2a6e696`.
 [`dmg/background.py`](dmg/background.py) renders the disk image's window background into `App/DMG`
 (`background.png` and `@2x`), which `scripts/build-dmg.sh` uses. Run it with `.venv/bin/python` after
 changing it; the icon positions it draws around are in `scripts/dmg/settings.py`.
+
+[`banner.jpg`](banner.jpg) is the README's banner, a 2000-pixel JPEG of the 3000 × 1000 original made with
+OpenAI's GPT Image (`sips -s format jpeg -s formatOptions 82 --resampleWidth 2000`).
