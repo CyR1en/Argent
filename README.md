@@ -1,4 +1,7 @@
-<h1 align="center">Argent</h1>
+<h1 align="center">
+  <img src="design/banner.jpg" width="100%"
+       alt="Argent. Raw files, developed as film. A black-and-white print of snowy mountains lies on paper beside a curling strip of orange colour negative.">
+</h1>
 
 <p align="center"><strong>A digital roll. A film finish.</strong></p>
 

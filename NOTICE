@@ -33,10 +33,11 @@ Hanken Grotesk (SIL Open Font License 1.1)
   (https://github.com/marcologous/hanken-grotesk). Licensed under the SIL Open Font License,
   Version 1.1; the licence is in Sources/ArgentApp/Resources/Fonts/HankenGrotesk-OFL.txt.
 
-Frame view surround specimen
+Frame view surround specimen and README banner
   Sources/ArgentApp/Resources/FrameSurroundSpecimen.jpg
-  A generated image, made with OpenAI's GPT Image for this project; it shows no real person
-  or place. It is distributed under the Apache License with the rest of Argent.
+  design/banner.jpg
+  Generated images, made with OpenAI's GPT Image for this project; they show no real person
+  or place. They are distributed under the Apache License with the rest of Argent.
 
 -------------------------------------------------------------------------------
 Machine-learning models (not in this repository)
