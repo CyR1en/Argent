@@ -1,0 +1,544 @@
+LC8 kernel L, section 0f, 2026-11-14
+Kernel version: 2026-11-14-2-kernel-l
+
+Release spike. Full-size camera-colour chart; unchanged LC3 readers.
+Python reference gaps enforce non-positive-luminance copying and zero donor colour.
+Protected patch gates: Purple 315..35 and Green 180..220 only.
+All other protected patches and all measured edge gaps print as KNOWN.
+
+PARITY protected/non-plateau: KNOWN The half-chroma measure is a threshold; near half strength at window edges, a small strength difference flips the rim share. Only Purple 315..35 and Green 180..220 are gated.
+PARITY edges/purple-amount-01/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.187424}
+PARITY edges/purple-amount-01/neutral: PASS {"allowance": 0.03, "argent": 0.03914451096265548, "gated": true, "lightroom": 0.22656882453445526, "measured_gap": 0.187424, "minimum": 0.009144824534455254, "side": "dark"}
+TRUTH edge-position/purple-amount-01/neutral: PASS {"maximum": 0.1, "shift_px": 2.8731204295390222e-05}
+PARITY edges/purple-amount-01/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-01/sky: PASS {"allowance": 0.03, "argent": 0.1945474541852542, "gated": true, "lightroom": 0.16892101354958444, "measured_gap": 0, "minimum": 0.13892101354958444, "side": "dark"}
+TRUTH edge-position/purple-amount-01/sky: PASS {"maximum": 0.1, "shift_px": 0.0033836291701883348}
+PARITY edges/purple-amount-01/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.319345}
+PARITY edges/purple-amount-01/foliage: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0.319345, "minimum": -0.02999983084281152, "side": "dark"}
+TRUTH edge-position/purple-amount-01/foliage: PASS {"maximum": 0.1, "shift_px": 7.499660301640843e-05}
+PARITY edges/purple-amount-01/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.922253}
+PARITY edges/purple-amount-01/brown: PASS {"allowance": 0.03, "argent": 0.03797441433544291, "gated": true, "lightroom": 0.9602272318684572, "measured_gap": 0.922253, "minimum": 0.007974231868457166, "side": "dark"}
+TRUTH edge-position/purple-amount-01/brown: PASS {"maximum": 0.1, "shift_px": 0.0003357026794948271}
+PARITY edges/purple-amount-01/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.485557}
+PARITY edges/purple-amount-01/brown-sky: PASS {"allowance": 0.03, "argent": 0.10300749352738259, "gated": true, "lightroom": 0.5885640726750104, "measured_gap": 0.485557, "minimum": 0.07300707267501041, "side": "dark"}
+TRUTH edge-position/purple-amount-01/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.003273925620205509}
+PARITY edges/purple-amount-01/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.069925}
+PARITY edges/purple-amount-01/wide: PASS {"allowance": 0.03, "argent": 0.007870358917551057, "gated": true, "lightroom": 0.07779564800610805, "measured_gap": 0.069925, "minimum": -0.022129351993891946, "side": "dark"}
+TRUTH edge-position/purple-amount-01/wide: PASS {"maximum": 0.1, "shift_px": 8.271600343744988e-05}
+PARITY edges/purple-amount-01/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.156817}
+PARITY edges/purple-amount-01/narrow: PASS {"allowance": 0.03, "argent": 0.18868902427294476, "gated": true, "lightroom": 0.3455063779896197, "measured_gap": 0.156817, "minimum": 0.15868937798961968, "side": "dark"}
+TRUTH edge-position/purple-amount-01/narrow: PASS {"maximum": 0.1, "shift_px": 8.273721452098277e-05}
+PARITY edges/purple-amount-01/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.196926}
+PARITY edges/purple-amount-01/slant-22p5: PASS {"allowance": 0.03, "argent": 0.059975814706975106, "gated": true, "lightroom": 0.2569014918199143, "measured_gap": 0.196926, "minimum": 0.029975491819914296, "side": "dark"}
+TRUTH edge-position/purple-amount-01/slant-22p5: PASS {"maximum": 0.1, "shift_px": 4.6039857739932355e-05}
+PARITY edges/purple-amount-01/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.215604}
+PARITY edges/purple-amount-01/slant-45: PASS {"allowance": 0.03, "argent": 0.059643950865089224, "gated": true, "lightroom": 0.2752477650719871, "measured_gap": 0.215604, "minimum": 0.029643765071987127, "side": "dark"}
+TRUTH edge-position/purple-amount-01/slant-45: PASS {"maximum": 0.1, "shift_px": 8.419695911121572e-05}
+PARITY edges/purple-amount-01/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.240719}
+PARITY edges/purple-amount-01/line-4: PASS {"allowance": 0.03, "argent": 0.2904178513900454, "gated": true, "lightroom": 0.5311371848726094, "measured_gap": 0.240719, "minimum": 0.26041818487260937, "side": "dark"}
+TRUTH edge-position/purple-amount-01/line-4: PASS {"maximum": 0.1, "shift_px": 1.938443175331095e-05}
+PARITY edges/purple-amount-01/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.142276}
+PARITY edges/purple-amount-01/line-12: PASS {"allowance": 0.03, "argent": 0.033064009286526086, "gated": true, "lightroom": 0.17534019273678525, "measured_gap": 0.142276, "minimum": 0.0030641927367852373, "side": "dark"}
+TRUTH edge-position/purple-amount-01/line-12: PASS {"maximum": 0.1, "shift_px": 1.2176804458974289e-05}
+PARITY edges/purple-amount-01/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-01/swapped: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": -0.0003734670179358357, "measured_gap": 0, "minimum": -0.030373467017935835, "side": "dark"}
+TRUTH edge-position/purple-amount-01/swapped: PASS {"maximum": 0.1, "shift_px": 0.0007372450401502203}
+PARITY edges/purple-amount-02/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.291163}
+PARITY edges/purple-amount-02/neutral: PASS {"allowance": 0.03, "argent": 0.20390385513349774, "gated": true, "lightroom": 0.4950668173511277, "measured_gap": 0.291163, "minimum": 0.17390381735112767, "side": "dark"}
+TRUTH edge-position/purple-amount-02/neutral: PASS {"maximum": 0.1, "shift_px": 0.0001331567885230669}
+PARITY edges/purple-amount-02/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-02/sky: PASS {"allowance": 0.03, "argent": 0.4670773488908043, "gated": true, "lightroom": 0.3679611425012611, "measured_gap": 0, "minimum": 0.3379611425012611, "side": "dark"}
+TRUTH edge-position/purple-amount-02/sky: PASS {"maximum": 0.1, "shift_px": 0.004800015733692153}
+PARITY edges/purple-amount-02/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.212346}
+PARITY edges/purple-amount-02/foliage: PASS {"allowance": 0.03, "argent": 0.10699885803286824, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0.212346, "minimum": 0.07699916915718846, "side": "dark"}
+TRUTH edge-position/purple-amount-02/foliage: PASS {"maximum": 0.1, "shift_px": 0.0002600403357477521}
+PARITY edges/purple-amount-02/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.599565}
+PARITY edges/purple-amount-02/brown: PASS {"allowance": 0.03, "argent": 0.3992767717966381, "gated": true, "lightroom": 0.9988412720054433, "measured_gap": 0.599565, "minimum": 0.3692762720054432, "side": "dark"}
+TRUTH edge-position/purple-amount-02/brown: PASS {"maximum": 0.1, "shift_px": 0.00044013816491998356}
+PARITY edges/purple-amount-02/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.53984}
+PARITY edges/purple-amount-02/brown-sky: PASS {"allowance": 0.03, "argent": 0.4450536925936448, "gated": true, "lightroom": 0.9848935524303766, "measured_gap": 0.53984, "minimum": 0.41505355243037656, "side": "dark"}
+TRUTH edge-position/purple-amount-02/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0038440762054078315}
+PARITY edges/purple-amount-02/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.143593}
+PARITY edges/purple-amount-02/wide: PASS {"allowance": 0.03, "argent": 0.044502040099596574, "gated": true, "lightroom": 0.18809484000270416, "measured_gap": 0.143593, "minimum": 0.014501840002704158, "side": "dark"}
+TRUTH edge-position/purple-amount-02/wide: PASS {"maximum": 0.1, "shift_px": 3.345118565306615e-05}
+PARITY edges/purple-amount-02/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.004465}
+PARITY edges/purple-amount-02/narrow: PASS {"allowance": 0.03, "argent": 0.5788366404791018, "gated": true, "lightroom": 0.5833017265590337, "measured_gap": 0.004465, "minimum": 0.5488367265590336, "side": "dark"}
+TRUTH edge-position/purple-amount-02/narrow: PASS {"maximum": 0.1, "shift_px": 7.833298302848817e-05}
+PARITY edges/purple-amount-02/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.369715}
+PARITY edges/purple-amount-02/slant-22p5: PASS {"allowance": 0.03, "argent": 0.20200457962255036, "gated": true, "lightroom": 0.5717195307065368, "measured_gap": 0.369715, "minimum": 0.1720045307065368, "side": "dark"}
+TRUTH edge-position/purple-amount-02/slant-22p5: PASS {"maximum": 0.1, "shift_px": 5.573937066613577e-05}
+PARITY edges/purple-amount-02/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.361225}
+PARITY edges/purple-amount-02/slant-45: PASS {"allowance": 0.03, "argent": 0.2052870069936943, "gated": true, "lightroom": 0.5665116639715508, "measured_gap": 0.361225, "minimum": 0.17528666397155082, "side": "dark"}
+TRUTH edge-position/purple-amount-02/slant-45: PASS {"maximum": 0.1, "shift_px": 2.0286825257342933e-05}
+PARITY edges/purple-amount-02/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-02/line-4: PASS {"allowance": 0.03, "argent": 0.8034611465181684, "gated": true, "lightroom": 0.7363227970612582, "measured_gap": 0, "minimum": 0.7063227970612582, "side": "dark"}
+TRUTH edge-position/purple-amount-02/line-4: PASS {"maximum": 0.1, "shift_px": 6.65316869774557e-05}
+PARITY edges/purple-amount-02/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.197192}
+PARITY edges/purple-amount-02/line-12: PASS {"allowance": 0.03, "argent": 0.18248693180375875, "gated": true, "lightroom": 0.3796788012632223, "measured_gap": 0.197192, "minimum": 0.15248680126322228, "side": "dark"}
+TRUTH edge-position/purple-amount-02/line-12: PASS {"maximum": 0.1, "shift_px": 9.084323771091363e-05}
+PARITY edges/purple-amount-02/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.000323}
+PARITY edges/purple-amount-02/swapped: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.0003227872815688704, "measured_gap": 0.000323, "minimum": -0.03000021271843113, "side": "dark"}
+TRUTH edge-position/purple-amount-02/swapped: PASS {"maximum": 0.1, "shift_px": 0.00019118711112450781}
+PARITY edges/purple-amount-05/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.038749}
+PARITY edges/purple-amount-05/neutral: PASS {"allowance": 0.03, "argent": 0.876349317295876, "gated": true, "lightroom": 0.9150981241589347, "measured_gap": 0.038749, "minimum": 0.8463491241589346, "side": "dark"}
+TRUTH edge-position/purple-amount-05/neutral: PASS {"maximum": 0.1, "shift_px": 4.363200537133016e-05}
+PARITY edges/purple-amount-05/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.081843}
+PARITY edges/purple-amount-05/sky: PASS {"allowance": 0.03, "argent": 0.6172432717797607, "gated": true, "lightroom": 0.6990865848752299, "measured_gap": 0.081843, "minimum": 0.5872435848752299, "side": "dark"}
+TRUTH edge-position/purple-amount-05/sky: PASS {"maximum": 0.1, "shift_px": 0.005010991075947185}
+PARITY edges/purple-amount-05/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-05/foliage: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0, "minimum": 0.28934516915718844, "side": "dark"}
+TRUTH edge-position/purple-amount-05/foliage: PASS {"maximum": 0.1, "shift_px": 0.00022857171560308753}
+PARITY edges/purple-amount-05/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-05/brown: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.9988412720054433, "measured_gap": 0, "minimum": 0.9688412720054432, "side": "dark"}
+TRUTH edge-position/purple-amount-05/brown: PASS {"maximum": 0.1, "shift_px": 0.00046689492943872643}
+PARITY edges/purple-amount-05/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.015567}
+PARITY edges/purple-amount-05/brown-sky: PASS {"allowance": 0.03, "argent": 0.9844308271943065, "gated": true, "lightroom": 0.9999976918616281, "measured_gap": 0.015567, "minimum": 0.9544306918616281, "side": "dark"}
+TRUTH edge-position/purple-amount-05/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.004006072758500179}
+PARITY edges/purple-amount-05/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.329987}
+PARITY edges/purple-amount-05/wide: PASS {"allowance": 0.03, "argent": 0.2922751875835967, "gated": true, "lightroom": 0.6222623095171838, "measured_gap": 0.329987, "minimum": 0.2622753095171838, "side": "dark"}
+TRUTH edge-position/purple-amount-05/wide: PASS {"maximum": 0.1, "shift_px": 0.0002307523092689024}
+PARITY edges/purple-amount-05/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-05/narrow: PASS {"allowance": 0.03, "argent": 0.9018372360548577, "gated": true, "lightroom": 0.8459177158626526, "measured_gap": 0, "minimum": 0.8159177158626526, "side": "dark"}
+TRUTH edge-position/purple-amount-05/narrow: PASS {"maximum": 0.1, "shift_px": 5.303476605686419e-05}
+PARITY edges/purple-amount-05/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.006473}
+PARITY edges/purple-amount-05/slant-22p5: PASS {"allowance": 0.03, "argent": 0.895124193466697, "gated": true, "lightroom": 0.9015971341907345, "measured_gap": 0.006473, "minimum": 0.8651241341907345, "side": "dark"}
+TRUTH edge-position/purple-amount-05/slant-22p5: PASS {"maximum": 0.1, "shift_px": 4.803123522389985e-05}
+PARITY edges/purple-amount-05/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-05/slant-45: PASS {"allowance": 0.03, "argent": 0.895423319867588, "gated": true, "lightroom": 0.88329064930534, "measured_gap": 0, "minimum": 0.8532906493053399, "side": "dark"}
+TRUTH edge-position/purple-amount-05/slant-45: PASS {"maximum": 0.1, "shift_px": 0.0001653842984377374}
+PARITY edges/purple-amount-05/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.023091}
+PARITY edges/purple-amount-05/line-4: PASS {"allowance": 0.03, "argent": 0.8636920068107646, "gated": true, "lightroom": 0.8867825401991305, "measured_gap": 0.023091, "minimum": 0.8336915401991305, "side": "dark"}
+TRUTH edge-position/purple-amount-05/line-4: PASS {"maximum": 0.1, "shift_px": 8.559452858669658e-05}
+PARITY edges/purple-amount-05/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.122183}
+PARITY edges/purple-amount-05/line-12: PASS {"allowance": 0.03, "argent": 0.7148350849626581, "gated": true, "lightroom": 0.8370185597859541, "measured_gap": 0.122183, "minimum": 0.684835559785954, "side": "dark"}
+TRUTH edge-position/purple-amount-05/line-12: PASS {"maximum": 0.1, "shift_px": 2.707760553466443e-05}
+PARITY edges/purple-amount-05/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.000175}
+PARITY edges/purple-amount-05/swapped: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.00017508387681097748, "measured_gap": 0.000175, "minimum": -0.029999916123189023, "side": "dark"}
+TRUTH edge-position/purple-amount-05/swapped: PASS {"maximum": 0.1, "shift_px": 3.5955618597233174e-05}
+PARITY edges/purple-amount-10/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.054014}
+PARITY edges/purple-amount-10/neutral: PASS {"allowance": 0.03, "argent": 0.9138987618932418, "gated": true, "lightroom": 0.9679131950332486, "measured_gap": 0.054014, "minimum": 0.8838991950332485, "side": "dark"}
+TRUTH edge-position/purple-amount-10/neutral: PASS {"maximum": 0.1, "shift_px": 3.350203580287925e-05}
+PARITY edges/purple-amount-10/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.152026}
+PARITY edges/purple-amount-10/sky: PASS {"allowance": 0.03, "argent": 0.5681849162445087, "gated": true, "lightroom": 0.7202104848016736, "measured_gap": 0.152026, "minimum": 0.5381844848016736, "side": "dark"}
+TRUTH edge-position/purple-amount-10/sky: PASS {"maximum": 0.1, "shift_px": 0.004785050232086252}
+PARITY edges/purple-amount-10/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-10/foliage: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0, "minimum": 0.28934516915718844, "side": "dark"}
+TRUTH edge-position/purple-amount-10/foliage: PASS {"maximum": 0.1, "shift_px": 0.0001359268213556586}
+PARITY edges/purple-amount-10/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-10/brown: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.9988412720054433, "measured_gap": 0, "minimum": 0.9688412720054432, "side": "dark"}
+TRUTH edge-position/purple-amount-10/brown: PASS {"maximum": 0.1, "shift_px": 0.0006798701078996555}
+PARITY edges/purple-amount-10/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.003686}
+PARITY edges/purple-amount-10/brown-sky: PASS {"allowance": 0.03, "argent": 0.9963117979328706, "gated": true, "lightroom": 0.9999976918616281, "measured_gap": 0.003686, "minimum": 0.9663116918616281, "side": "dark"}
+TRUTH edge-position/purple-amount-10/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.004897611120289552}
+PARITY edges/purple-amount-10/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.065807}
+PARITY edges/purple-amount-10/wide: PASS {"allowance": 0.03, "argent": 0.8809955731600584, "gated": true, "lightroom": 0.9468023627603543, "measured_gap": 0.065807, "minimum": 0.8509953627603544, "side": "dark"}
+TRUTH edge-position/purple-amount-10/wide: PASS {"maximum": 0.1, "shift_px": 0.00019897842598540216}
+PARITY edges/purple-amount-10/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-10/narrow: PASS {"allowance": 0.03, "argent": 0.944586590474597, "gated": true, "lightroom": 0.8939556099596706, "measured_gap": 0, "minimum": 0.8639556099596706, "side": "dark"}
+TRUTH edge-position/purple-amount-10/narrow: PASS {"maximum": 0.1, "shift_px": 5.751265350242263e-05}
+PARITY edges/purple-amount-10/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.046246}
+PARITY edges/purple-amount-10/slant-22p5: PASS {"allowance": 0.03, "argent": 0.9164363646197919, "gated": true, "lightroom": 0.9626820996447103, "measured_gap": 0.046246, "minimum": 0.8864360996447103, "side": "dark"}
+TRUTH edge-position/purple-amount-10/slant-22p5: PASS {"maximum": 0.1, "shift_px": 4.800501345614272e-05}
+PARITY edges/purple-amount-10/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.03654}
+PARITY edges/purple-amount-10/slant-45: PASS {"allowance": 0.03, "argent": 0.9165767543950573, "gated": true, "lightroom": 0.9531168483305062, "measured_gap": 0.03654, "minimum": 0.8865768483305062, "side": "dark"}
+TRUTH edge-position/purple-amount-10/slant-45: PASS {"maximum": 0.1, "shift_px": 6.0428129573797396e-06}
+PARITY edges/purple-amount-10/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.006929}
+PARITY edges/purple-amount-10/line-4: PASS {"allowance": 0.03, "argent": 0.8944663636682378, "gated": true, "lightroom": 0.9013950614235944, "measured_gap": 0.006929, "minimum": 0.8644660614235944, "side": "dark"}
+TRUTH edge-position/purple-amount-10/line-4: PASS {"maximum": 0.1, "shift_px": 7.584794806825279e-05}
+PARITY edges/purple-amount-10/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.112654}
+PARITY edges/purple-amount-10/line-12: PASS {"allowance": 0.03, "argent": 0.8665654280625881, "gated": true, "lightroom": 0.9792189876851758, "measured_gap": 0.112654, "minimum": 0.8365649876851757, "side": "dark"}
+TRUTH edge-position/purple-amount-10/line-12: PASS {"maximum": 0.1, "shift_px": 0.0001221854323967264}
+PARITY edges/purple-amount-10/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-10/swapped: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": -2.6962079999526267e-05, "measured_gap": 0, "minimum": -0.030026962079999525, "side": "dark"}
+TRUTH edge-position/purple-amount-10/swapped: PASS {"maximum": 0.1, "shift_px": 0.00013380370231461103}
+PARITY edges/purple-amount-20/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.026986}
+PARITY edges/purple-amount-20/neutral: PASS {"allowance": 0.03, "argent": 0.9485463280251624, "gated": true, "lightroom": 0.9755318909376189, "measured_gap": 0.026986, "minimum": 0.918545890937619, "side": "dark"}
+TRUTH edge-position/purple-amount-20/neutral: PASS {"maximum": 0.1, "shift_px": 0.00010500367326816997}
+PARITY edges/purple-amount-20/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.218688}
+PARITY edges/purple-amount-20/sky: PASS {"allowance": 0.03, "argent": 0.522309497283274, "gated": true, "lightroom": 0.7409973868330184, "measured_gap": 0.218688, "minimum": 0.4923093868330184, "side": "dark"}
+TRUTH edge-position/purple-amount-20/sky: PASS {"maximum": 0.1, "shift_px": 0.005193244202107539}
+PARITY edges/purple-amount-20/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-20/foliage: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0, "minimum": 0.28934516915718844, "side": "dark"}
+TRUTH edge-position/purple-amount-20/foliage: PASS {"maximum": 0.1, "shift_px": 0.0003009823037977699}
+PARITY edges/purple-amount-20/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-20/brown: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.9988412720054433, "measured_gap": 0, "minimum": 0.9688412720054432, "side": "dark"}
+TRUTH edge-position/purple-amount-20/brown: PASS {"maximum": 0.1, "shift_px": 0.0015237957464979363}
+PARITY edges/purple-amount-20/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-20/brown-sky: PASS {"allowance": 0.03, "argent": 1.0, "gated": true, "lightroom": 0.9999976918616281, "measured_gap": 0, "minimum": 0.9699976918616281, "side": "dark"}
+TRUTH edge-position/purple-amount-20/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.005871312950631868}
+PARITY edges/purple-amount-20/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.069915}
+PARITY edges/purple-amount-20/wide: PASS {"allowance": 0.03, "argent": 0.9107753541168969, "gated": true, "lightroom": 0.980690814861316, "measured_gap": 0.069915, "minimum": 0.8807758148613161, "side": "dark"}
+TRUTH edge-position/purple-amount-20/wide: PASS {"maximum": 0.1, "shift_px": 1.0085935572473614e-05}
+PARITY edges/purple-amount-20/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-20/narrow: PASS {"allowance": 0.03, "argent": 0.9715231924870371, "gated": true, "lightroom": 0.9060173844365922, "measured_gap": 0, "minimum": 0.8760173844365922, "side": "dark"}
+TRUTH edge-position/purple-amount-20/narrow: PASS {"maximum": 0.1, "shift_px": 2.240742902398507e-05}
+PARITY edges/purple-amount-20/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.025978}
+PARITY edges/purple-amount-20/slant-22p5: PASS {"allowance": 0.03, "argent": 0.9490475337682578, "gated": true, "lightroom": 0.9750253115557452, "measured_gap": 0.025978, "minimum": 0.9190473115557452, "side": "dark"}
+TRUTH edge-position/purple-amount-20/slant-22p5: PASS {"maximum": 0.1, "shift_px": 3.6273256126873044e-05}
+PARITY edges/purple-amount-20/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.020691}
+PARITY edges/purple-amount-20/slant-45: PASS {"allowance": 0.03, "argent": 0.9476147604510717, "gated": true, "lightroom": 0.9683057867473698, "measured_gap": 0.020691, "minimum": 0.9176147867473697, "side": "dark"}
+TRUTH edge-position/purple-amount-20/slant-45: PASS {"maximum": 0.1, "shift_px": 9.982084097912014e-05}
+PARITY edges/purple-amount-20/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/purple-amount-20/line-4: PASS {"allowance": 0.03, "argent": 0.9402747752741406, "gated": true, "lightroom": 0.8992972616185746, "measured_gap": 0, "minimum": 0.8692972616185746, "side": "dark"}
+TRUTH edge-position/purple-amount-20/line-4: PASS {"maximum": 0.1, "shift_px": 2.6019442189939568e-05}
+PARITY edges/purple-amount-20/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.059767}
+PARITY edges/purple-amount-20/line-12: PASS {"allowance": 0.03, "argent": 0.9243019218957714, "gated": true, "lightroom": 0.9840692780514904, "measured_gap": 0.059767, "minimum": 0.8943022780514903, "side": "dark"}
+TRUTH edge-position/purple-amount-20/line-12: PASS {"maximum": 0.1, "shift_px": 1.4853913958390308e-05}
+PARITY edges/purple-amount-20/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.000369}
+PARITY edges/purple-amount-20/swapped: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.00036850932469389974, "measured_gap": 0.000369, "minimum": -0.0300004906753061, "side": "dark"}
+TRUTH edge-position/purple-amount-20/swapped: PASS {"maximum": 0.1, "shift_px": 0.0007372450401502203}
+PARITY edges/green-amount-01/neutral: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/neutral: PASS {"maximum": 0.1, "shift_px": 3.678197011011268e-05}
+PARITY edges/green-amount-01/sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-01/foliage: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/foliage: PASS {"maximum": 0.1, "shift_px": 0.00016198462744979047}
+PARITY edges/green-amount-01/brown: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/brown: PASS {"maximum": 0.1, "shift_px": 0.000395644557542591}
+PARITY edges/green-amount-01/brown-sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-01/wide: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/wide: PASS {"maximum": 0.1, "shift_px": 0.00046012967027699643}
+PARITY edges/green-amount-01/narrow: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/narrow: PASS {"maximum": 0.1, "shift_px": 0.00017956729322454734}
+PARITY edges/green-amount-01/slant-22p5: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/slant-22p5: PASS {"maximum": 0.1, "shift_px": 8.992740579388814e-05}
+PARITY edges/green-amount-01/slant-45: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/slant-45: PASS {"maximum": 0.1, "shift_px": 0.0002467911323830174}
+PARITY edges/green-amount-01/line-4: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/line-4: PASS {"maximum": 0.1, "shift_px": 5.820710998660772e-05}
+PARITY edges/green-amount-01/line-12: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/line-12: PASS {"maximum": 0.1, "shift_px": 3.6462442238871517e-06}
+PARITY edges/green-amount-01/swapped: INFO {"allowance": 0.03, "argent": 0.10343322016554246, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-01/swapped: PASS {"maximum": 0.1, "shift_px": 8.797350316183672e-05}
+PARITY edges/green-amount-02/neutral: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/neutral: PASS {"maximum": 0.1, "shift_px": 0.00036157597549885123}
+PARITY edges/green-amount-02/sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-02/foliage: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/foliage: PASS {"maximum": 0.1, "shift_px": 0.0004656439179578087}
+PARITY edges/green-amount-02/brown: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/brown: PASS {"maximum": 0.1, "shift_px": 0.00120296502789965}
+PARITY edges/green-amount-02/brown-sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-02/wide: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/wide: PASS {"maximum": 0.1, "shift_px": 0.00010727083512300299}
+PARITY edges/green-amount-02/narrow: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/narrow: PASS {"maximum": 0.1, "shift_px": 0.00039114776537069185}
+PARITY edges/green-amount-02/slant-22p5: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/slant-22p5: PASS {"maximum": 0.1, "shift_px": 0.00023526187172431823}
+PARITY edges/green-amount-02/slant-45: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/slant-45: PASS {"maximum": 0.1, "shift_px": 0.000543231220382745}
+PARITY edges/green-amount-02/line-4: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/line-4: PASS {"maximum": 0.1, "shift_px": 0.0004962196302842337}
+PARITY edges/green-amount-02/line-12: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/line-12: PASS {"maximum": 0.1, "shift_px": 0.0005212178980995574}
+PARITY edges/green-amount-02/swapped: INFO {"allowance": 0.03, "argent": 0.3252243940987174, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-02/swapped: PASS {"maximum": 0.1, "shift_px": 0.0001874224772044908}
+PARITY edges/green-amount-05/neutral: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/neutral: PASS {"maximum": 0.1, "shift_px": 0.000731417184591493}
+PARITY edges/green-amount-05/sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-05/foliage: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/foliage: PASS {"maximum": 0.1, "shift_px": 0.0013557831687312782}
+PARITY edges/green-amount-05/brown: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/brown: PASS {"maximum": 0.1, "shift_px": 0.004357193309396013}
+PARITY edges/green-amount-05/brown-sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-05/wide: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/wide: PASS {"maximum": 0.1, "shift_px": 0.0002600436476410395}
+PARITY edges/green-amount-05/narrow: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/narrow: PASS {"maximum": 0.1, "shift_px": 0.0003098438683065696}
+PARITY edges/green-amount-05/slant-22p5: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/slant-22p5: PASS {"maximum": 0.1, "shift_px": 0.000526925289302066}
+PARITY edges/green-amount-05/slant-45: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/slant-45: PASS {"maximum": 0.1, "shift_px": 0.0006320022482849685}
+PARITY edges/green-amount-05/line-4: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/line-4: PASS {"maximum": 0.1, "shift_px": 0.0005882640327028454}
+PARITY edges/green-amount-05/line-12: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/line-12: PASS {"maximum": 0.1, "shift_px": 0.0008841748796850624}
+PARITY edges/green-amount-05/swapped: INFO {"allowance": 0.03, "argent": 0.9008406782609127, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-05/swapped: PASS {"maximum": 0.1, "shift_px": 0.00021240263686572725}
+PARITY edges/green-amount-10/neutral/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.005867}
+PARITY edges/green-amount-10/neutral: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.0058667266737975066, "measured_gap": 0.005867, "minimum": -0.030000273326202493, "side": "dark"}
+TRUTH edge-position/green-amount-10/neutral: PASS {"maximum": 0.1, "shift_px": 0.0007127454359674712}
+PARITY edges/green-amount-10/sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/green-amount-10/sky: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": -0.0005190580420704194, "measured_gap": 0, "minimum": -0.03051905804207042, "side": "dark"}
+TRUTH edge-position/green-amount-10/sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-10/foliage/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.319345}
+PARITY edges/green-amount-10/foliage: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.31934516915718847, "measured_gap": 0.319345, "minimum": -0.02999983084281152, "side": "dark"}
+TRUTH edge-position/green-amount-10/foliage: PASS {"maximum": 0.1, "shift_px": 0.0014845751475179858}
+PARITY edges/green-amount-10/brown/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/green-amount-10/brown: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": -0.00198124346134132, "measured_gap": 0, "minimum": -0.03198124346134132, "side": "dark"}
+TRUTH edge-position/green-amount-10/brown: PASS {"maximum": 0.1, "shift_px": 0.004749523560521185}
+PARITY edges/green-amount-10/brown-sky/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/green-amount-10/brown-sky: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": -0.0008821545255035534, "measured_gap": 0, "minimum": -0.030882154525503552, "side": "dark"}
+TRUTH edge-position/green-amount-10/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-10/wide/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.001251}
+PARITY edges/green-amount-10/wide: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.001251059615633987, "measured_gap": 0.001251, "minimum": -0.02999994038436601, "side": "dark"}
+TRUTH edge-position/green-amount-10/wide: PASS {"maximum": 0.1, "shift_px": 0.0013136376550498818}
+PARITY edges/green-amount-10/narrow/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.033495}
+PARITY edges/green-amount-10/narrow: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.0334953964820921, "measured_gap": 0.033495, "minimum": -0.029999603517907897, "side": "dark"}
+TRUTH edge-position/green-amount-10/narrow: PASS {"maximum": 0.1, "shift_px": 0.0002378097872708651}
+PARITY edges/green-amount-10/slant-22p5/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.00695}
+PARITY edges/green-amount-10/slant-22p5: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.006949893927381434, "measured_gap": 0.00695, "minimum": -0.030000106072618563, "side": "dark"}
+TRUTH edge-position/green-amount-10/slant-22p5: PASS {"maximum": 0.1, "shift_px": 0.0003901085715766195}
+PARITY edges/green-amount-10/slant-45/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.008636}
+PARITY edges/green-amount-10/slant-45: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.008636211485586909, "measured_gap": 0.008636, "minimum": -0.029999788514413088, "side": "dark"}
+TRUTH edge-position/green-amount-10/slant-45: PASS {"maximum": 0.1, "shift_px": 0.0005872355127904683}
+PARITY edges/green-amount-10/line-4/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.039529}
+PARITY edges/green-amount-10/line-4: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.03952857741604954, "measured_gap": 0.039529, "minimum": -0.030000422583950463, "side": "dark"}
+TRUTH edge-position/green-amount-10/line-4: PASS {"maximum": 0.1, "shift_px": 0.0005288845611948201}
+PARITY edges/green-amount-10/line-12/gap: KNOWN {"allowance": 0.03, "measured_gap": 0.007593}
+PARITY edges/green-amount-10/line-12: PASS {"allowance": 0.03, "argent": 0.0, "gated": true, "lightroom": 0.007592953165127869, "measured_gap": 0.007593, "minimum": -0.03000004683487213, "side": "dark"}
+TRUTH edge-position/green-amount-10/line-12: PASS {"maximum": 0.1, "shift_px": 0.0005419858848769721}
+PARITY edges/green-amount-10/swapped/gap: KNOWN {"allowance": 0.03, "measured_gap": 0}
+PARITY edges/green-amount-10/swapped: PASS {"allowance": 0.03, "argent": 0.9448869961332766, "gated": true, "lightroom": 0.49275638362647445, "measured_gap": 0, "minimum": 0.4627563836264744, "side": "dark"}
+TRUTH edge-position/green-amount-10/swapped: PASS {"maximum": 0.1, "shift_px": 0.0002986205175602996}
+PARITY edges/green-amount-20/neutral: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/neutral: PASS {"maximum": 0.1, "shift_px": 0.000331957424631546}
+PARITY edges/green-amount-20/sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-20/foliage: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/foliage: PASS {"maximum": 0.1, "shift_px": 0.0015841776412783004}
+PARITY edges/green-amount-20/brown: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/brown: PASS {"maximum": 0.1, "shift_px": 0.005188097491605587}
+PARITY edges/green-amount-20/brown-sky: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/brown-sky: PASS {"maximum": 0.1, "shift_px": 0.0}
+PARITY edges/green-amount-20/wide: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/wide: PASS {"maximum": 0.1, "shift_px": 0.0007409485799546589}
+PARITY edges/green-amount-20/narrow: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/narrow: PASS {"maximum": 0.1, "shift_px": 2.6090659134087035e-05}
+PARITY edges/green-amount-20/slant-22p5: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/slant-22p5: PASS {"maximum": 0.1, "shift_px": 0.0002273262179827984}
+PARITY edges/green-amount-20/slant-45: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/slant-45: PASS {"maximum": 0.1, "shift_px": 0.0002522873924981628}
+PARITY edges/green-amount-20/line-4: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/line-4: PASS {"maximum": 0.1, "shift_px": 0.0002945839815895468}
+PARITY edges/green-amount-20/line-12: INFO {"allowance": 0.03, "argent": 0.0, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/line-12: PASS {"maximum": 0.1, "shift_px": 0.0004110678915285604}
+PARITY edges/green-amount-20/swapped: INFO {"allowance": 0.03, "argent": 0.9678721442374004, "gated": false, "lightroom": null, "measured_gap": null, "minimum": null, "side": "dark"}
+TRUTH edge-position/green-amount-20/swapped: PASS {"maximum": 0.1, "shift_px": 0.0003848681036746626}
+TRUTH HDR-purple-10: PASS {"minimum": 0.75, "removed": 0.9221545570700941}
+PARITY wheel/purple-amount-01/2px: INFO {"argent": 0.9074867550470708, "gated": false, "lightroom": 0.8552554358960147, "rule": "within-.05"}
+PARITY wheel/purple-amount-01/6px: INFO {"argent": 0.30921110077873953, "gated": false, "lightroom": 0.311687769085599, "rule": "within-.05"}
+PARITY wheel/purple-amount-01/12px: INFO {"argent": 0.1596421872116567, "gated": false, "lightroom": 0.16141211118373308, "rule": "within-.05"}
+PARITY wheel/purple-amount-02/2px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9528276666755325, "rule": "within-.05"}
+PARITY wheel/purple-amount-02/6px: PASS {"argent": 0.6432462387695483, "gated": true, "lightroom": 0.6379134098881437, "rule": "within-.05"}
+PARITY wheel/purple-amount-02/12px: PASS {"argent": 0.33221531176261665, "gated": true, "lightroom": 0.32997259483563346, "rule": "within-.05"}
+PARITY wheel/purple-amount-05/2px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9748756047056012, "rule": "within-.05"}
+PARITY wheel/purple-amount-05/6px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9812819871471662, "rule": "within-.05"}
+PARITY wheel/purple-amount-05/12px: PASS {"argent": 0.8277033371868979, "gated": true, "lightroom": 0.8197604766361295, "rule": "within-.05"}
+TRUTH wheel/purple/2px: PASS {"minimum": 0.75, "removed": 1.0}
+PARITY wheel/purple-amount-10/2px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9775559675756165, "rule": "within-.05"}
+TRUTH wheel/purple/6px: PASS {"minimum": 0.75, "removed": 1.0}
+PARITY wheel/purple-amount-10/6px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9887228469695977, "rule": "within-.05"}
+TRUTH wheel/purple/12px: PASS {"minimum": 0.75, "removed": 1.0}
+PARITY wheel/purple-amount-10/12px: PASS {"argent": 1.0, "gated": true, "lightroom": 0.9900865073607067, "rule": "within-.05"}
+PARITY protected/purple/0/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/5/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/10/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/15/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/20/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/25/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/30/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/35/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/40/6px: KNOWN {"argent": 0.2047303082191781, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/45/6px: KNOWN {"argent": 0.0704195205479452, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/50/6px: KNOWN {"argent": 0.0003210616438356164, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/55/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/60/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/65/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/70/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/75/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/80/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/85/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/90/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/95/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/100/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/105/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/110/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/115/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/120/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/125/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/130/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/135/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/140/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/145/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/150/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/155/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/160/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/165/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/170/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/175/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/180/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/185/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/190/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/195/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/200/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/205/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/210/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/215/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/220/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/225/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/230/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/235/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/240/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/245/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/250/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/255/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/260/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/265/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/270/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/275/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/280/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/285/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/290/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/295/6px: KNOWN {"argent": 0.00010702054794520547, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/300/6px: KNOWN {"argent": 0.002461472602739726, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/305/6px: KNOWN {"argent": 0.10434503424657535, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/310/6px: KNOWN {"argent": 0.2048373287671233, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/purple/315/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/320/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/325/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/330/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/335/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/340/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/345/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/350/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/355/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/0/2px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/0/12px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/purple/180/2px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/purple/180/12px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY wheel/purple-amount-20/2px: PASS {"argent": 0.0, "gated": true, "lightroom": 0.00026657459932401695, "rule": "within-.05"}
+PARITY wheel/purple-amount-20/6px: PASS {"argent": 0.0, "gated": true, "lightroom": 0.00026657459932401695, "rule": "within-.05"}
+PARITY wheel/purple-amount-20/12px: PASS {"argent": 0.0, "gated": true, "lightroom": 0.00026657459932401695, "rule": "within-.05"}
+PARITY hue/purple-hue-lo-020/start_bracket: PASS {"argent": [[265, 270]], "distance": 0, "lightroom": [[265, 270]], "maximum": 5}
+PARITY hue/purple-hue-lo-020/end_bracket: PASS {"argent": [[85, 90]], "distance": 0, "lightroom": [[90, 95]], "maximum": 5}
+PARITY hue/purple-hue-lo-040/start_bracket: PASS {"argent": [[305, 310]], "distance": 0, "lightroom": [[300, 305]], "maximum": 5}
+PARITY hue/purple-hue-lo-040/end_bracket: PASS {"argent": [[85, 90]], "distance": 0, "lightroom": [[90, 95]], "maximum": 5}
+PARITY hue/purple-hue-lo-060/start_bracket: PASS {"argent": [[20, 25]], "distance": 0, "lightroom": [[20, 25]], "maximum": 5}
+PARITY hue/purple-hue-lo-060/end_bracket: PASS {"argent": [[85, 90]], "distance": 0, "lightroom": [[90, 95]], "maximum": 5}
+PARITY hue/purple-hue-lo-080/start_bracket: PASS {"argent": [[60, 65]], "distance": 0, "lightroom": [[60, 65]], "maximum": 5}
+PARITY hue/purple-hue-lo-080/end_bracket: PASS {"argent": [[85, 90]], "distance": 0, "lightroom": [[90, 95]], "maximum": 5}
+PARITY hue/purple-hue-hi-020/start_bracket: PASS {"argent": [[245, 250]], "distance": 0, "lightroom": [[245, 250]], "maximum": 5}
+PARITY hue/purple-hue-hi-020/end_bracket: PASS {"argent": [[275, 280]], "distance": 0, "lightroom": [[275, 280]], "maximum": 5}
+PARITY hue/purple-hue-hi-040/start_bracket: PASS {"argent": [[245, 250]], "distance": 0, "lightroom": [[245, 250]], "maximum": 5}
+PARITY hue/purple-hue-hi-040/end_bracket: PASS {"argent": [[320, 325]], "distance": 0, "lightroom": [[320, 325]], "maximum": 5}
+PARITY hue/purple-hue-hi-060/start_bracket: PASS {"argent": [[245, 250]], "distance": 0, "lightroom": [[245, 250]], "maximum": 5}
+PARITY hue/purple-hue-hi-060/end_bracket: PASS {"argent": [[35, 40]], "distance": 0, "lightroom": [[40, 45]], "maximum": 5}
+PARITY hue/purple-hue-hi-080/start_bracket: PASS {"argent": [[245, 250]], "distance": 0, "lightroom": [[245, 250]], "maximum": 5}
+PARITY hue/purple-hue-hi-080/end_bracket: PASS {"argent": [[65, 70]], "distance": 0, "lightroom": [[65, 70]], "maximum": 5}
+PARITY wheel/green-amount-01/2px: PASS {"argent": 0.8959910840785519, "gated": true, "lightroom": 0.4497116150836277, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-01/6px: PASS {"argent": 0.33500835862647016, "gated": true, "lightroom": 0.1955314054913154, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-01/12px: PASS {"argent": 0.1947626772634497, "gated": true, "lightroom": 0.10109193242324918, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-02/2px: PASS {"argent": 0.9669373620394869, "gated": true, "lightroom": 0.6235249454563695, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-02/6px: PASS {"argent": 0.6403702975899971, "gated": true, "lightroom": 0.47465380542544255, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-02/12px: PASS {"argent": 0.3729496404092665, "gated": true, "lightroom": 0.24529631869858934, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-05/2px: PASS {"argent": 0.9775686171943616, "gated": true, "lightroom": 0.707689090737908, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-05/6px: PASS {"argent": 0.9562245261172181, "gated": true, "lightroom": 0.8288929979415528, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-05/12px: PASS {"argent": 0.7749566349956335, "gated": true, "lightroom": 0.7087756619925349, "rule": "at-least-lightroom-minus-.05"}
+TRUTH wheel/green/2px: PASS {"minimum": 0.75, "removed": 0.9806195913164473}
+PARITY wheel/green-amount-10/2px: PASS {"argent": 0.9806195913164473, "gated": true, "lightroom": 0.730122729011728, "rule": "at-least-lightroom-minus-.05"}
+TRUTH wheel/green/6px: PASS {"minimum": 0.75, "removed": 0.9733124701026995}
+PARITY wheel/green-amount-10/6px: PASS {"argent": 0.9733124701026995, "gated": true, "lightroom": 0.8895195153868494, "rule": "at-least-lightroom-minus-.05"}
+TRUTH wheel/green/12px: PASS {"minimum": 0.75, "removed": 0.9533783966605102}
+PARITY wheel/green-amount-10/12px: PASS {"argent": 0.9533783966605102, "gated": true, "lightroom": 0.9133233370778905, "rule": "at-least-lightroom-minus-.05"}
+PARITY protected/green/0/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/5/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/10/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/15/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/20/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/25/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/30/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/35/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/40/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/45/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/50/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/55/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/60/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/65/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/70/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/75/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/80/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/85/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/90/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/95/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/100/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/105/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/110/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/115/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/120/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/125/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/130/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/135/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/140/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/145/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/150/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/155/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/160/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/165/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/170/6px: KNOWN {"argent": 0.0012842465753424657, "gated": false, "lightroom": 0.0}
+PARITY protected/green/175/6px: KNOWN {"argent": 0.3035102739726027, "gated": false, "lightroom": 0.1721960616438356}
+PARITY protected/green/180/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/185/6px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/190/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/195/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/200/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/205/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/210/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/215/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/220/6px: PASS {"argent": 0.3035102739726027, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/225/6px: KNOWN {"argent": 0.3035102739726027, "gated": false, "lightroom": 0.3360445205479452}
+PARITY protected/green/230/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/235/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/240/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/245/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/250/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/255/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/260/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/265/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/270/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/275/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/280/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/285/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/290/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/295/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/300/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/305/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/310/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/315/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/320/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/325/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/330/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/335/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/340/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/345/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/350/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/355/6px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/0/2px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/0/12px: KNOWN {"argent": 0.0, "gated": false, "lightroom": 0.0}
+PARITY protected/green/180/2px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY protected/green/180/12px: PASS {"argent": 0.3360445205479452, "gated": true, "lightroom": 0.3360445205479452}
+PARITY wheel/green-amount-20/2px: PASS {"argent": 0.982587813327105, "gated": true, "lightroom": 0.7403849965502838, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-20/6px: PASS {"argent": 0.9796183061369961, "gated": true, "lightroom": 0.9072180017578118, "rule": "at-least-lightroom-minus-.05"}
+PARITY wheel/green-amount-20/12px: PASS {"argent": 0.9731041099782866, "gated": true, "lightroom": 0.9464735953818708, "rule": "at-least-lightroom-minus-.05"}
+PARITY hue/green-hue-lo-020/start_bracket: PASS {"argent": [[105, 110]], "distance": 0, "lightroom": [[105, 110]], "maximum": 5}
+PARITY hue/green-hue-lo-020/end_bracket: PASS {"argent": [[270, 275]], "distance": 0, "lightroom": [[275, 280]], "maximum": 5}
+PARITY hue/green-hue-lo-040/start_bracket: PASS {"argent": [[160, 165]], "distance": 0, "lightroom": [[160, 165]], "maximum": 5}
+PARITY hue/green-hue-lo-040/end_bracket: PASS {"argent": [[270, 275]], "distance": 0, "lightroom": [[275, 280]], "maximum": 5}
+PARITY hue/green-hue-lo-060/start_bracket: PASS {"argent": [[220, 225]], "distance": 0, "lightroom": [[215, 220]], "maximum": 5}
+PARITY hue/green-hue-lo-060/end_bracket: PASS {"argent": [[270, 275]], "distance": 0, "lightroom": [[275, 280]], "maximum": 5}
+PARITY hue/green-hue-lo-080/start_bracket: PASS {"argent": [[245, 250]], "distance": 0, "lightroom": [[245, 250]], "maximum": 5}
+PARITY hue/green-hue-lo-080/end_bracket: PASS {"argent": [[270, 275]], "distance": 0, "lightroom": [[275, 280]], "maximum": 5}
+PARITY hue/green-hue-hi-020/start_bracket: PASS {"argent": [[80, 85]], "distance": 0, "lightroom": [[80, 85]], "maximum": 5}
+PARITY hue/green-hue-hi-020/end_bracket: PASS {"argent": [[120, 125]], "distance": 0, "lightroom": [[120, 125]], "maximum": 5}
+PARITY hue/green-hue-hi-040/start_bracket: PASS {"argent": [[80, 85]], "distance": 0, "lightroom": [[80, 85]], "maximum": 5}
+PARITY hue/green-hue-hi-040/end_bracket: PASS {"argent": [[185, 190]], "distance": 0, "lightroom": [[185, 190]], "maximum": 5}
+PARITY hue/green-hue-hi-060/start_bracket: PASS {"argent": [[80, 85]], "distance": 0, "lightroom": [[80, 85]], "maximum": 5}
+PARITY hue/green-hue-hi-060/end_bracket: PASS {"argent": [[230, 235]], "distance": 0, "lightroom": [[230, 235]], "maximum": 5}
+PARITY hue/green-hue-hi-080/start_bracket: PASS {"argent": [[80, 85]], "distance": 0, "lightroom": [[80, 85]], "maximum": 5}
+PARITY hue/green-hue-hi-080/end_bracket: PASS {"argent": [[250, 255]], "distance": 0, "lightroom": [[250, 255]], "maximum": 5}
+TRUTH PASS: 127/127 gates
+PARITY PASS: 161/161 gates (INFO rows are not gates)

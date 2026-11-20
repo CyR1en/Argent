@@ -1,0 +1,64 @@
+{
+  "schema": 2,
+  "id": "kodak-vision3-500t",
+  "displayName": "Tungsten 500",
+  "modelledFilm": "Kodak VISION3 500T",
+  "manufacturer": "Kodak",
+  "status": "datasheet",
+  "boxSpeed": 500,
+  "paper": "kodak-endura-premier",
+  "printVariants": [
+    {"id": "kodak-vision3-500t-cinema", "displayName": "Cinema 500", "paper": "kodak-vision-2383"}
+  ],
+  "source": {
+    "publication": "H-1-5219",
+    "edition": "2026-03",
+    "url": "https://www.kodak.com/content/products-brochures/motion-picture/KODAK-VISION3-5219-7219-technical-information.pdf",
+    "sha256": "6d037d8090373ee50d10bedfff3df14777a575dd107c50edcafc7ec5862d0972",
+    "curvePage": 3,
+    "spectralPage": 4,
+    "grainPage": 3,
+    "notes": "March 2026 anti-halation undercoat (AHU) version, ECN-2. Camera Stops were digitized at half-stop intervals and zero was anchored to Argent’s metered mid-gray. The curve uses Kodak’s ECN-2 densitometry; inversion approximates it with Status M (which Kodak specifies for ECN-2 process-control strips), after aligning the plotted toe to its published spectral minimum. The published highlight roll-off is used as drawn. No interlayer coefficients are claimed. Halation inputs are estimates for a film with an anti-halation undercoat, not measurements."
+  },
+  "captureIlluminantKelvin": 3200,
+  "highlightShoulder": "published",
+  "spectralSensitivity": {
+    "wavelengths": [370, 380, 390, 400, 410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520, 530, 540, 550, 560, 570, 580, 590, 600, 610, 620, 630, 640, 650, 660, 670, 680],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.61, 0.71, 0.75, 0.69, 0.61, 0.92, 1.16, 1.51, 1.87, 2.1, 2.24, 2.41, 2.39, 2.37, 2.44, 2.42, 2.08, 1.7],
+    "green": [null, null, null, null, null, null, null, null, 1.05, 1.15, 1.25, 1.61, 1.99, 2.21, 2.3, 2.41, 2.52, 2.67, 2.8, 2.72, 2.62, 2.37, 1.72, 0.76, null, null, null, null, null, null, null, null],
+    "blue": [2.5, 2.8, 3.08, 3.19, 3.2, 3.18, 3.16, 3.11, 3.08, 3.07, 3.03, 2.83, 2.58, 2.28, 1.85, 1.3, 0.7, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+  },
+  "characteristicCurves": {
+    "densitometry": "statusM",
+    "densityReference": "aboveToe",
+    "logExposureReference": -1.5,
+    "speedReference": false,
+    "logExposure": [-4.046872, -3.896357, -3.745842, -3.595327, -3.444812, -3.294297, -3.143782, -2.993267, -2.842752, -2.692237, -2.541722, -2.391207, -2.240692, -2.090177, -1.939662, -1.789147, -1.638632, -1.488117, -1.337602, -1.187087, -1.036572, -0.886057, -0.735542, -0.585027, -0.434512, -0.283997, -0.133482, 0.017033, 0.167548, 0.318063, 0.468578, 0.619093, 0.769608],
+    "red": [0.1917, 0.1949, 0.1981, 0.2076, 0.2235, 0.2457, 0.2764, 0.3135, 0.3569, 0.4109, 0.4777, 0.5492, 0.618, 0.6884, 0.7594, 0.8293, 0.9008, 0.9733, 1.0438, 1.1147, 1.1857, 1.2561, 1.3292, 1.4023, 1.4701, 1.5315, 1.5935, 1.6533, 1.7073, 1.7566, 1.7974, 1.827, 1.8482],
+    "green": [0.5878, 0.5889, 0.5931, 0.6011, 0.618, 0.6434, 0.6778, 0.7181, 0.77, 0.8351, 0.914, 0.9972, 1.0787, 1.1624, 1.2466, 1.3297, 1.4139, 1.4976, 1.5792, 1.6628, 1.7465, 1.8286, 1.9139, 1.9981, 2.078, 2.1543, 2.2268, 2.2973, 2.3635, 2.4238, 2.4752, 2.5154, 2.5451],
+    "blue": [0.842, 0.8431, 0.8473, 0.8547, 0.8695, 0.8918, 0.9225, 0.9596, 1.0062, 1.0724, 1.1529, 1.2376, 1.3197, 1.4023, 1.4828, 1.5622, 1.6422, 1.7227, 1.8016, 1.8826, 1.9642, 2.0452, 2.1283, 2.2109, 2.2904, 2.3629, 2.435, 2.5038, 2.5673, 2.6235, 2.6701, 2.7114, 2.7336]
+  },
+  "dyeDensity": {
+    "wavelengths": [400, 420, 440, 460, 480, 500, 520, 540, 560, 580, 600, 620, 640, 660, 680, 700, 720, 740, 760, 780, 800],
+    "cyan": [0.2, 0.12, 0.05, 0.015, 0.014, 0.02, 0.039, 0.078, 0.138, 0.228, 0.38, 0.58, 0.755, 0.908, 0.993, 0.98, 0.87, 0.69, 0.48, 0.29, 0.14],
+    "magenta": [0, 0, 0, 0.016, 0.19, 0.49, 0.8, 0.999, 0.875, 0.53, 0.25, 0.139, 0.094, 0.069, 0.058, 0.053, 0.046, 0.031, 0.021, 0.014, 0.009],
+    "yellow": [0.49, 0.82, 0.985, 0.928, 0.68, 0.373, 0.209, 0.14, 0.099, 0.058, 0.03, 0.009, 0.002, 0, 0, 0, 0, 0.006, 0.008, 0.008, 0.009],
+    "minimumDensity": [0.58, 0.75, 0.86, 0.832, 0.77, 0.716, 0.65, 0.533, 0.521, 0.522, 0.362, 0.25, 0.208, 0.154, 0.143, 0.138, 0.128, 0.118, 0.109, 0.093, 0.079]
+  },
+  "couplers": {
+    "interLayer": [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 0, 0]
+    ]
+  },
+  "grayCard": null,
+  "grain": {
+    "rmsGranularity48um": [0.0058, 0.007, 0.019]
+  },
+  "halation": {
+    "strength": 0.01,
+    "greenShare": 0.15,
+    "radiusMicrometres": 180
+  }
+}

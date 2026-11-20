@@ -1,0 +1,48 @@
+# ANSI/ISO 5-3:1995 (ANSI/NAPM IT2.18-1996) Tables 3 and 4, log10 spectral products normalized to a peak of 5.000, defined at 10 nm; transcribed by hand from the scan at law.resource.org (incorporated into US law, 36 CFR 1238.14) and verified twice against the scanned page. Numbers only; the PDF is not redistributed.
+# Columns are log10 of the spectral product, so the product is 10^value with a peak of 100000. Blank means outside the explicit table; extend the log10 value in a straight line with the slope rows below.
+wavelength_nm,A_blue,A_green,A_red,M_blue,M_green,M_red
+400,,,,,,
+410,,,,2.103,,
+420,3.602,,,4.111,,
+430,4.819,,,4.632,,
+440,5.000,,,4.871,,
+450,4.912,,,5.000,,
+460,4.620,,,4.955,,
+470,4.040,,,4.743,1.152,
+480,2.989,,,4.343,2.207,
+490,1.566,,,3.743,3.156,
+500,0.165,1.650,,2.990,3.804,
+510,,3.822,,1.852,4.272,
+520,,4.782,,,4.626,
+530,,5.000,,,4.872,
+540,,4.906,,,5.000,
+550,,4.644,,,4.995,
+560,,4.221,,,4.818,
+570,,3.609,,,4.458,
+580,,2.766,,,3.915,
+590,,1.579,,,3.172,
+600,,,2.568,,2.239,
+610,,,4.638,,1.070,
+620,,,5.000,,,2.109
+630,,,4.871,,,4.479
+640,,,4.604,,,5.000
+650,,,4.286,,,4.899
+660,,,3.900,,,4.578
+670,,,3.551,,,4.252
+680,,,3.165,,,3.875
+690,,,2.776,,,3.491
+700,,,2.383,,,3.099
+710,,,1.970,,,2.687
+720,,,1.551,,,2.269
+730,,,1.141,,,1.859
+740,,,0.741,,,1.449
+750,,,0.341,,,1.054
+760,,,,,,0.654
+770,,,,,,0.254
+# Slope rows, log10 units per nm, applied as a straight-line extension of the log10 value beyond the first and last tabulated entry of each column:
+# A_blue: +0.380/nm below 420 nm ; -0.140/nm above 500 nm
+# A_green: +0.220/nm below 500 nm ; -0.170/nm above 590 nm
+# A_red: +0.270/nm below 600 nm ; -0.040/nm above 750 nm
+# M_blue: +0.250/nm below 410 nm ; -0.220/nm above 510 nm
+# M_green: +0.106/nm below 470 nm ; -0.120/nm above 610 nm
+# M_red: +0.260/nm below 620 nm ; -0.040/nm above 770 nm

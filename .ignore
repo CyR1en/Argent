@@ -1,0 +1,3 @@
+# Search tools (ripgrep, editors, coding agents) honour .gitignore, which leaves out docs/: Argent's
+# private notes, cloned there by scripts/docs.sh. This brings them back into search.
+!/docs/

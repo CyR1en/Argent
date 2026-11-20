@@ -1,0 +1,31 @@
+[project]
+name = "argent-bake"
+dynamic = ["version"]
+description = "Bakes Argent film stock profiles into 3D LUTs for the app."
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["argent_bake", "argent_bake.stocks", "argent_bake.papers"]
+
+[tool.setuptools.dynamic]
+version = { attr = "argent_bake.__version__" }
+
+[tool.setuptools.package-dir]
+"argent_bake.stocks" = "stocks"
+"argent_bake.papers" = "papers"
+
+[tool.setuptools.package-data]
+argent_bake = ["data/*.csv", "data/README.md"]
+"argent_bake.stocks" = ["*.json"]
+"argent_bake.papers" = ["*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

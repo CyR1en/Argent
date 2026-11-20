@@ -1,0 +1,124 @@
+# The real-RAW regression suite: the tests scripts/regression.sh runs on the CC0 samples in
+# scripts/samples.manifest, and requires to pass. A required test that is missing, skipped or
+# fails fails the run, as does any skipped test in it. See docs/ci-regression.md.
+#
+#   test <id>            required; the id as `swift test list` prints it
+#   exclude <id> <why>   reads the samples but is left out, with the reason
+#   output <text>        a line the run must print
+#
+# Every test of a *SampleTests suite is one or the other: scripts/regression.sh stops before the
+# run on one that is neither (regression.py unlisted).
+#
+# None of these reads references/ or needs ARGENT_MEASURE; scripts/regression.sh unsets every
+# ARGENT_* variable. The opt-in measurement suites (*MeasureTests) stay out.
+
+test ArgentCoreTests.ARWFrameInfoTests/readsTheSamples()
+test ArgentCoreTests.AppleSegmentationSampleTests/aPortraitPictureGetsAPortraitMatte()
+test ArgentCoreTests.AppleSegmentationSampleTests/aSkyClickBelowTheGateNeverLoadsEoMT()
+test ArgentCoreTests.AppleSegmentationSampleTests/eachKindsSeedOnTheSample()
+test ArgentCoreTests.AppleSegmentationSampleTests/visionGivesTheSameBytesEveryTime()
+test ArgentCoreTests.AppleSegmentationSampleTests/visionGivesTheSameBytesInEveryProcess()
+test ArgentCoreTests.AppleRawDecoderTests/configureAppliesEveryPinAndReadsThemBack()
+test ArgentCoreTests.AppleRawDecoderTests/putsAMeteredFrameNearMidGray()
+test ArgentCoreTests.AppleRawDecoderTests/raw9AppliesItsPinsAndLeavesWhatItDoesNotTake()
+test ArgentCoreTests.AppleRawDecoderTests/raw9ColourStaysWithRAW8s()
+test ArgentCoreTests.AppleRawDecoderTests/raw9RepeatsBitForBit()
+test ArgentCoreTests.AppleRawDecoderTests/raw9DecodesAtOnceAreEachALoneDecode()
+test ArgentCoreTests.DecoderChoiceSampleTests/aMachineFailureOfRAW9IsTriedAgainAndNeverNoted()
+test ArgentCoreTests.DecoderChoiceSampleTests/aRAW9FailureFallsBackToRAW8ForTheSession()
+test ArgentCoreTests.DecoderChoiceSampleTests/anUnreadableFileIsNotAnInHouseFailure()
+test ArgentCoreTests.DecoderChoiceSampleTests/choicesAndReadbackFollowAReplacementWithTheSameSizeAndDate()
+test ArgentCoreTests.DecoderChoiceSampleTests/choicesFollowTheSwitchTheFileAndFailures()
+test ArgentCoreTests.DecoderChoiceSampleTests/choosesByFormatAndISO()
+test ArgentCoreTests.DecoderChoiceSampleTests/failuresBelongToTheVersionThatFailed(_:chosen:)
+test ArgentCoreTests.DecoderChoiceSampleTests/fallsBackToApplesDecoder()
+test ArgentCoreTests.DecoderChoiceSampleTests/inHouseFramesCarryApplesReadback()
+test ArgentCoreTests.DecoderChoiceSampleTests/raw9DecodesTheBayerModesAndRAW8TheRest()
+test ArgentCoreTests.DecoderChoiceSampleTests/raw9TakesTheBayerModesAtEveryISO()
+test ArgentCoreTests.ImageEncoderSampleTests/higherQualityWritesALargerFileThatReadsBack(format:)
+test ArgentCoreTests.ImageEncoderSampleTests/writesEachFormatWithTheRawsMetadata(format:space:)
+test ArgentCoreTests.InHouseDecoderSampleTests/landsWhereAppleDoes()
+test ArgentCoreTests.InHouseDecoderSampleTests/refusesEveryOtherFile()
+test ArgentCoreTests.InHouseDecoderSampleTests/refusesOtherCamerasAndCrops()
+test ArgentCoreTests.InHouseDecoderSampleTests/scalesByAreaResize()
+test ArgentCoreTests.InHouseDecoderSampleTests/takesFullFrameAndAPSCUncompressed()
+test ArgentCoreTests.InHouseDecoderSampleTests/uncompressedAndLosslessLDecodeTheSameMosaicAlike()
+test ArgentCoreTests.InHouseDecoderSampleTests/uncompressedLandsWhereAppleDoes()
+test ArgentCoreTests.LensCorrectionTests/readsTheSample()
+test ArgentCoreTests.LensCorrectionTests/theHeadersPictureHasTheDecodesTwoSidesOnEverySample()
+test ArgentCoreTests.LensStageTests/thePipelineUsesAsManyTexturesWithTheStageAsWithNoLens()
+test ArgentRollTests.LensLegacyTests/anUnchangedLegacyDevelopIsSkippedAndASettingChangeUsesTheStage()
+test ArgentRollTests.LensPreviewTests/autoAndTheDescriptorReadTheLensOffDecodeLiveFromDiskAndWhenSeeded()
+test ArgentRollTests.LensPreviewTests/decoderCorrectedDiskEntriesAreIgnoredAndStagePicturesSurviveReload()
+test ArgentRollTests.LensPreviewTests/neutralAndMaskReadersUseTheSceneAtTheSheetFrameAndRefinedSizes(_:)
+test ArgentCoreTests.PreviewScoringSampleTests/eachSamplesPreviewScores()
+test ArgentCoreTests.RawModeSampleTests/applesDecoderStillReadsPastFullFrameSmall()
+test ArgentCoreTests.RawModeSampleTests/fullFrameSmallDecodesTrimmedWithACleanEdge()
+test ArgentCoreTests.RawModeSampleTests/fullFrameSmallFillsTheLongSideItIsAskedFor()
+test ArgentCoreTests.RawModeSampleTests/losslessMediumCarriesItsOffsetAndNoTrim()
+test ArgentCoreTests.RawModeSampleTests/turnedSmallIsTrimmedOnTheSensorsEdges()
+test ArgentCoreTests.SonyLosslessRawTests/decodesTheSampleTiles()
+test ArgentCoreTests.SonyUncompressedRawTests/readsTheSample()
+test ArgentRollTests.DecoderSwitchSampleTests/aFrameRAW9FailsOnDevelopsThroughRAW8AndStands()
+test ArgentRollTests.DecoderSwitchSampleTests/aFrameRAW9FailsOnForTheMachineFailsAndDevelopsWithRAW9Later()
+test ArgentRollTests.DecoderSwitchSampleTests/aRollDevelopsAgainExactlyTheFramesWhoseDecoderChanges()
+test ArgentRollTests.DecoderSwitchSampleTests/theDiskCacheKeepsEachDecodersFrames()
+test ArgentRollTests.DevelopSampleTests/aFileAppearingOrChangingDuringEncodeIsPreserved(replacing:)
+test ArgentRollTests.DevelopSampleTests/aFrameWithMasksDevelopsThroughThem()
+test ArgentRollTests.DevelopSampleTests/aPrintWrittenOverItsFrameIsTheSame()
+test ArgentRollTests.DevelopSampleTests/aRawReplacedWhileEncodingCannotPublishItsOldPicture()
+test ArgentRollTests.DevelopSampleTests/aTightBudgetDevelopsOneFrameAtATimeAndStops()
+test ArgentRollTests.DevelopSampleTests/aWrittenImageWithAFailedRecipeIsReportedAndItsReceiptCanRecover()
+test ArgentRollTests.DevelopSampleTests/developsSkipsTheSameRecipeAndDevelopsAgainFromTheSidecarAlone()
+test ArgentRollTests.DevelopSampleTests/stopsAtFrameBoundaries()
+test ArgentRollTests.FilmPreviewSampleTests/aDevelopsFramesAndFrameViewDecodesNeverWaitOnEachOther()
+test ArgentRollTests.FilmPreviewSampleTests/aFrameViewSmallerThanTheSheetKeepsItsDecodeToItself()
+test ArgentRollTests.FilmPreviewSampleTests/aLosslessSmallFrameFillsTheFrameView()
+test ArgentRollTests.FilmPreviewSampleTests/aMeasurementIsTheSheetsWhicheverViewAsksFirst()
+test ArgentRollTests.FilmPreviewSampleTests/aRefinedPictureServesAfterItsDecodeIsLetGo()
+test ArgentRollTests.FilmPreviewSampleTests/aRefinementStopsForADevelopAndWhenItsCallerGoes()
+test ArgentRollTests.FilmPreviewSampleTests/aRollOpenedAgainRendersFromTheDiskCache()
+test ArgentRollTests.FilmPreviewSampleTests/cancelledRequestsDoNotDecode()
+test ArgentRollTests.FilmPreviewSampleTests/everyOutputSpaceRendersFromTheOneDecode()
+test ArgentRollTests.FilmPreviewSampleTests/inHouseAndWholeDecodesAreNotRefined()
+test ArgentRollTests.FilmPreviewSampleTests/refiningAnAppleFrameShowsTheDevelopsDecodeResized(_:pixels:decoder:)
+test ArgentRollTests.FilmPreviewSampleTests/theFrameViewKeepsItsLastThreeDecodes()
+test ArgentRollTests.FilmPreviewSampleTests/whileADevelopRunsADecodeWaitsForItsFrames()
+test ArgentRollTests.FilmPreviewSampleTests/whileADevelopRunsTheFrameViewKeepsOnlyItsFrame()
+test ArgentRollTests.MaskPreviewSampleTests/aDevelopPrintsTheGradientTheFrameViewShowed()
+test ArgentRollTests.MaskPreviewSampleTests/refiningTheFrameViewsDecodeKeepsItsField()
+test ArgentRollTests.MaskPreviewSampleTests/theSheetAndTheFrameViewRenderThroughOneFieldAndLetItGo()
+test ArgentRollTests.MaskSeedDevelopSampleTests/aLostSeedFailsItsFrameAloneAndTheRollDevelops()
+test ArgentRollTests.MaskSeedDevelopSampleTests/aSeedDamagedDuringTheDecodeFailsTheFrameAndWritesNothing()
+test ArgentRollTests.PatchDevelopSampleTests/aLostPatchFailsItsFrameAloneAndTheRollDevelops()
+test ArgentRollTests.PatchDevelopSampleTests/aPatchDamagedDuringTheDecodeFailsTheFrameAndWritesNothing()
+test ArgentRollTests.RemovalSeamTests/aLightSliderBuildsNothingInTheStageAndALensSliderLaysTheKeptPatchAgain()
+test ArgentRollTests.RemovalSeamTests/aRemovalReachesTheSheetsAndTheFrameViewsPicturesAsTheStageLaysIt()
+test ArgentRollTests.RemovalSeamTests/aRemovalThatIsOnNamesTheDecodeAndOneThatIsOffDoesNot()
+test ArgentRollTests.RemovalSeamTests/autoMeasuresTheDecodeAndNeverARemoval()
+test ArgentRollTests.RemovalSeamTests/theModelsInputIsCutFromTheFullSizeDecodeWithTheEarlierRemovalsLaid()
+test ArgentRollTests.SmartMaskWiringTests/aDevelopPrintsASmartMaskFromTheSeedsItsLaneHolds()
+test ArgentRollTests.SmartMaskWiringTests/theOverlayReadsTheRefinedFieldOnTheHeldDecode()
+test ArgentRollTests.SmartMaskWiringTests/theSheetAndTheFrameViewRenderASmartMaskFromTheStore()
+test ArgentRollTests.FrameViewRegistrationSampleTests/losslessMediumPreviewsLieWhereTheFileDoes()
+test ArgentRollTests.FrameViewRegistrationSampleTests/losslessSmallPreviewsLieWhereTheFileDoes()
+test ArgentRollTests.SourceIdentitySampleTests/aRawChangedInPlaceIsDevelopedAgain()
+test ArgentRollTests.SourceIdentitySampleTests/theDiskCacheDoesNotGiveAChangedRawTheOldPixels()
+test ArgentRollTests.SourceIdentitySampleTests/aRawChangedWhileItsRollIsOpenIsMeasuredAgain()
+test ArgentRollTests.FilmPreviewSourceRefreshTests/invalidationRejectsTheFrameViewAndItsQueuedMeasurement(trimming:)
+test ArgentRollTests.FilmPreviewSourceRefreshTests/measurementOfAReplacementUsesItsCurrentISOEvenWhenTheCallerHasAnOldFrame()
+
+# Wall-clock limits that fail when other jobs load this Mac. Each still runs in a plain local
+# `swift test` where the samples are present.
+exclude ArgentCoreTests.RawModeSampleTests/readsEveryModeOfTheSamples() asserts each ARWLayout.read under 5 ms
+exclude ArgentRollTests.FilmPreviewSampleTests/rendersAFrameAndSwitchesStocksWithoutDecodingAgain() asserts a stock switch under 100 ms
+exclude ArgentRollTests.FilmPreviewSampleTests/theFrameViewAndTheStripShareOneDecode() asserts a stock switch under 100 ms
+# Reads references/corpus where present and is a measurement of the sheet, not a regression.
+exclude ArgentRollTests.RollTests/measuresTheSheetOnRealFiles() measurement; reads references/corpus when present
+
+# The GPU-decoding tests return early, passing, without a Metal device; these lines print only
+# after a GPU decode of the sample, so they prove the GPU paths ran.
+output MEASURE sample against Apple:
+output MEASURE uncompressed sample against Apple:
+output MEASURE metered frame:
+output MEASURE RAW 9 colour against RAW 8:

@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argent — Settings page</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; }
+
+  /* Outside the window: the mockup's own caption, in the host's colours. */
+  .sim { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px;
+         font: 12px/1.3 var(--font-sans, var(--sans)); color: var(--muted-foreground, GrayText); }
+  .sim b { font-weight: 600; color: var(--foreground, CanvasText); margin-right: 6px; }
+  .sim div { display: flex; gap: 4px; }
+  .sim button { all: unset; cursor: pointer; padding: 3px 8px; border-radius: 6px; font-size: 11px;
+                border: 1px solid transparent; font-variant-numeric: tabular-nums; }
+  .sim button:hover { color: var(--foreground, CanvasText); }
+  .sim button[aria-pressed=true] { background: var(--secondary, rgba(128,128,128,.16)); color: var(--foreground, CanvasText);
+                                   border-color: var(--border, rgba(128,128,128,.25)); }
+  .sim button:focus-visible { outline: 2px solid var(--ring, #888); outline-offset: 1px; }
+  .stage { position: relative; width: 100%; }
+
+  /* ── The window ─────────────────────────────────────────────────────────────── */
+  .win, .mini { display: grid; grid-template-rows: 52px minmax(0, 1fr); isolation: isolate; overflow: hidden;
+                font-family: var(--sans); font-size: 13px; line-height: 1.25; color: var(--text);
+                -webkit-font-smoothing: antialiased; cursor: default; user-select: none; -webkit-user-select: none; }
+  .win { position: absolute; left: 0; top: 0; transform-origin: 0 0; grid-template-columns: 60px minmax(0, 1fr);
+         border-radius: 16px; box-shadow: 0 0 0 .5px rgba(128,128,128,.45), 0 2px 7px rgba(0,0,0,.22); }
+  .win *, .mini * { box-sizing: border-box; }
+  .win, .win * { transition: background-color .18s ease-out, color .18s ease-out, box-shadow .18s ease-out; }
+
+  /* The shell: the Mac's sidebar material under the theme's tint. */
+  .shell { position: absolute; inset: 0; z-index: -1; }
+  .shell i { position: absolute; inset: 0; }
+  .shell .desk { background:
+      radial-gradient(ellipse 46% 60% at 6% 18%, #46506a 0, transparent 70%),
+      radial-gradient(ellipse 40% 50% at 96% 8%, #4d4560 0, transparent 70%),
+      radial-gradient(ellipse 60% 44% at 60% 104%, #5a4a44 0, transparent 72%),
+      radial-gradient(ellipse 30% 50% at 0% 92%, #3b4d50 0, transparent 70%),
+      #33363f; }
+  .shell .mat { background: var(--mat); }
+  .shell .tint { background: var(--tint); opacity: var(--tint-a); }
+
+  .strip { grid-column: 1 / -1; position: relative; display: flex; align-items: center; color: rgb(var(--ink)); }
+  .lights { position: absolute; left: 20px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .lights.idle i { background: rgba(var(--ink), .22); box-shadow: none; }
+  .wordmark { position: absolute; left: 94px; font-size: 19px; }
+  .ctx { position: absolute; left: 0; right: 0; text-align: center; }
+  .ctx b { display: block; font-size: 13px; font-weight: 600; }
+  .ctx em { display: block; font-style: normal; font-size: 11px; margin-top: 1px; opacity: .96; font-variant-numeric: tabular-nums; }
+
+  .rail { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-bottom: 6px; }
+  .rail a { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: rgba(var(--ink), .96); }
+  .rail a.dim { opacity: .38; }
+  .rail a.here { color: rgb(var(--ink)); background: var(--lens); box-shadow: var(--glass-edge), 0 1px 5px rgba(0,0,0,.16); }
+  .rail hr { width: 20px; height: 1px; border: 0; margin: 4px 0; background: rgba(var(--ink), .09); }
+  svg.ic { display: block; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .ws { position: relative; margin: 0 6px 6px 0; border-radius: 16px; background: var(--ws); overflow: hidden; min-height: 0; }
+  .page { height: 100%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(var(--ink), .25) transparent; }
+  .col { max-width: 720px; margin: 0 auto; padding: 36px 44px 40px; box-sizing: content-box !important; }
+
+  /* ── Shared parts (Graphite.swift) ──────────────────────────────────────────── */
+  .glass { background: var(--glass-bg); box-shadow: var(--glass-edge), 0 1px 3px rgba(0,0,0,.07); }
+  .btn { all: unset; height: 28px; padding: 0 10px; border-radius: 7px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+  .btn.icon { width: 28px; padding: 0; justify-content: center; }
+  .btn.glass { background: var(--glass-bg); box-shadow: var(--glass-edge), 0 1px 3px rgba(0,0,0,.07); }
+  .btn:hover { background-color: rgba(var(--ink), .09); }
+  .btn:active { background-color: rgba(var(--ink), .14); }
+  .quiet { all: unset; font-size: 11px; padding: 0 5px; height: 18px; line-height: 18px; border-radius: 5px; color: var(--sec); }
+  .quiet:hover { color: var(--text); background: rgba(var(--ink), .09); }
+  .win :focus-visible { outline: 2px solid var(--selection); outline-offset: 2px; }
+
+  .seg { position: relative; display: flex; padding: 2px; border-radius: 8px; }
+  .seg .thumb { position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n)); border-radius: 6px;
+                background: var(--thumb); box-shadow: 0 .5px 1.5px rgba(0,0,0,.22); transform: translateX(calc(var(--i) * 100%));
+                transition: transform .34s cubic-bezier(.3, 1.35, .5, 1); }
+  .seg button { all: unset; position: relative; flex: 1; height: 30px; border-radius: 6px; display: flex; align-items: center;
+                justify-content: center; gap: 6px; font-size: 13px; color: var(--sec); }
+  .seg button:hover, .seg button[aria-pressed=true] { color: var(--text); }
+  .pseg { display: inline-flex; padding: 2px; border-radius: 8px; }
+  .pseg span { height: 24px; padding: 0 14px; display: flex; align-items: center; gap: 5px; border-radius: 6px; color: var(--sec); white-space: nowrap; }
+  .pseg span.on { background: var(--thumb); color: var(--text); box-shadow: 0 .5px 1.5px rgba(0,0,0,.22); }
+  .pseg.fill { display: flex; } .pseg.fill span { flex: 1; justify-content: center; padding: 0; }
+
+  .face { height: 28px; padding: 0 10px 0 12px; border-radius: 7px; display: flex; align-items: center; justify-content: space-between;
+          background: rgba(var(--ink), .05); box-shadow: inset 0 0 0 1px rgba(var(--ink), .12); }
+  .face svg { color: var(--sec); }
+  .qc { display: flex; align-items: center; height: 28px; border-radius: 7px; background: rgba(var(--ink), .05);
+        box-shadow: inset 0 0 0 1px rgba(var(--ink), .12); }
+  .qc output, .qc b { flex: none; width: 54px; height: 100%; display: grid; place-items: center; font-weight: 400;
+                      font-variant-numeric: tabular-nums; border-right: 1px solid rgba(var(--ink), .12); }
+  .qc input { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 100%; margin: 0 12px; background: none; cursor: default; }
+  .qc input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+        background: linear-gradient(90deg, var(--text) var(--p), rgba(var(--ink), .2) var(--p)); }
+  .qc input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 14px; margin-top: -5px; border-radius: 7px; background: #fff;
+        box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 1px 2.5px rgba(0,0,0,.34); transition: transform .2s cubic-bezier(.3, 1.4, .5, 1); }
+  .qc input:active::-webkit-slider-thumb { transform: scale(1.12); }
+  .qc input:focus-visible { outline: none; } .qc:has(input:focus-visible) { outline: 2px solid var(--selection); outline-offset: 2px; }
+  .qc .trk { position: relative; flex: 1; height: 4px; margin: 0 12px; border-radius: 2px; background: rgba(var(--ink), .2); }
+  .qc .trk i { position: absolute; left: 0; top: 0; bottom: 0; width: 84%; border-radius: 2px; background: var(--text); }
+  .qc .trk s { position: absolute; left: 84%; top: -5px; width: 22px; height: 14px; margin-left: -11px; border-radius: 7px; background: #fff; box-shadow: 0 1px 2.5px rgba(0,0,0,.34); }
+  .off { opacity: .42; pointer-events: none; }
+
+  .sw { all: unset; flex: none; position: relative; width: 30px; height: 18px; border-radius: 9px; background: rgba(var(--ink), .2); }
+  .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text);
+               box-shadow: 0 .5px 1px rgba(0,0,0,.3); transition: transform .22s cubic-bezier(.3, 1.4, .5, 1), background-color .15s; }
+  .sw.off { opacity: .42; pointer-events: none; }
+  .sw[aria-checked=true] { background: var(--selection); }
+  .sw[aria-checked=true]::after { transform: translateX(12px); background: var(--onp); }
+
+  .pill { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: rgba(var(--ink), .14); }
+  .chip { all: unset; height: 20px; padding: 0 6px 0 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; background: rgba(var(--ink), .07); }
+  .chip:hover, .chip[aria-expanded=true] { background: rgba(var(--ink), .12); }
+  .chip svg { color: var(--sec); }
+  .menu { position: absolute; z-index: 9; left: 16px; top: calc(100% + 4px); min-width: 148px; padding: 5px; border-radius: 10px; background: var(--menu-bg);
+          -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: 0 0 0 .5px rgba(var(--ink), .2), 0 12px 32px rgba(0,0,0,.32); }
+  .menu button { all: unset; display: flex; align-items: center; width: 100%; height: 24px; padding: 0 12px 0 24px; border-radius: 6px; font-size: 13px; position: relative; }
+  .menu button:hover, .menu button:focus-visible { background: rgba(var(--ink), .1); outline: none; }
+  .menu button[aria-checked=true]::before { content: ""; position: absolute; left: 9px; top: 7px; width: 8px; height: 4.5px;
+          border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); }
+
+  /* ── The page ───────────────────────────────────────────────────────────────── */
+  h1 { margin: 0; font-size: 26px; font-weight: 600; line-height: 1.15; }
+  .sub { margin-top: 6px; color: var(--sec); }
+  .close { position: absolute; top: 18px; right: 18px; z-index: 2; }
+
+  .sect { display: flex; align-items: center; gap: 12px; height: 20px; margin: 30px 0 14px; }
+  .sect b { font-size: 11px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ter); }
+  .sect i { flex: 1; height: 1px; background: rgba(var(--ink), .09); }
+  .sect .quiet[hidden] { display: none; }
+
+  .line { display: flex; align-items: center; gap: 12px; min-height: 34px; }
+  .line .name { font-size: 15px; }
+  .line .note { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sec); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .line .seg { width: 312px; flex: none; margin-left: auto; }
+
+  /* The two proofs: the theme's light version and its dark one, as the window would be. */
+  .proofs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+  .proof { position: relative; min-width: 0; }
+  .proof > button { all: unset; display: block; width: 100%; border-radius: 10px; }
+  .frame { position: relative; display: block; aspect-ratio: 760 / 452; border-radius: 10px; overflow: hidden; background: var(--well);
+           box-shadow: 0 0 0 1px rgba(var(--ink), .12), 0 4px 14px rgba(0,0,0,.12); transition: box-shadow .2s ease-out; }
+  .proof.shown .frame { box-shadow: 0 0 0 2px var(--ws), 0 0 0 4px var(--selection), 0 6px 18px rgba(0,0,0,.16); }
+  .proof > button:hover .frame { filter: brightness(1.03); }
+  .proof > button:focus-visible { outline-offset: 5px; }
+  .cap { display: flex; align-items: center; gap: 6px; height: 20px; margin: 12px 2px 0; color: var(--sec); }
+  .proof.shown .cap { color: var(--text); }
+  .cap .pill { margin-left: auto; color: var(--text); }
+  .none { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+          text-align: center; padding: 0 28px; border-radius: 10px; color: var(--sec);
+          background: repeating-linear-gradient(135deg, rgba(var(--ink), .035) 0 6px, transparent 6px 12px); box-shadow: inset 0 0 0 1px rgba(var(--ink), .12); }
+  .none b { font-size: 13px; font-weight: 600; color: var(--text); }
+  .none span { font-size: 12px; }
+
+  .mini { position: absolute; left: 0; top: 0; width: 760px; height: 452px; transform-origin: 0 0; transform: scale(var(--k, .46));
+          grid-template-columns: 60px minmax(0, 1fr) 304px; pointer-events: none; transition: none; }
+  .mini * { transition: none !important; }
+  .mini .shell .mat { background: var(--mini-mat); }
+  .m-ws { margin: 0 0 6px; border-radius: 16px; background: var(--ws); padding: 14px 18px 0; overflow: hidden; }
+  .m-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 12px; margin-top: 14px; }
+  .m-grid em { display: block; font-style: normal; font-size: 11px; color: var(--sec); margin-top: 5px; text-align: center; font-variant-numeric: tabular-nums; }
+  .pic { position: relative; display: block; aspect-ratio: 3 / 2; border-radius: 4px; background-color: var(--well); }
+  .sel .pic { box-shadow: 0 0 0 2px var(--ws), 0 0 0 4px var(--selection); }
+  .sel em { color: var(--text); }
+  .pic u { position: absolute; right: 5px; bottom: 5px; width: 15px; height: 15px; border-radius: 50%; background: rgba(0,0,0,.6); box-shadow: 0 0 0 1px rgba(255,255,255,.3); }
+  .pic u::after { content: ""; position: absolute; left: 4.2px; top: 4.6px; width: 6px; height: 3.2px; border-left: 1.3px solid #fff; border-bottom: 1.3px solid #fff; transform: rotate(-45deg); }
+  .m-panel { margin: 0 12px 6px; border-radius: 16px; padding: 18px 20px 20px; display: flex; flex-direction: column;
+             background: color-mix(in srgb, var(--float) 82%, transparent); box-shadow: var(--glass-edge), 0 6px 20px rgba(0,0,0,.14); }
+  .m-panel h2 { margin: 0; font-size: 19px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .m-panel h2 svg { color: var(--sec); }
+  .m-panel p { margin: 4px 0 0; color: var(--sec); }
+  .m-panel hr { border: 0; height: 1px; margin: 13px 0; background: rgba(var(--ink), .09); }
+  .m-panel small { font-size: 12px; color: var(--sec); }
+  .m-panel .folder { height: 36px; margin-top: 8px; padding: 0 12px; gap: 10px; justify-content: flex-start; border-radius: 8px; }
+  .p-row { display: grid; grid-template-columns: 78px 1fr; align-items: center; margin-bottom: 10px; }
+  .m-panel .go { margin-top: auto; height: 36px; border-radius: 8px; display: grid; place-items: center; font-size: 15px; font-weight: 600; color: var(--onp);
+                 background: linear-gradient(var(--ptop), var(--pbot)); box-shadow: inset 0 .5px 0 rgba(255,255,255,.4), 0 1px 3px rgba(0,0,0,.25); }
+
+  /* Stand-ins for a roll's first frames. */
+  .f1 { background-image: radial-gradient(ellipse 36% 26% at 66% 50%, rgba(255,222,184,.55) 0, transparent 72%), linear-gradient(180deg, #66768c 0, #a99d96 44%, #d2ae8c 55%, #47515c 56.5%, #2c343c 100%); }
+  .f2 { background-image: radial-gradient(ellipse 15% 46% at 18% 88%, #222d27 0 50%, transparent 66%), radial-gradient(ellipse 13% 38% at 43% 92%, #2a362f 0 50%, transparent 66%), radial-gradient(ellipse 17% 52% at 80% 90%, #1f2924 0 50%, transparent 66%), linear-gradient(180deg, #c5c9c5 0, #a4ada8 48%, #647268 72%, #2f3a33 100%); }
+  .f3 { background-image: radial-gradient(ellipse 9% 14% at 46% 40%, #2b2523 0 62%, transparent 80%), radial-gradient(ellipse 22% 44% at 46% 98%, #2e292b 0 64%, transparent 80%), radial-gradient(ellipse 70% 90% at 30% 30%, rgba(255,236,210,.22) 0, transparent 70%), linear-gradient(100deg, #b79d84 0, #8c715a 100%); }
+  .f4 { background-image: radial-gradient(ellipse 30% 34% at 24% 36%, #8a9a66 0, transparent 72%), radial-gradient(ellipse 34% 40% at 70% 56%, #3d5030 0, transparent 70%), radial-gradient(ellipse 22% 26% at 58% 22%, #a7ad70 0, transparent 70%), linear-gradient(180deg, #b9c2b4 0, #6d8052 30%, #4c5f3a 100%); }
+  .f5 { background-image: radial-gradient(circle at 28% 56%, rgba(255,196,130,.7) 0 2.5%, transparent 9%), radial-gradient(circle at 54% 48%, rgba(170,200,235,.55) 0 2%, transparent 8%), radial-gradient(circle at 74% 60%, rgba(255,170,120,.55) 0 3%, transparent 11%), linear-gradient(180deg, #171d2a 0, #232a38 54%, #0e1117 100%); }
+  .f6 { background-image: linear-gradient(180deg, #cdd3d9 0, #e6e9eb 42%, #8d979c 46%, #6f7a80 48.5%, #cfd5d9 50%, #e3e6e8 100%); }
+  .f7 { background-image: linear-gradient(180deg, transparent 50%, #ad8c62 50.5%, #86663f 100%), radial-gradient(ellipse 44% 20% at 30% 51%, #75788a 0 55%, transparent 70%), linear-gradient(180deg, #86a8c2 0, #c4cfcf 50%); }
+  .f8 { background-image: radial-gradient(ellipse 26% 40% at 64% 42%, #ecdfc8 0, rgba(236,223,200,.5) 42%, transparent 82%), linear-gradient(120deg, #3a332d 0, #1f1c1a 100%); }
+  .f9 { background-image: radial-gradient(ellipse 80% 80% at 50% 40%, transparent 55%, rgba(0,0,0,.2) 100%), linear-gradient(180deg, #c3d1d8 0, #dbe2e0 49%, #5d7c84 50.5%, #3c5862 100%); }
+
+  /* The themes. */
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .tile { all: unset; position: relative; display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 12px; border-radius: 12px;
+          background: rgba(var(--ink), .05); box-shadow: inset 0 0 0 1px rgba(var(--ink), .12); }
+  .tile:hover { background: rgba(var(--ink), .08); }
+  .tile:active { transform: scale(.985); }
+  .tile[aria-pressed=true] { box-shadow: inset 0 0 0 1.5px var(--text); }
+  .tile .txt { min-width: 0; flex: 1; }
+  .tile .txt > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tile .txt b, .tile .txt em { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .txt b { font-weight: 400; } .tile[aria-pressed=true] .txt b { font-weight: 600; }
+  .tile .txt em { font-style: normal; font-size: 11px; color: var(--sec); }
+  .tile .txt span + span { margin-top: 3px; }
+  .tile .txt u[hidden] { display: none; }
+  .tile .txt u { flex: none; text-decoration: none; font-size: 11px; font-variant-numeric: tabular-nums; padding: 0 4px; border-radius: 4px; background: rgba(var(--ink), .09); }
+  .tile .txt svg { display: none; } .tile[aria-pressed=true] .txt svg { display: block; }
+  /* The theme's two versions side by side, as the proofs are: each its workspace, its ink and its primary colour. */
+  .swatch { flex: none; display: flex; width: 52px; height: 34px; border-radius: 5px; overflow: hidden; box-shadow: 0 0 0 1px rgba(128,128,128,.42); }
+  .swatch i { position: relative; flex: 1; background: var(--b); }
+  .swatch i::before { content: ""; position: absolute; left: 5px; top: 7px; width: 12px; height: 2px; border-radius: 1px; background: var(--t);
+                      box-shadow: 0 5px 0 -0.01px color-mix(in srgb, var(--t) 50%, var(--b)); }
+  .swatch i::after { content: ""; position: absolute; left: 5px; bottom: 6px; width: 14px; height: 6px; border-radius: 3px; background: var(--p); }
+
+  .foot { display: flex; align-items: center; gap: 7px; margin-top: 12px; font-size: 12px; color: var(--ter); }
+
+  /* Cards of rows. */
+  .card { position: relative; border-radius: 12px; overflow: hidden; }
+  .row { position: relative; display: flex; align-items: center; gap: 20px; min-height: 62px; padding: 10px 20px; }
+  .row + .row { border-top: 1px solid rgba(var(--ink), .09); }
+  .row .lab { flex: none; width: 262px; min-width: 0; }
+  .row .lab b { display: block; font-size: 15px; font-weight: 400; }
+  .row .lab em { display: block; font-style: normal; font-size: 12px; color: var(--sec); margin-top: 3px; }
+  .row .qc { flex: 1; min-width: 0; }
+  .row.wide .lab { flex: 1; width: auto; }
+  /* The Frame view card: a frame on its surround, as the frame view has it, beside the rows that set it. */
+  .fv { display: grid; grid-template-columns: 34% minmax(0, 1fr); }
+  .spec { position: relative; overflow: hidden; background: var(--surround); border-right: 1px solid rgba(var(--ink), .09); }
+  .spec .amb { position: absolute; inset: -36px; filter: var(--amb-filter); opacity: var(--amb, 0); transition: opacity .3s ease-out;
+               -webkit-mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 34%, rgba(0,0,0,.55) 100%); mask-image: radial-gradient(ellipse 72% 72% at 50% 50%, #000 34%, rgba(0,0,0,.55) 100%); }
+  .spec .shot { position: absolute; left: 50%; top: 50%; height: 78%; aspect-ratio: 2 / 3; transform: translate(-50%, -50%); transition: box-shadow .3s ease-out; }
+  .spec.shadow .shot { box-shadow: 0 1px 2px rgba(0,0,0,.26), 0 7px 20px rgba(0,0,0,.34); }
+  .fp { background-image: radial-gradient(ellipse 7% 4.6% at 52% 57%, #1b1d24 0 58%, transparent 88%), radial-gradient(ellipse 12% 13% at 52% 71%, #1e222c 0 60%, transparent 84%),
+        radial-gradient(ellipse 8% 11% at 52% 87%, #33291f 0 50%, transparent 82%), radial-gradient(ellipse 80% 26% at 62% 28%, rgba(255,255,255,.34) 0, transparent 72%),
+        linear-gradient(180deg, #5b7aa6 0, #9db2c8 45%, #c9c4b5 59%, #8c7656 65%, #5f4b37 82%, #3a2e23 100%); }
+  .fv .row .lab { flex: 1; width: auto; }
+  .fv .row .qc, .fv .row .seg { flex: none; width: 196px; }
+  .seg.plain { background: rgba(var(--ink), .05); box-shadow: inset 0 0 0 1px rgba(var(--ink), .12); }
+
+  .grain { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none;
+           -webkit-mask-image: linear-gradient(90deg, transparent 36%, #000 78%); mask-image: linear-gradient(90deg, transparent 36%, #000 78%);
+           transition: opacity .5s ease-out; }
+  .grain.out { opacity: 0; }
+
+  @media (prefers-reduced-motion: reduce) { .win *, .seg .thumb, .sw::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="sim">
+  <span><b>Settings</b>Themes, Mode, the sliders and the switches all respond</span>
+  <div role="group" aria-label="Window size">
+    <button data-size="page" aria-pressed="true">Whole page</button>
+    <button data-size="std" aria-pressed="false">1280 × 860</button>
+    <button data-size="min" aria-pressed="false">800 × 560</button>
+  </div>
+</div>
+<div class="stage" id="stage"><div class="win" id="win"></div></div>
+
+<script>
+// ── The catalog, from Themes.swift ───────────────────────────────────────────────
+const L = (title, o) => ({ id: 'light', title, dark: false, ...o });
+const D = (id, title, o) => ({ id, title, dark: true, ...o });
+const THEMES = [
+  { id: 'graphite', name: 'Graphite',
+    light: L('Light', { chrome: 0xd2d4d6, ws: 0xdfe1e3, well: 0xcfd1d3, text: 0x1d1f21, sec: .78, ter: .72, top: 0x45484b, bot: 0x2f3133, on: 0xf2f2f0 }),
+    dark: [D('dark', 'Dark', { chrome: 0x2f3133, ws: 0x373a3c, surround: 0x2a2c2e, well: 0x2c2f31, placeholder: 0x3e4143, control: 0x45484a, text: 0xf2f2f0, sec: .68, ter: .58, selection: 0xf4f3ef, top: 0xe2e4e6, bot: 0xc3c6c9, on: 0x1d1f21, float: 0x323436 })] },
+  { id: 'middle-gray', name: 'Middle gray',
+    light: L('Light', { chrome: 0xa3a3a3, ws: 0xb0b0b0, surround: 0x777777, well: 0x9a9a9a, text: 0x141414, sec: .86, ter: .80, top: 0x3a3a3a, bot: 0x262626, on: 0xf1f1f1 }),
+    dark: [D('dark', 'Dark', { chrome: 0x525252, ws: 0x5e5e5e, surround: 0x777777, well: 0x474747, text: 0xf1f1f1, sec: .94, ter: .84, selection: 0xf1f1f1, top: 0xe2e2e2, bot: 0xd4d4d4, on: 0x262626 })] },
+  { id: 'gruvbox', name: 'Gruvbox',
+    light: L('Light', { chrome: 0xf2e5bc, ws: 0xfbf1c7, well: 0xebdbb2, text: 0x3c3836, sec: .86, ter: .76, top: 0xb8460f, bot: 0xaf3a03, on: 0xfbf1c7 }),
+    dark: [D('dark', 'Dark', { chrome: 0x1d2021, ws: 0x282828, well: 0x1d2021, text: 0xebdbb2, sec: .78, ter: .64, top: 0xfbc850, bot: 0xfabd2f, on: 0x282828 })] },
+  { id: 'github', name: 'GitHub',
+    light: L('Light', { chrome: 0xf6f8fa, ws: 0xffffff, well: 0xeaeef2, text: 0x1f2328, sec: .80, ter: .72, top: 0x1a73dc, bot: 0x0969da, on: 0xffffff }),
+    dark: [D('dark-dimmed', 'Dark Dimmed', { chrome: 0x1c2128, ws: 0x22272e, well: 0x1c2128, text: 0xcdd9e5, sec: .80, ter: .70, top: 0x6fabf7, bot: 0x539bf5, on: 0x1c2128 }),
+           D('dark', 'Dark', { chrome: 0x010409, ws: 0x0d1117, well: 0x161b22, text: 0xe6edf3, sec: .76, ter: .64, top: 0x5299f8, bot: 0x2f81f7, on: 0x0d1117 })] },
+  { id: 'one-dark-pro', name: 'One Dark Pro',
+    light: L('One Light', { chrome: 0xeaeaeb, ws: 0xfafafa, well: 0xe5e5e6, text: 0x383a42, sec: .86, ter: .78, top: 0x366be4, bot: 0x2d65dc, on: 0xffffff }),
+    dark: [D('one-dark', 'One Dark', { chrome: 0x21252b, ws: 0x282c34, well: 0x21252b, text: 0xabb2bf, sec: .92, ter: .82, top: 0x7abcf2, bot: 0x61afef, on: 0x21252b })] },
+  { id: 'tokyo-night', name: 'Tokyo Night',
+    light: L('Day', { chrome: 0xd0d5e3, ws: 0xe1e2e7, well: 0xd0d5e3, text: 0x243f85, sec: .92, ter: .86, top: 0x2c70da, bot: 0x2569d4, on: 0xffffff }),
+    dark: [D('night', 'Night', { chrome: 0x16161e, ws: 0x1a1b26, well: 0x16161e, text: 0xc0caf5, sec: .80, ter: .66, top: 0x8fb1f8, bot: 0x7aa2f7, on: 0x16161e }),
+           D('storm', 'Storm', { chrome: 0x1f2335, ws: 0x24283b, well: 0x1f2335, text: 0xc0caf5, sec: .82, ter: .72, top: 0x8fb1f8, bot: 0x7aa2f7, on: 0x1f2335 }),
+           D('moon', 'Moon', { chrome: 0x1e2030, ws: 0x222436, well: 0x1e2030, text: 0xc8d3f5, sec: .80, ter: .70, top: 0x95b7ff, bot: 0x82aaff, on: 0x1e2030 })] },
+  { id: 'dracula', name: 'Dracula',
+    light: L('Alucard', { chrome: 0xf4efdc, ws: 0xfffbeb, well: 0xefe9d3, text: 0x1f1f1f, sec: .78, ter: .70, top: 0x7059ce, bot: 0x644ac9, on: 0xffffff }),
+    dark: [D('dracula', 'Dracula', { chrome: 0x21222c, ws: 0x282a36, well: 0x191a21, text: 0xf8f8f2, sec: .72, ter: .60, top: 0xc8a4fa, bot: 0xbd93f9, on: 0x21222c })] },
+  { id: 'nord', name: 'Nord', light: null,
+    dark: [D('dark', 'Dark only', { chrome: 0x2e3440, ws: 0x3b4252, well: 0x2e3440, text: 0xeceff4, sec: .78, ter: .68, top: 0x9bcad8, bot: 0x88c0d0, on: 0x2e3440 })] },
+  { id: 'catppuccin', name: 'Catppuccin',
+    light: L('Latte', { chrome: 0xe6e9ef, ws: 0xeff1f5, well: 0xdce0e8, text: 0x4c4f69, sec: .94, ter: .86, selection: 0x6577f5, top: 0x8797fd, bot: 0x7287fd, on: 0x11111b }),
+    dark: [D('mocha', 'Mocha', { chrome: 0x181825, ws: 0x1e1e2e, well: 0x11111b, text: 0xcdd6f4, sec: .80, ter: .66, top: 0xc0c8fe, bot: 0xb4befe, on: 0x11111b }),
+           D('macchiato', 'Macchiato', { chrome: 0x1e2030, ws: 0x24273a, well: 0x181926, text: 0xcad3f5, sec: .80, ter: .70, top: 0xc3c8f9, bot: 0xb7bdf8, on: 0x181926 }),
+           D('frappe', 'Frappé', { chrome: 0x292c3c, ws: 0x303446, well: 0x232634, text: 0xc6d0f5, sec: .84, ter: .76, top: 0xc5c6f3, bot: 0xbabbf1, on: 0x232634 })] },
+];
+
+// ── Colour, as ThemePalette has it ──────────────────────────────────────────────
+const ch = (c, s) => (c >> s) & 255;
+const hex = c => '#' + c.toString(16).padStart(6, '0');
+const rgba = (c, a) => `rgba(${ch(c, 16)},${ch(c, 8)},${ch(c, 0)},${a})`;
+function mix(a, b, t) {
+  const f = s => Math.min(255, Math.max(0, Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * t))) << s;
+  return f(16) | f(8) | f(0);
+}
+function gray(c) {
+  const lin = s => { const v = ch(c, s) / 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  const y = .2126 * lin(16) + .7152 * lin(8) + .0722 * lin(0);
+  const l = Math.round((y <= .0031308 ? 12.92 * y : 1.055 * Math.pow(y, 1 / 2.4) - .055) * 255);
+  return l << 16 | l << 8 | l;
+}
+const derive = v => ({ ...v,
+  surround: v.surround ?? (v.dark ? gray(v.ws) : 0xc8c8c8), placeholder: v.placeholder ?? mix(v.ws, v.text, .06),
+  control: v.control ?? mix(v.ws, v.text, .11), selection: v.selection ?? v.bot, float: v.float ?? mix(v.chrome, v.ws, .25) });
+
+// ── State ───────────────────────────────────────────────────────────────────────
+const DEFAULTS = { t: 82, s: 100 };
+/// The frame view's surround as a first launch has it: Ambient, at 68 percent, with its edge shadow.
+const FRAME = { amb: true, ai: 68, shadow: true };
+const S = { mode: 'dark', theme: 'graphite', dv: {}, grain: true, size: 'page', ...DEFAULTS, ...FRAME };
+const mac = matchMedia('(prefers-color-scheme: dark)');
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+/// Increase Contrast, under which the frame view keeps its neutral surround.
+const firm = matchMedia('(prefers-contrast: more)');
+const themeOf = id => THEMES.find(t => t.id === id) ?? THEMES[0];
+const darkOf = th => th.dark.find(v => v.id === S.dv[th.id]) ?? th.dark[0];
+const wantsLight = () => S.mode === 'light' || (S.mode === 'system' && !mac.matches);
+
+/// The tint over the sidebar material (WindowShellStyle).
+function shell(p) {
+  const a = 1 - S.t / 100, c = p.chrome;
+  const neutral = Math.max(ch(c, 16), ch(c, 8), ch(c, 0)) - Math.min(ch(c, 16), ch(c, 8), ch(c, 0)) <= 5;
+  return { tint: neutral ? c : mix(gray(c), c, S.s / 100), a, control: neutral ? 'neutral' : a === 0 ? 'transparent' : 'available' };
+}
+function paint(el, version) {
+  const p = derive(version), sh = shell(p), set = (k, v) => el.style.setProperty('--' + k, v);
+  for (const k of ['chrome', 'ws', 'surround', 'well', 'placeholder', 'control', 'text', 'selection', 'float']) set(k, hex(p[k]));
+  set('ptop', hex(p.top)); set('pbot', hex(p.bot)); set('onp', hex(p.on));
+  set('sec', rgba(p.text, p.sec)); set('ter', rgba(p.text, p.ter));
+  set('ink', p.dark ? '255,255,255' : '0,0,0');
+  set('thumb', p.dark ? 'rgba(255,255,255,.17)' : 'rgba(255,255,255,.92)');
+  set('glass-bg', p.dark ? 'rgba(255,255,255,.055)' : 'rgba(255,255,255,.46)');
+  set('glass-edge', p.dark ? 'inset 0 0 0 .5px rgba(255,255,255,.15), inset 0 .5px 0 rgba(255,255,255,.12)'
+                           : 'inset 0 0 0 .5px rgba(0,0,0,.11), inset 0 .5px 0 rgba(255,255,255,.9)');
+  set('lens', p.dark ? 'rgba(255,255,255,.11)' : 'rgba(255,255,255,.62)');
+  set('menu-bg', p.dark ? 'rgba(46,47,50,.92)' : 'rgba(248,248,249,.94)');
+  set('mat', p.dark ? 'rgba(21,22,25,.68)' : 'rgba(236,237,240,.88)');
+  set('mini-mat', p.dark ? '#2b2b2b' : '#d9d9d9');
+  // The ambient surround is anchored to its theme's side: dimmer over a dark surround, paler over a light one.
+  set('amb-filter', p.dark ? 'blur(22px) saturate(.95) brightness(.82)' : 'blur(22px) saturate(.7) brightness(1.42)');
+  set('tint', hex(sh.tint)); set('tint-a', sh.a);
+  return { p, sh };
+}
+
+// ── Symbols, drawn after SF Symbols at light weight ─────────────────────────────
+const gear = (() => {
+  let d = '';
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4, w = Math.PI / 8;
+    [[7.3, a - w * .66], [9.3, a - w * .38], [9.3, a + w * .38], [7.3, a + w * .66]].forEach(([r, t], j) =>
+      d += (i + j ? 'L' : 'M') + (12 + r * Math.cos(t)).toFixed(2) + ' ' + (12 + r * Math.sin(t)).toFixed(2));
+  }
+  return `<path d="${d}Z"/><circle cx="12" cy="12" r="3"/>`;
+})();
+const ICONS = {
+  rolls: '<rect x="4.2" y="8.6" width="15.6" height="11" rx="2.2"/><path d="M8.2 8.6v11M15.8 8.6v11M6.8 5.8h10.4M9 3.2h6"/>',
+  roll: '<rect x="4" y="4" width="6.8" height="6.8" rx="1.6"/><rect x="13.2" y="4" width="6.8" height="6.8" rx="1.6"/><rect x="4" y="13.2" width="6.8" height="6.8" rx="1.6"/><rect x="13.2" y="13.2" width="6.8" height="6.8" rx="1.6"/>',
+  frame: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><circle cx="8.6" cy="10" r="1.4"/><path d="M4 16.4l4.6-4 3.4 2.9 3-2.5 5 4.2"/>',
+  stock: '<path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4"/>',
+  adjust: '<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h7M15 17h5"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="17" r="2"/>',
+  develop: '<path d="M12 14V3.8M8.6 7L12 3.6 15.4 7M8.2 10H6.5A1.5 1.5 0 0 0 5 11.5v7A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5h-1.7"/>',
+  settings: gear,
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  system: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',
+  light: '<circle cx="12" cy="12" r="3.7"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/>',
+  dark: '<path d="M19.6 14.4A8 8 0 0 1 9.6 4.4a8 8 0 1 0 10 10z"/>',
+  chev: '<path d="M6 9.5l6 5.5 6-5.5"/>',
+  check: '<circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.4l2.6 2.6 5-5.6"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h3.6l2 2h7.4a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  info: '<circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4M12 7.8v.1"/>',
+};
+const ic = (name, size = 17, w = 1.25) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-width="${(w * 24 / size).toFixed(2)}" aria-hidden="true">${ICONS[name]}</svg>`;
+
+// ── The window ──────────────────────────────────────────────────────────────────
+const RAIL = ['rolls', 0, 'roll', 'frame', 0, 'stock', 'adjust', 0, 'develop', 0, 'settings'];
+const rail = (here, dim = []) => RAIL.map(n => n ? `<a class="${n === here ? 'here' : ''}${dim.includes(n) ? ' dim' : ''}">${ic(n)}</a>` : '<hr>').join('');
+
+/// The window, small: the Develop page, which shows a theme's shell, sheet, glass, ink and primary colour at once.
+const mini = () => `<span class="mini">
+  <span class="shell"><i class="mat"></i><i class="tint"></i></span>
+  <span class="strip"><span class="lights idle"><i></i><i></i><i></i></span><span class="wordmark">Argent</span>
+    <span class="ctx"><b>Sample roll</b><em>24 frames · Auto ready</em></span></span>
+  <span class="rail">${rail('develop')}</span>
+  <span class="m-ws" style="display:block">
+    <span class="pseg glass"><span class="on">All 24</span><span>Flagged 3</span><span>Unflagged 21</span></span>
+    <span class="m-grid">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(i =>
+      `<span class="${i === 2 ? 'sel' : ''}"><span class="pic f${i}"><u></u></span><em>DSC0${4050 + i}</em></span>`).join('')}</span>
+  </span>
+  <span class="m-panel">
+    <h2>Develop ${ic('x', 15, 1.1)}</h2><p>24 frames · Portra 400</p><hr>
+    <small>Save to</small><span class="face folder">${ic('folder', 17)}Sample roll / Export</span><hr>
+    <span class="p-row"><span>Format</span><span class="face">JPEG ${ic('chev', 11, 1.4)}</span></span>
+    <span class="p-row"><span>Quality</span><span class="qc"><b>92</b><span class="trk"><i></i><s></s></span></span></span>
+    <span class="p-row"><span>Grain</span><span class="pseg fill" style="box-shadow:inset 0 0 0 1px rgba(var(--ink),.12);background:rgba(var(--ink),.05)"><span class="on">Natural</span><span>Off</span></span></span>
+    <span class="go">Develop 24</span>
+  </span>
+</span>`;
+
+const win = document.getElementById('win'), stage = document.getElementById('stage');
+win.innerHTML = `
+  <div class="shell"><i class="desk"></i><i class="mat"></i><i class="tint"></i></div>
+  <div class="strip"><span class="lights"><i></i><i></i><i></i></span><span class="wordmark">Argent</span></div>
+  <nav class="rail" aria-label="Navigation">${rail('settings', ['roll', 'frame', 'stock', 'adjust', 'develop'])}</nav>
+  <main class="ws">
+    <button class="btn icon glass close" aria-label="Close settings" title="Close settings (Escape)">${ic('x', 14, 1.1)}</button>
+    <div class="page"><div class="col">
+      <h1>Settings</h1>
+      <div class="sub">Changes are saved automatically</div>
+
+      <div class="sect"><b>Appearance</b><i></i></div>
+      <div class="line">
+        <span class="name">Mode</span><span class="note" id="modeNote"></span>
+        <div class="seg glass" id="mode" style="--n:3" role="group" aria-label="Mode"><span class="thumb"></span>
+          ${['system', 'light', 'dark'].map(m => `<button data-mode="${m}">${ic(m, 14, 1.2)}${m[0].toUpperCase() + m.slice(1)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="proofs">
+        ${['light', 'dark'].map(m => `<div class="proof" id="proof-${m}">
+          <button data-mode="${m}"><span class="frame">${mini()}</span></button>
+          <div class="cap">${ic(m, 13, 1.2)}<span class="ver"></span><span class="pill" hidden>Showing</span></div>
+        </div>`).join('')}
+      </div>
+
+      <div class="line" style="margin-top:22px"><span class="name">Theme</span><span class="note">A theme brings both of its versions, and Mode says which shows</span></div>
+      <div class="tiles" id="tiles"></div>
+
+      <div class="sect"><b>Window shell</b><i></i><button class="quiet" id="resetShell" hidden>Reset</button></div>
+      <div class="card glass">
+        <div class="row"><div class="lab"><b>Transparency</b><em>How much desktop frost shows through</em></div>
+          <div class="qc"><output id="tOut"></output><input id="t" type="range" min="0" max="100" step="1" aria-label="Transparency"></div></div>
+        <div class="row" id="sRow"><div class="lab"><b>Tint saturation</b><em id="sNote"></em></div>
+          <div class="qc"><output id="sOut"></output><input id="s" type="range" min="0" max="200" step="1" aria-label="Tint saturation"></div></div>
+      </div>
+
+      <div class="sect"><b>Frame view</b><i></i><button class="quiet" id="resetFrame" hidden>Reset</button></div>
+      <div class="card glass fv">
+        <div class="spec" id="spec" aria-hidden="true"><span class="amb fp"></span><span class="shot fp"></span></div>
+        <div>
+          <div class="row"><div class="lab"><b>Surround</b><em id="surNote"></em></div>
+            <div class="seg plain" id="surround" style="--n:2" role="group" aria-label="Frame surround"><span class="thumb"></span>
+              <button data-surround="1">Ambient</button><button data-surround="0">Neutral</button></div></div>
+          <div class="row"><div class="lab"><b>Intensity</b><em>How strongly the frame tints it</em></div>
+            <div class="qc" id="aiBox"><output id="aiOut"></output><input id="ai" type="range" min="0" max="100" step="1" aria-label="Ambient surround intensity"></div></div>
+          <div class="row"><div class="lab"><b>Edge shadow</b><em>A soft shadow under the frame</em></div>
+            <button class="sw" id="shadowSw" role="switch" aria-label="Ambient edge shadow"></button></div>
+        </div>
+      </div>
+      <div class="foot">${ic('info', 13, 1.2)}<span id="frameNote"></span></div>
+
+      <div class="sect"><b>Rolls</b><i></i></div>
+      <div class="card glass" id="rollsCard">
+        <canvas class="grain" id="grain" aria-hidden="true"></canvas>
+        <div class="row wide"><div class="lab"><b>Backdrop</b><em>Grain drifts behind the Rolls page and follows the pointer</em></div>
+          <button class="sw" id="grainSw" role="switch" aria-label="Rolls backdrop"></button></div>
+      </div>
+    </div></div>
+  </main>`;
+
+const $ = s => win.querySelector(s);
+const tiles = $('#tiles');
+tiles.innerHTML = THEMES.map(th => `<button class="tile" data-theme="${th.id}"><span class="swatch"></span>
+  <span class="txt"><span><b>${th.name}</b>${ic('check', 14, 1.2)}</span><span><em></em><u></u></span></span></button>`).join('');
+
+function render() {
+  const th = themeOf(S.theme), dark = darkOf(th), light = wantsLight();
+  const version = light && th.light ? th.light : dark;
+  const { sh } = paint(win, version);
+
+  // Mode, and the two proofs under it.
+  const modes = ['system', 'light', 'dark'];
+  $('#mode').style.setProperty('--i', modes.indexOf(S.mode));
+  win.querySelectorAll('#mode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+  for (const m of ['light', 'dark']) {
+    const box = $('#proof-' + m), v = m === 'light' ? th.light : dark, shown = v === version;
+    box.classList.toggle('shown', shown);
+    box.querySelector('.pill').hidden = !shown;
+    box.querySelector('button').setAttribute('aria-label', v ? `${v.title}: show ${th.name}'s ${m} version` : `${th.name} has no light version`);
+    const frame = box.querySelector('.frame'), none = frame.querySelector('.none');
+    if (v) { paint(frame, v); none?.remove(); frame.querySelector('.mini').hidden = false; }
+    else {
+      frame.querySelector('.mini').hidden = true;
+      if (!none) frame.insertAdjacentHTML('beforeend', `<span class="none"><b>No light version</b><span>${th.name} is dark only, so Argent stays dark</span></span>`);
+    }
+    frame.querySelector('.mini').style.display = v ? '' : 'none';
+    const ver = box.querySelector('.ver');
+    if (m === 'dark' && th.dark.length > 1) {
+      ver.innerHTML = `<button class="chip" aria-haspopup="menu" aria-expanded="false" aria-label="${th.name} dark versions">${dark.title}${ic('chev', 10, 1.5)}</button>`;
+    } else ver.textContent = v ? v.title : 'None';
+  }
+  $('#modeNote').innerHTML = S.mode === 'system' ? `Follows the Mac, ${mac.matches ? 'dark' : 'light'} now` : '';
+
+  // The themes.
+  tiles.querySelectorAll('.tile').forEach(tile => {
+    const t = themeOf(tile.dataset.theme), d = derive(darkOf(t)), l = t.light && derive(t.light);
+    tile.setAttribute('aria-pressed', t.id === th.id);
+    const half = p => `<i style="--b:${hex(p.ws)};--t:${hex(p.text)};--p:${hex(p.bot)}"></i>`;
+    tile.querySelector('.swatch').innerHTML = (l ? half(l) : '') + half(d);
+    tile.querySelector('em').textContent = l ? `${l.title} · ${d.title}` : d.title;
+    const more = tile.querySelector('u');
+    more.hidden = t.dark.length < 2;
+    more.textContent = `+${t.dark.length - 1}`;
+    more.title = `${t.dark.length} dark versions: ${t.dark.map(v => v.title).join(', ')}`;
+  });
+
+  // The window shell.
+  for (const k of ['t', 's', 'ai']) {
+    const input = $('#' + k);
+    input.value = S[k];
+    input.style.setProperty('--p', (S[k] - input.min) / (input.max - input.min) * 100 + '%');
+    $(`#${k}Out`).textContent = S[k] + '%';
+  }
+  $('#sRow').querySelector('.qc').classList.toggle('off', sh.control !== 'available');
+  $('#sNote').textContent = { available: 'At 100%, the tint matches the theme', neutral: `${th.name}’s tint has no color to adjust`,
+                              transparent: 'Lower transparency to show the tint' }[sh.control];
+  $('#resetShell').hidden = S.t === DEFAULTS.t && S.s === DEFAULTS.s;
+
+  // The frame view's surround.
+  const ambient = S.amb && !firm.matches;
+  $('#surround').style.setProperty('--i', S.amb ? 0 : 1);
+  $('#surround').classList.toggle('off', firm.matches);
+  win.querySelectorAll('#surround button').forEach(b => b.setAttribute('aria-pressed', (b.dataset.surround === '1') === S.amb));
+  $('#surNote').textContent = firm.matches ? 'Increase Contrast keeps the surround neutral'
+    : S.amb ? 'Colors from the open frame' : 'Flat gray in every theme';
+  $('#aiBox').classList.toggle('off', !ambient);
+  $('#shadowSw').classList.toggle('off', !ambient);
+  $('#shadowSw').setAttribute('aria-checked', S.shadow);
+  $('#spec').style.setProperty('--amb', ambient ? (S.ai / 100 * .82).toFixed(3) : 0);
+  $('#spec').classList.toggle('shadow', ambient && S.shadow);
+  $('#frameNote').textContent = `View › Gray Surround (⇧⌘G) ${ambient ? 'always ' : ''}switches to 18% gray for proofing`;
+  $('#resetFrame').hidden = S.amb === FRAME.amb && S.ai === FRAME.ai && S.shadow === FRAME.shadow;
+
+  $('#grainSw').setAttribute('aria-checked', S.grain);
+  $('#grain').classList.toggle('out', !S.grain);
+  grain.palette = derive(version);
+  grain.wake();
+  layout();
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────────
+function closeMenu() { win.querySelector('.menu')?.remove(); win.querySelector('.chip')?.setAttribute('aria-expanded', false); }
+win.addEventListener('click', e => {
+  const hit = s => e.target.closest(s);
+  const item = hit('.menu button');
+  if (item) { S.dv[S.theme] = item.dataset.v; closeMenu(); return render(); }
+  const chip = hit('.chip');
+  if (chip) {
+    if (win.querySelector('.menu')) return closeMenu();
+    const th = themeOf(S.theme), now = darkOf(th);
+    chip.setAttribute('aria-expanded', true);
+    chip.closest('.proof').insertAdjacentHTML('beforeend', `<div class="menu" role="menu">${th.dark.map(v =>
+      `<button role="menuitemradio" aria-checked="${v === now}" data-v="${v.id}">${v.title}</button>`).join('')}</div>`);
+    return win.querySelector('.menu [aria-checked=true]').focus();
+  }
+  closeMenu();
+  const mode = hit('[data-mode]'), tile = hit('.tile'), surround = hit('[data-surround]');
+  if (mode) S.mode = mode.dataset.mode;
+  else if (tile) S.theme = tile.dataset.theme;
+  else if (surround) S.amb = surround.dataset.surround === '1';
+  else if (hit('#shadowSw')) S.shadow = !S.shadow;
+  else if (hit('#resetFrame')) Object.assign(S, FRAME);
+  else if (hit('#grainSw')) S.grain = !S.grain;
+  else if (hit('#resetShell')) Object.assign(S, DEFAULTS);
+  else return;
+  render();
+});
+win.addEventListener('keydown', e => {
+  const menu = win.querySelector('.menu');
+  if (!menu) return;
+  const items = [...menu.children], at = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') { closeMenu(); win.querySelector('.chip')?.focus(); }
+  else if (e.key === 'ArrowDown') items[(at + 1) % items.length].focus();
+  else if (e.key === 'ArrowUp') items[(at + items.length - 1) % items.length].focus();
+  else return;
+  e.preventDefault();
+});
+for (const k of ['t', 's', 'ai']) $('#' + k).addEventListener('input', e => { S[k] = +e.target.value; render(); });
+mac.addEventListener('change', render);
+firm.addEventListener('change', render);
+document.querySelectorAll('.sim button').forEach(b => b.addEventListener('click', () => {
+  S.size = b.dataset.size;
+  document.querySelectorAll('.sim button').forEach(o => o.setAttribute('aria-pressed', o === b));
+  layout();
+}));
+
+// ── The window's size in the mockup's frame ─────────────────────────────────────
+function layout() {
+  const room = stage.clientWidth;
+  if (!room) return;
+  const fixed = { std: [1280, 860], min: [800, 560] }[S.size];
+  const width = fixed ? fixed[0] : Math.min(1280, Math.max(874, room)), k = Math.min(1, room / width);
+  win.style.width = width + 'px';
+  win.style.height = fixed ? fixed[1] + 'px' : 'auto';
+  win.style.transform = `scale(${k})`;
+  win.style.left = Math.max(0, (room - width * k) / 2) + 'px';
+  stage.style.height = Math.ceil(win.offsetHeight * k) + 'px';
+  win.querySelectorAll('.frame').forEach(f => f.style.setProperty('--k', f.clientWidth / 760));
+}
+let lastRoom = 0;
+new ResizeObserver(() => { if (stage.clientWidth !== lastRoom) { lastRoom = stage.clientWidth; layout(); } }).observe(stage);
+
+// ── The Latent image, small: 2-point cells lit against Bayer's 8 by 8 matrix ────
+const grain = (() => {
+  const B = [0,32,8,40,2,34,10,42, 48,16,56,24,50,18,58,26, 12,44,4,36,14,46,6,38, 60,28,52,20,62,30,54,22,
+             3,35,11,43,1,33,9,41, 51,19,59,27,49,17,57,25, 15,47,7,39,13,45,5,37, 63,31,55,23,61,29,53,21];
+  const canvas = $('#grain'), card = $('#rollsCard'), g = canvas.getContext('2d');
+  const self = { palette: null, wake };
+  let pointer = null, pool = 0, running = false, last = 0;
+  const hash = (x, y) => { const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - Math.floor(n); };
+  const smooth = t => t * t * (3 - 2 * t);
+  function noise(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), u = smooth(x - xi), v = smooth(y - yi);
+    return (hash(xi, yi) * (1 - u) + hash(xi + 1, yi) * u) * (1 - v) + (hash(xi, yi + 1) * (1 - u) + hash(xi + 1, yi + 1) * u) * v;
+  }
+  function draw(time) {
+    const w = Math.ceil(card.clientWidth / 2), h = Math.ceil(card.clientHeight / 2), p = self.palette;
+    if (!w || !h || !p) return;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    const image = g.createImageData(w, h), data = image.data, t = time / 1000;
+    const lit = [ch(p.text, 16), ch(p.text, 8), ch(p.text, 0), Math.round((p.dark ? .2 : .16) * 255)];
+    const warm = mix(p.text, p.bot, .7), near = [ch(warm, 16), ch(warm, 8), ch(warm, 0), Math.round(.42 * 255)];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let cover = .05 + .3 * noise(x / 46 + t * .11, y / 30 - t * .05) * noise(x / 19 - t * .07, y / 15 + 7);
+      let ink = lit;
+      if (pool > .01 && pointer) {
+        const d = Math.hypot(x - pointer.x, y - pointer.y) / 26;
+        if (d < 1) { cover += pool * .55 * (1 - d) * (1 - d); ink = near; }
+      }
+      if (cover > (B[(y & 7) * 8 + (x & 7)] + .5) / 64) data.set(ink, (y * w + x) * 4);
+    }
+    g.putImageData(image, 0, 0);
+  }
+  function tick(time) {
+    if (!running) return;
+    if (time - last > 66) { last = time; pool += ((pointer ? 1 : 0) - pool) * .25; draw(time); }
+    if (!S.grain || still.matches) { running = false; return; }
+    requestAnimationFrame(tick);
+  }
+  function wake() {
+    if (still.matches || !S.grain) return draw(4200);
+    if (!running) { running = true; requestAnimationFrame(tick); }
+  }
+  card.addEventListener('pointermove', e => {
+    const box = card.getBoundingClientRect(), k = box.width / card.clientWidth || 1;
+    pointer = { x: (e.clientX - box.left) / k / 2, y: (e.clientY - box.top) / k / 2 };
+  });
+  card.addEventListener('pointerleave', () => pointer = null);
+  return self;
+})();
+
+render();
+</script>
+</body>
+</html>

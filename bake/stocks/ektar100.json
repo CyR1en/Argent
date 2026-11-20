@@ -1,0 +1,70 @@
+{
+  "schema": 2,
+  "id": "kodak-ektar-100",
+  "displayName": "Ektar 100",
+  "modelledFilm": "Kodak Ektar 100",
+  "manufacturer": "Kodak",
+  "boxSpeed": 100,
+  "status": "datasheet",
+  "notes": "Digitized from the Kodak E-4046 datasheet of January 2025. The sheet prints the Print Grain Index at 4.4X as under 25, which is null here. The dye curves are plotted from 405 to 685 nm; the minimum density curve alone starts at 400 nm and that one point is dropped so both arrays share a grid. The sheet's MTF plot is not used. Kodak calls the curves typical, representative of production coatings and not of any one roll. The Status M red, green and blue densities are what the sheet prints: they include cross-absorption and the orange mask, so they are not layer densities. The sheet gives no per-dye spectra, only the midscale neutral and minimum density totals, so dyeDensity holds those two curves and the bake has to unmix them. The couplers are fitted to gamma ratios published for commercial films of the stock's class, not measured on this stock. Grain is anchored on the Print Grain Index and checked against published scans; halation's strength is a guess inside what the base allows. No roll of this stock was shot or scanned for Argent. No push or pull processing. Red density at Log H Ref -0.84 is 0.930, outside the sheet's gray-card window of 0.77 to 0.87; the red curve meets the window centre at log H -1.01.",
+  "source": {
+    "publication": "E-4046",
+    "edition": "2025-01",
+    "url": "https://www.kodakprofessional.com/sites/default/files/2025-07/e4046.pdf",
+    "digitized": "2026-10-06",
+    "method": "vector paths of the datasheet PDF read with pypdf 6.19 through the project's own content stream interpreter, axes calibrated by least squares on the labelled tick lines (largest tick residual 0.029 pt), curves resampled by linear interpolation every 0.05 log H and 5 nm; an earlier independent extraction with PyMuPDF agrees within 0.0009 D on the characteristic curves, 0.0007 log S on the sensitivities and 0.0006 D on the dye densities"
+  },
+  "spectralSensitivity": {
+    "wavelengths": [380, 385, 390, 395, 400, 405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685, 690, 695],
+    "red": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 0.1918, 0.2946, 0.3584, 0.3554, 0.6481, 1.0468, 1.3562, 1.5075, 1.5957, 1.6720, 1.7490, 1.7644, 1.7602, 1.7819, 1.8028, 1.8358, 1.8950, 1.9459, 1.9926, 2.0477, 2.0414, 1.9570, 1.7652, 1.4568, 1.2205, 1.0512, 0.9212, 0.6911, 0.2961],
+    "green": [null, null, null, 0.8396, 0.9381, 0.9713, 0.9496, 0.9180, 0.8682, 0.8170, 0.7743, 0.7117, 0.6489, 0.6138, 0.6141, 0.6069, 0.6110, 0.6089, 0.6064, 0.6828, 0.8367, 1.0632, 1.2107, 1.3005, 1.3737, 1.4175, 1.4552, 1.5081, 1.5593, 1.6279, 1.6938, 1.7452, 1.7876, 1.8371, 1.8199, 1.7800, 1.7770, 1.7466, 1.6638, 1.6330, 1.3898, 0.9128, 0.3750, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+    "blue": [1.0924, 1.2925, 1.5408, 1.7879, 1.9385, 2.0236, 2.0453, 2.0361, 2.0110, 2.0274, 2.0410, 2.0602, 2.0846, 2.0497, 2.0197, 2.0232, 2.0588, 2.1116, 2.1517, 2.0898, 1.7932, 1.3374, 0.7920, 0.3554, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+  },
+  "characteristicCurves": {
+    "densitometry": "statusM",
+    "logExposure": [-2.80, -2.75, -2.70, -2.65, -2.60, -2.55, -2.50, -2.45, -2.40, -2.35, -2.30, -2.25, -2.20, -2.15, -2.10, -2.05, -2.00, -1.95, -1.90, -1.85, -1.80, -1.75, -1.70, -1.65, -1.60, -1.55, -1.50, -1.45, -1.40, -1.35, -1.30, -1.25, -1.20, -1.15, -1.10, -1.05, -1.00, -0.95, -0.90, -0.85, -0.80, -0.75, -0.70, -0.65, -0.60, -0.55, -0.50, -0.45, -0.40, -0.35, -0.30, -0.25, -0.20, -0.15, -0.10, -0.05, 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15],
+    "red": [0.2104, 0.2120, 0.2136, 0.2153, 0.2167, 0.2179, 0.2192, 0.2213, 0.2243, 0.2281, 0.2329, 0.2389, 0.2463, 0.2553, 0.2663, 0.2795, 0.2955, 0.3139, 0.3341, 0.3572, 0.3813, 0.4058, 0.4307, 0.4560, 0.4817, 0.5078, 0.5343, 0.5612, 0.5886, 0.6165, 0.6449, 0.6738, 0.7033, 0.7340, 0.7657, 0.7976, 0.8293, 0.8609, 0.8930, 0.9239, 0.9538, 0.9828, 1.0113, 1.0392, 1.0668, 1.0940, 1.1211, 1.1481, 1.1750, 1.2021, 1.2294, 1.2570, 1.2851, 1.3136, 1.3428, 1.3703, 1.3963, 1.4218, 1.4475, 1.4734, 1.4995, 1.5256, 1.5516, 1.5776, 1.6032, 1.6286, 1.6535, 1.6779, 1.7016, 1.7248, 1.7472, 1.7688, 1.7897, 1.8092, 1.8292, 1.8494, 1.8694, 1.8892, 1.9091, 1.9289],
+    "green": [0.6353, 0.6363, 0.6372, 0.6382, 0.6389, 0.6396, 0.6404, 0.6420, 0.6445, 0.6482, 0.6532, 0.6596, 0.6677, 0.6776, 0.6897, 0.7040, 0.7208, 0.7401, 0.7618, 0.7859, 0.8119, 0.8394, 0.8681, 0.8976, 0.9273, 0.9571, 0.9867, 1.0160, 1.0460, 1.0763, 1.1058, 1.1351, 1.1644, 1.1937, 1.2223, 1.2510, 1.2798, 1.3089, 1.3382, 1.3675, 1.3970, 1.4265, 1.4561, 1.4857, 1.5152, 1.5447, 1.5741, 1.6033, 1.6324, 1.6614, 1.6890, 1.7163, 1.7431, 1.7698, 1.7966, 1.8232, 1.8495, 1.8757, 1.9016, 1.9274, 1.9529, 1.9782, 2.0033, 2.0282, 2.0530, 2.0775, 2.1019, 2.1261, 2.1501, 2.1740, 2.1980, 2.2221, 2.2456, 2.2691, 2.2925, 2.3160, 2.3391, 2.3622, 2.3854, 2.4085],
+    "blue": [0.8498, 0.8573, 0.8630, 0.8683, 0.8707, 0.8707, 0.8707, 0.8728, 0.8775, 0.8848, 0.8938, 0.9059, 0.9216, 0.9420, 0.9648, 0.9894, 1.0174, 1.0486, 1.0807, 1.1125, 1.1420, 1.1692, 1.1970, 1.2270, 1.2617, 1.3010, 1.3408, 1.3799, 1.4132, 1.4456, 1.4780, 1.5103, 1.5425, 1.5748, 1.6070, 1.6393, 1.6716, 1.7041, 1.7366, 1.7693, 1.8022, 1.8352, 1.8685, 1.9020, 1.9358, 1.9700, 2.0044, 2.0393, 2.0733, 2.1070, 2.1407, 2.1744, 2.2078, 2.2410, 2.2743, 2.3068, 2.3387, 2.3698, 2.4005, 2.4306, 2.4604, 2.4899, 2.5191, 2.5482, 2.5772, 2.6063, 2.6353, 2.6645, 2.6940, 2.7237, 2.7538, 2.7843, 2.8154, 2.8472, 2.8796, 2.9129, 2.9482, 2.9841, 3.0210, 3.0581],
+    "logExposureReference": -0.84
+  },
+  "dyeDensity": {
+    "wavelengths": [405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500, 505, 510, 515, 520, 525, 530, 535, 540, 545, 550, 555, 560, 565, 570, 575, 580, 585, 590, 595, 600, 605, 610, 615, 620, 625, 630, 635, 640, 645, 650, 655, 660, 665, 670, 675, 680, 685],
+    "midscaleNeutral": [1.4783, 1.5607, 1.6667, 1.7818, 1.8896, 1.9789, 2.0385, 2.0742, 2.0930, 2.0928, 2.0740, 2.0417, 1.9923, 1.9239, 1.8430, 1.7657, 1.6890, 1.6241, 1.5843, 1.5707, 1.5815, 1.5914, 1.5960, 1.6010, 1.6045, 1.6051, 1.6106, 1.6200, 1.6078, 1.5781, 1.5286, 1.4677, 1.3972, 1.3159, 1.2241, 1.1250, 1.0245, 0.9333, 0.8632, 0.8176, 0.7955, 0.7927, 0.8053, 0.8282, 0.8597, 0.8957, 0.9357, 0.9788, 1.0237, 1.0691, 1.1135, 1.1557, 1.1946, 1.2293, 1.2582, 1.2873, 1.3163],
+    "minimumDensity": [0.7111, 0.7251, 0.7589, 0.7982, 0.8291, 0.8504, 0.8624, 0.8654, 0.8611, 0.8513, 0.8377, 0.8210, 0.8016, 0.7823, 0.7629, 0.7430, 0.7225, 0.7044, 0.6933, 0.6917, 0.7025, 0.7080, 0.7006, 0.6772, 0.6490, 0.6315, 0.6211, 0.6151, 0.6064, 0.5983, 0.5947, 0.5937, 0.5929, 0.5835, 0.5636, 0.5238, 0.4678, 0.3960, 0.3337, 0.2829, 0.2482, 0.2260, 0.2126, 0.2057, 0.2025, 0.2021, 0.2038, 0.2071, 0.2116, 0.2170, 0.2229, 0.2290, 0.2349, 0.2402, 0.2454, 0.2498, 0.2530]
+  },
+  "grayCard": {
+    "redDensity": [0.77, 0.87],
+    "whiteStepRedDensity": [1.13, 1.23],
+    "foreheadRedDensity": {
+      "lightComplexion": [1.08, 1.18],
+      "darkComplexion": [0.93, 1.03]
+    },
+    "source": "E-4046 p3, Status M red of a normally exposed and processed negative: a KODAK Gray Card (gray side), the lightest step of a KODAK Paper Gray Scale (nominal density 0.1), and the highest diffuse density on a normally lit forehead of light and of dark complexion, which the sheet gives as a guide only"
+  },
+  "couplers": {
+    "interLayer": [[0.000, 0.658, 0.155], [1.167, 0.000, 1.381], [0.151, 0.757, 0.000]],
+    "gammaRatios": [1.38, 1.81, 1.33],
+    "anchor": "KODAK HD 400",
+    "basis": "no sheet publishes interimage; fitted (bake/tools/fit_couplers.py) so the layers' Status M gamma ratios at mid-scale, separation over white light, meet those Fuji's EP1693702A1 (2005, Table 3) measured on commercial films, for the stock's class (inference), each layer's inhibition split between the other two as Kodak's US6620580B2 and US5314792A describe (inference); docs/research/film.md section 4.2"
+  },
+  "exposureMatrix": {
+    "matrix": [[1.622860, -0.765494, 0.142634], [-0.035457, 0.877319, 0.158138], [0.009960, -0.004199, 0.994239]],
+    "basis": "fitted (bake/tools/fit_exposure_matrix.py) by least squares on log10 layer exposure, rows summing to one so grays stay neutral, over measured reflectances under D55: Morimoto, Zhang, Fukuda and Uchikawa's 307 natural objects (Zenodo 5217752, CC BY 4.0) and NIST's 100 forearms (public domain), the two sets weighted equally (docs/research/film-sim/bakelook.md section 2); regularized as REGULARIZATION names, chosen by package G's criterion (docs/research/film-sim/matrix.md section 3)"
+  },
+  "halation": {
+    "strength": 0.0105,
+    "greenShare": 0.25,
+    "radiusMicrometres": 180,
+    "basis": "strength and green share a guess, docs/M3-research.md section 4, the strength inside what the 0.10 mm base's reflection geometry allows for Kodak's undercoat densities (0.0035 to 0.19); radius the render kernel's scale, whose weights follow that geometry, docs/research/film.md section 4.4"
+  },
+  "grain": {
+    "printGrainIndex": [null, 38, 66],
+    "relativeSigma": 0.60,
+    "rmsGranularity48um": [0.0030, 0.0033, 0.0079],
+    "basis": "printGrainIndex is the sheet's 135 format value at 4.4X, 8.8X and 17.8X (null where the sheet prints none or under 25); relativeSigma is 10^(dPGI / 100.8) against Portra 400 (inference); rmsGranularity48um is the Portra 400 anchor of 0.0050, 0.0055, 0.0132 scaled by relativeSigma, plus or minus 30 percent, docs/M3-research.md section 3; the anchor agrees with DxO's measurement of scanned Portra 160NC, with the diffuse RMS granularity other makers print for ISO 400 colour negatives, and with freely licensed scans, docs/research/film.md section 4.3"
+  },
+  "paper": "kodak-endura-premier",
+  "printStage": null,
+  "correctionLUT": null
+}

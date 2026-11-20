@@ -1,0 +1,55 @@
+{
+  "about": "What Presence's stages read that the four fits' constants.json files do not hold: the design's decisions (the evidence folder's design/synthesis.md) and the numbers the fit scripts keep in their code. Each entry names where it comes from.",
+  "detail": {
+    "limitStops": 4,
+    "source": "design/synthesis.md, Decisions closed here: the summed stops of Clarity and Texture are held to the Light tables' limit, ManualToneTables.gainLimit"
+  },
+  "texture": {
+    "minimumFieldLongSide": 16,
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_texture_clarity.py texture_band: F = min(decode, max(16, round(full * field_scale))); guided_coefficients: share 0.5 when the fit's params name none"
+  },
+  "clarity": {
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_texture_clarity.py guided_coefficients: share 0.5 when the fit's params name none"
+  },
+  "dehaze": {
+    "fadeStartRatio": 1,
+    "fadeEndRatio": 2,
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_dehaze.py dehaze: G = 1 + (G - 1) clip(2 - Y / Y_A, 0, 1) for positive values when fade is on; Field: the coefficients boxed at rounded(r_g / 2)"
+  },
+  "vibrance": {
+    "minimumFallOff": 0.02,
+    "lightnessReference": 0.18,
+    "strength": {
+      "default": {"positive": 1, "negative": 1},
+      "stocks": {
+        "kodak-ektar-100": {"positive": 1.77, "negative": 2.0},
+        "kodak-gold-200": {"positive": 1.74, "negative": 1.96},
+        "kodak-portra-160": {"positive": 1.41, "negative": 1.61},
+        "kodak-portra-400": {"positive": 1.45, "negative": 1.72},
+        "kodak-portra-800": {"positive": 1.46, "negative": 1.74},
+        "kodak-ultramax-400": {"positive": 1.64, "negative": 1.92}
+      },
+      "rule": {
+        "positive": {"slope": 0.5224119978517177, "intercept": 0.651766495282588, "leaveOneOutRms": 0.05670066922133117, "leaveOneOutMax": 0.10674296340882683},
+        "negative": {"slope": 0.5310835563312757, "intercept": 0.8796745865782775, "leaveOneOutRms": 0.005749955723310613, "leaveOneOutMax": 0.009324550140496823},
+        "chromaRatio": {"kodak-ektar-100": 2.104602384187754, "kodak-gold-200": 2.041747013631734, "kodak-portra-160": 1.3670849574509414, "kodak-portra-400": 1.5710648996218772, "kodak-portra-800": 1.6334406938886523, "kodak-ultramax-400": 1.942361301366584},
+        "source": "validate/colour/constants.json vibranceStrength.rule and ruleCandidates.properties (V3, section 3.1): strength = slope * c + intercept per sign, where c is the stock's chromaRatio, the median over 4 x 4 blocks of Argent's base-print C* over Lightroom's base C* (L* 3 to 97, C* above 5, nothing clipped), averaged over round 1's five frames. A new stock takes its strength from its c, five renders and no hand fit; outside c 1.37 to 2.11 the rule extrapolates. The generator does not read it"
+      },
+      "source": "validate/colour/constants.json vibranceStrength.carried, + and - (V3, section 3.1; the same numbers as bars.json strengths): per stock and sign the m that minimises the mean clip-rule chroma-ratio error of round 1's five frames at +50 and +100, or -50 and -100, rounded to two decimals as fit_colour.py fitted_strengths carries it. A stock not listed takes 1, F3's law as fitted. The positive strength multiplies a1, a2 and a3, the negative divides c (fit_colour.py strengthen)"
+    },
+    "source": "fit_colour.py vib_gain: the fall-off's width is held to at least 0.02; lightness_stops: l = log2(Y / 0.18)"
+  },
+  "colourSpaces": {
+    "proPhotoToXYZ": [[0.7976749, 0.1351917, 0.0313534], [0.2880402, 0.7118741, 0.0000857], [0.0, 0.0, 0.82521]],
+    "rec2020ToXYZ65": [[0.636958, 0.144617, 0.168881], [0.2627, 0.677998, 0.059302], [0.0, 0.028073, 1.060985]],
+    "d50": [0.96422, 1.0, 0.82521],
+    "d65": [0.95047, 1.0, 1.08883],
+    "bradford": [[0.8951, 0.2664, -0.1614], [-0.7502, 1.7135, 0.0367], [0.0389, -0.0685, 1.0296]],
+    "oklabM1": [[0.8189330101, 0.3618667424, -0.1288597137], [0.0329845436, 0.9293118715, 0.0361456387], [0.0482003018, 0.2643662691, 0.633851707]],
+    "oklabM2": [[0.2104542553, 0.793617785, -0.0040720468], [1.9779984951, -2.428592205, 0.4505937099], [0.0259040371, 0.7827717662, -0.808675766]],
+    "source": "fit_colour.py lines 37 to 77, the spaces Vibrance's law was fitted in: linear ProPhoto (D50) reached from linear Rec. 2020 (D65) by Bradford, and Oklab's hue from ProPhoto adapted to D65, M1's rows scaled so white maps to (1, 1, 1)"
+  }
+}

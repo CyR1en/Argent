@@ -1,0 +1,87 @@
+Argent
+Copyright 2026 cyr1en
+
+Argent is licensed under the Apache License, Version 2.0 (LICENSE), except the files listed under
+"Third-party material in this repository", which keep their own licences.
+
+-------------------------------------------------------------------------------
+Third-party material in this repository
+-------------------------------------------------------------------------------
+
+CIE colour tables (CC BY-SA 4.0)
+  bake/argent_bake/data/cie_1931_2deg_cmf_380-780_5nm.csv
+    CIE 1931 2 degree colour-matching functions, CIE 018:2019 Table 6,
+    DOI 10.25039/CIE.DS.xvudnb9b. Changes: rows 380 to 780 nm at 5 nm selected from the
+    1 nm table; values unchanged; comment and header lines added.
+  bake/argent_bake/data/cie_daylight_components_S0S1S2_300-830_5nm.csv
+    CIE daylight components S0, S1, S2, CIE 015:2018 Table 6, DOI 10.25039/CIE.DS.w7zunnny.
+    Changes: none to the values; comment and header lines added.
+  (c) CIE. Licensed under the Creative Commons Attribution-ShareAlike 4.0 International
+  licence, https://creativecommons.org/licenses/by-sa/4.0/. These two files, and any
+  adaptation of them, stay under CC BY-SA 4.0, not the Apache License. The stock LUTs the
+  bake tool computes from them contain no CIE value and are not adaptations.
+
+ISO 5-3 densitometry weights
+  bake/argent_bake/data/iso5-3_status_a_m_log_spectral_products.csv
+    Status A and Status M log spectral products, ANSI/ISO 5-3:1995 (ANSI/NAPM IT2.18-1996)
+    Tables 3 and 4, transcribed from the copy incorporated by reference in 36 CFR 1238.14.
+    Numbers only; no text of the standard is included.
+
+Hanken Grotesk (SIL Open Font License 1.1)
+  Sources/ArgentApp/Resources/Fonts/HankenGrotesk-Variable.ttf
+  Copyright 2021 The Hanken Grotesk Project Authors
+  (https://github.com/marcologous/hanken-grotesk). Licensed under the SIL Open Font License,
+  Version 1.1; the licence is in Sources/ArgentApp/Resources/Fonts/HankenGrotesk-OFL.txt.
+
+Frame view surround specimen
+  Sources/ArgentApp/Resources/FrameSurroundSpecimen.jpg
+  A generated image, made with OpenAI's GPT Image for this project; it shows no real person
+  or place. It is distributed under the Apache License with the rest of Argent.
+
+-------------------------------------------------------------------------------
+Machine-learning models (not in this repository)
+-------------------------------------------------------------------------------
+
+No model weights are in this repository. The scripts in scripts/convert-*.zsh download and
+convert them on your Mac, and scripts/build-app.sh bundles them with their licence texts in
+Argent.app/Contents/Resources/Models/Licences (from scripts/models/licences). Each model's
+terms are its own, and some are NON-COMMERCIAL; an app built with them may be used and shared
+only as those terms allow. scripts/models/licences/README.md records what each text says.
+
+  Depth Anything 3 Mono-Large     Apache-2.0
+  EoMT-DINOv3-L                   code MIT; weights under Meta's DINOv3 License Agreement;
+                                  trained on ADE20K (non-commercial research images)
+  S3OD-sod                        code MIT; weights treated as a DINOv3 derivative; trained
+                                  partly on FLUX.1 Krea-dev images (FLUX.1 [dev]
+                                  Non-Commercial License)
+  ViTMatte-S (Composition-1k)     code MIT; weights tagged Apache-2.0; trained on Adobe's
+                                  research matting data
+  ObjectClear                     NTU S-Lab License 1.0: non-commercial use only
+
+-------------------------------------------------------------------------------
+Trademarks
+-------------------------------------------------------------------------------
+
+Kodak, Portra, Ektar, Gold, ColorPlus, UltraMax and Vision3 are trademarks of Eastman Kodak
+Company. Fujifilm, Fujicolor, Pro 400H, C200 and Superia are trademarks of FUJIFILM Corporation.
+CineStill is a trademark of CineStill Film. Sony and a7 IV are trademarks of Sony Group
+Corporation. Argent is not affiliated with or endorsed by any of them. A stock's name says which
+film's published datasheets and curves its model follows; it is Argent's model of that film, not
+the film, and not a product of its maker.
+
+-------------------------------------------------------------------------------
+Data credits
+-------------------------------------------------------------------------------
+
+Constants in Argent were measured or chosen on public data, among them: raw.pixls.us sample
+raws (CC0); Cube++ (Ershov et al., CC BY 4.0); the NTIRE 2024 Night Photography Rendering
+ratings (CC BY 4.0); natural-object reflectances and daylights by Morimoto et al. (CC BY 4.0);
+NIST skin reflectance (US public domain); film scans by Ivanova et al. (CC BY 4.0); RawNIND
+(CC BY-SA 4.0); and Kodak's published film and paper datasheets. No file from these sets is
+in this repository.
+
+Research-only data. A few constants were chosen on data whose terms allow research or private
+use only: Auto's print aim and tone step (FittedPlacement, FittedTone) on the MIT-Adobe FiveK
+expert edits, and the in-house decoder's ISO cutoffs and neutral colour gain on a7 IV raws from
+Imaging Resource and Photography Blog. They are fine for this non-commercial project. Before any
+commercial use, choose them again on data whose terms allow it.

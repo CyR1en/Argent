@@ -1,0 +1,14 @@
+# The CC0 Sony a7 IV (ILCE-7M4) sample raws the real-RAW regression suite reads, one per
+# compression mode, from raw.pixls.us. scripts/fetch-samples.sh fetches and verifies them
+# into ./samples.
+#
+# Columns: SHA-256, size in bytes, file name in samples/, source URL.
+# Provenance (docs/ci-regression.md): each hash and size is the one in raw.pixls.us's own
+# git-LFS mirror (https://raw.pixls.us/data.lfs.git, pointer files Sony/ILCE-7M4/<name>,
+# dump of 2026-10-09, commit be3dc02d) and matches the bytes fetched on 2026-10-05.
+# Never edit a hash by hand to make a check pass.
+626e1f3235e28f2c642814e0aefad404ea767c06943934db87d2b0072ba8e8b9 73457664 ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW
+851b43c2116c4139104a5036f83ac3b6a148789b2142214dd7192c13972b25b6 49184768 ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW
+d453005714327addd75bcb99c1c6223173dc92f2a59542d82e6761ef0e0e7571 32804864 ILCE-7M4_DSC06675_FullFrame-LossLess-Compressed-Medium.ARW https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06675_FullFrame-LossLess-Compressed-Medium.ARW
+cbbd0930c7d8706dff84c68a2004454266e6fd0d8354f5f76a106b5d776e0223 22933504 ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW
+73c79fd9fbd73dff89548b611aaedc3c5a7e3412ec190c23881ea8434ff2214c 40665088 ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW https://raw.pixls.us/data/Sony/ILCE-7M4/ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW

@@ -1,0 +1,51 @@
+# Swift / Xcode
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+Package.resolved
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+bake/*.egg-info/
+
+# Output
+/out/
+/argent-out/
+
+# Spike build outputs, from the steps in each spikes/*/README.md
+/spikes/lossless-decode/LibRaw-0.22.2.tar.gz
+/spikes/lossless-decode/LibRaw-0.22.2/
+/spikes/lossless-decode/lrbench
+/spikes/lossless-decode/tiledec
+/spikes/lossless-decode/libraw_L.raw
+/spikes/lossless-decode/step2.jsonl
+/spikes/lossless-decode/step2.log
+/spikes/lossless-decode/step3.jsonl
+/spikes/decoder-costs/costs
+/spikes/decoder-costs/out/
+/spikes/decoder-probes/wbprobe
+/spikes/decoder-probes/isoseries
+/spikes/decoder-probes/moire_probe
+/spikes/decoder-probes/badpixels_probe
+
+# macOS
+.DS_Store
+
+# Sample raws for the spike and regression suite (CC0 from raw.pixls.us), not committed
+/samples/
+
+# Datasheets, papers, datasets and probes fetched for research. Local only: their terms
+# forbid redistribution (docs/provenance.md, section 1).
+/references/
+
+# The assembled app, scripts/build-app.sh
+/build/
+
+# Design notes, research and records: a separate private repository, cloned here by scripts/docs.sh.
+# Code comments cite its files as docs/<file>. .ignore brings the folder back into search tools.
+/docs/

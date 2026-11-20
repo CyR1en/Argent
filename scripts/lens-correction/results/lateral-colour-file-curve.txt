@@ -1,0 +1,37 @@
+Lateral colour: file-curve trial, 2026-11-14
+
+Offsets against green in camera colour, in full-size pixels, in the outer half
+of the field. Off and on use the same qualified edges within each pair.
+On applies the nominal file curve at i/15 with divisor 2097152 and the
+specified plus sign, preserving the distortion framing. The trial was rejected;
+Argent leaves lateral colour unapplied. No correction coefficients were fitted.
+
+Lens                 Edges  Channel  State  Signed median  Absolute median  Absolute p95
+Tamron 33 mm             69  red      off         0.081728         0.095704      0.245963
+Tamron 33 mm             69  red      on         -0.072278         0.092631      0.260380
+Tamron 33 mm             69  blue     off         0.276583         0.276583      0.659695
+Tamron 33 mm             69  blue     on         -0.150196         0.170034      0.425005
+Tamron 54 mm            104  red      off        -0.103779         0.117674      0.473199
+Tamron 54 mm            104  red      on          0.503241         0.505740      0.703704
+Tamron 54 mm            104  blue     off         0.108116         0.126725      0.417520
+Tamron 54 mm            104  blue     on         -0.238269         0.260176      0.519019
+Tamron 64 mm           1955  red      off        -0.188666         0.194425      0.695369
+Tamron 64 mm           1955  red      on          0.795258         0.796780      1.119526
+Tamron 64 mm           1955  blue     off         0.095864         0.122229      0.531456
+Tamron 64 mm           1955  blue     on         -0.161810         0.193291      0.476300
+Tamron 75 mm            715  red      off        -0.336174         0.343374      0.904582
+Tamron 75 mm            715  red      on          1.183432         1.183432      1.643212
+Tamron 75 mm            715  blue     off        -0.029691         0.114413      0.530686
+Tamron 75 mm            715  blue     on         -0.698484         0.698484      1.087609
+Viltrox 50 mm 1         499  red      off         0.104213         0.110537      0.590120
+Viltrox 50 mm 1         499  red      on          0.124977         0.133132      0.775971
+Viltrox 50 mm 1         499  blue     off        -0.006050         0.160084      0.819244
+Viltrox 50 mm 1         499  blue     on          0.185164         0.230714      0.893109
+Viltrox 50 mm 2         845  red      off         0.090841         0.106279      0.388487
+Viltrox 50 mm 2         845  red      on          0.101904         0.118018      0.442895
+Viltrox 50 mm 2         845  blue     off        -0.009262         0.173306      1.155621
+Viltrox 50 mm 2         845  blue     on          0.178275         0.247335      1.255750
+Viltrox 50 mm 3         919  red      off         0.085211         0.105590      0.438842
+Viltrox 50 mm 3         919  red      on          0.094740         0.111292      0.471444
+Viltrox 50 mm 3         919  blue     off        -0.017772         0.203333      1.241332
+Viltrox 50 mm 3         919  blue     on          0.179603         0.268529      1.254357

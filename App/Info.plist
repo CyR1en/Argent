@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Roll</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Argent</string>
+	<key>CFBundleExecutable</key>
+	<string>Argent</string>
+	<key>CFBundleIconFile</key>
+	<string>Argent</string>
+	<key>CFBundleIconName</key>
+	<string>Argent</string>
+	<key>CFBundleIdentifier</key>
+	<string>camera.argent.Argent</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Argent</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<!-- MallocLargeCache 0: malloc keeps no freed large block in its large cache. A HEIC's encoder
+	     (CMPhoto) grows each file in memory to 32 MB and frees it; the cache kept those blocks, dirty
+	     and in the footprint, 1.1 to 1.3 GB by the fortieth frame, and 340-frame develops to HEIC
+	     peaked at 2.28 to 2.59 GB in the app (docs/M2-shell.md section 10). The variable is
+	     libmalloc's, undocumented; were macOS to ignore it, develops to HEIC would hold that cache
+	     again, which the M5 memory check (scripts/measure/m5) shows. LaunchServices sets it at
+	     launch; scripts/measure/m5/engine.zsh gives the test processes the same. -->
+	<key>LSEnvironment</key>
+	<dict>
+		<key>MallocLargeCache</key>
+		<string>0</string>
+	</dict>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.photography</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>27.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Argent reads the raw files on a camera card you insert, to offer and open it as a roll.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+</dict>
+</plist>

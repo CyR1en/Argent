@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandboxed (spec, Platform). -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Rolls are folders and cards the user drops or opens, written to only for the recipes
+	     beside the raws; developed files go where the user picks. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- Where Import makes a roll's folder, ~/Pictures/Argent/<roll>, so a card becomes a roll with no
+	     open panel. -->
+	<key>com.apple.security.assets.pictures.read-write</key>
+	<true/>
+	<!-- The default develop destination, ~/Argent/Developed/<roll> (2026-11-16), so a roll develops with no
+	     open panel: no entitlement reaches a folder of the app's own in the home folder, only this
+	     exception, as the cards have theirs below. It reaches ~/Argent and nothing else of the home folder. -->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+	<array>
+		<string>/Argent/</string>
+	</array>
+	<!-- Cards: a card the user did not choose can be offered when it is inserted, and opened
+	     when the offer is taken, only through this exception. There is no removable-volume
+	     entitlement (verified 2026-10-06, docs/M2-shell.md section 6). Read-write so a card's
+	     recipes go beside its raws, as a dropped card's do. The app reads a volume only after
+	     the user takes its offer or opens it; detection lists DCIM and nothing else. -->
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/Volumes/</string>
+	</array>
+</dict>
+</plist>

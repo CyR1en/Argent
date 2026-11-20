@@ -1,0 +1,332 @@
+{
+ "made": "2026-11-11 11:41",
+ "script": "scripts/lightroom-probe/fit_colour.py (branch f3/colour-fit)",
+ "rerun": ".venv/bin/python -I scripts/lightroom-probe/fit_colour.py all",
+ "data": {
+  "grids": [
+   "exports-p-colour-grid (DNG)",
+   "exports-p-colour-grid-tif"
+  ],
+  "combos": "exports-p-combo, exports-p-raw-combos",
+  "film": [
+   "p-raw",
+   "p-photo-saturated",
+   "p-photo-sky",
+   "p-photo-foliage",
+   "p-photo-skin"
+  ],
+  "stocks": [
+   "kodak-ektar-100",
+   "kodak-gold-200",
+   "kodak-portra-160",
+   "kodak-portra-400",
+   "kodak-portra-800",
+   "kodak-ultramax-400"
+  ],
+  "spike": "/Users/cyr1en/Developer/Argent/.build/release/argent-spike"
+ },
+ "saturation": {
+  "method": "luma blend c' = Y + k (c - Y) on linear light before the tone curve (Argent: on the scene, before the Negative LUT); Y is Lightroom's grey, ProPhoto luminance; channels clipped at zero",
+  "k": "1 + s, s = slider / 100, both signs",
+  "lumaProPhoto": [
+   0.2880402,
+   0.7118741,
+   8.57e-05
+  ],
+  "lumaRec2020": [
+   0.2790187,
+   0.6753431,
+   0.0456382
+  ],
+  "lumaFittedOnDngGreys": [
+   0.2902,
+   0.7092,
+   0.0006
+  ],
+  "kMeasuredByValue": {
+   "-50": 0.4995626175769582,
+   "-25": 0.7500728549297977,
+   "25": 1.2514406042279753,
+   "50": 1.5030654087066018,
+   "100": 2.006605276068997
+  },
+  "fittedBy": "saturation_minus_100 and saturation_gain on the grids"
+ },
+ "vibrance": {
+  "method": "V-A: in linear ProPhoto before the tone curve, HSV saturation S times vib_gain (knee toward S = 1 at sknee) and HSV value times 2^vib_value, each channel kept at its share between the smallest and the largest; x = S, h = Oklab hue, l = log2(Y / 0.18); applied after Saturation",
+  "constants": {
+   "hsv": {
+    "pos": {
+     "a1": 0.6746466765068058,
+     "a2": 1.6252325603467073,
+     "x0": 0.42031449344690125,
+     "x0v": 0.06143629747880229,
+     "d": 0.5430347396371245,
+     "hc": 25.76848152972354,
+     "hw": 74.15097931876366,
+     "l0": -0.8919180261586022,
+     "sigma": 2.050589105799689,
+     "b1": 0.3893657199399173,
+     "b2": 0.10103057860034598,
+     "alpha": 0.872225486425929,
+     "beta": 0.9087713580526153,
+     "lv": -0.736877913174978,
+     "sv": 2.5305106888593447
+    },
+    "neg": {
+     "c": 0.6982139096543644,
+     "q": 1.4089597983994067,
+     "kappa": 0.19924876459446408,
+     "b1": 2.061497968047204,
+     "b2": 0.3700547443915001,
+     "alpha": 0.9508510975331534,
+     "beta": 0.9064730945206407,
+     "lv": -1.1346775055421559,
+     "sv": 2.183892898757388
+    },
+    "sref": 0.6,
+    "sknee": 0.8364317555209223
+   },
+   "luma": {
+    "pos": {
+     "a1": 1.0106339509967386,
+     "a2": 1.8656819477709918,
+     "x0": 0.48468478983503993,
+     "x0v": 0.02366786416458719,
+     "d": 0.48934836513098223,
+     "hc": 82.51745856496547,
+     "hw": 120.0,
+     "l0": -0.8166238116295191,
+     "sigma": 2.110769227943379,
+     "b1": 0.15,
+     "b2": 0.0,
+     "alpha": 0.5,
+     "beta": 0.5,
+     "lv": -1.5,
+     "sv": 1.5
+    },
+    "neg": {
+     "c": 0.5156170033655634,
+     "q": 1.5342757975204253,
+     "kappa": 0.40715527837746196,
+     "b1": 0.5,
+     "b2": 0.2,
+     "alpha": 0.5,
+     "beta": 0.8,
+     "lv": -1.5,
+     "sv": 1.5
+    },
+    "sref": 0.6,
+    "sknee": 0.8
+   },
+   "oklab": {
+    "pos": {
+     "a1": 0.3837516805930736,
+     "a2": 1.6056748117567399,
+     "x0": 0.42578838543419,
+     "x0v": 0.22068483535400926,
+     "d": 0.5521747751148669,
+     "hc": 44.92828485461807,
+     "hw": 93.96748766501544,
+     "l0": -1.0581071941329783,
+     "sigma": 2.5306266123213326,
+     "b1": 0.15,
+     "b2": 0.0,
+     "alpha": 0.5,
+     "beta": 0.5,
+     "lv": -1.5,
+     "sv": 1.5
+    },
+    "neg": {
+     "c": 0.515967005952859,
+     "q": 0.4482462913171391,
+     "kappa": 0.4396671683830784,
+     "b1": 0.5,
+     "b2": 0.2,
+     "alpha": 0.5,
+     "beta": 0.8,
+     "lv": -1.5,
+     "sv": 1.5
+    },
+    "sref": 0.6230308693654094,
+    "sknee": 0.8
+   }
+  },
+  "fitRmsLabPerComponent": {
+   "hsv": {
+    "pos": 1.315442119747579,
+    "neg": 0.7145879272408305
+   },
+   "luma": {
+    "pos": 2.905528361514407,
+    "neg": 2.708247132109186
+   },
+   "oklab": {
+    "pos": 2.675609320399944,
+    "neg": 2.652862431469676
+   }
+  },
+  "fittedBy": "fit_vibrance on the TIFF grid before the curve (patches and every 4th ramp sample), DNG held out"
+ },
+ "toneCurve": {
+  "log2Chart": [
+   -7.49715,
+   -6.47263,
+   -5.71134,
+   -5.06417,
+   -4.5013,
+   -4.00326,
+   -3.55666,
+   -3.15188,
+   -2.78173,
+   -2.44076,
+   -2.1247,
+   -1.83016,
+   -1.55439,
+   -1.29515,
+   -1.05056,
+   -0.81905,
+   -0.59931,
+   -0.39018,
+   -0.1907,
+   -0.07527
+  ],
+  "log2Render": [
+   -11.4689,
+   -7.66203,
+   -6.26904,
+   -5.10716,
+   -4.1752,
+   -3.41907,
+   -2.77633,
+   -2.21277,
+   -1.73954,
+   -1.36511,
+   -1.06564,
+   -0.82463,
+   -0.62971,
+   -0.47075,
+   -0.34063,
+   -0.23461,
+   -0.14937,
+   -0.08272,
+   -0.03325,
+   -0.0114
+  ],
+  "note": "Lightroom's raw tone curve for p-colour-grid (DNG), from its neutrals; used to take renders back before the curve"
+ },
+ "composition": "Saturation first, then Vibrance on its result (p-combo, measured)",
+ "passBars": {
+  "both": {
+   "identity": "slider 0 renders the same bytes as no stage (a literal bypass)",
+   "reproduce": "the Swift build's print against this prototype's print of the same raw, stock, flags and value, 4 x 4 blocks in CIELAB D50, on p-raw and p-photo-saturated, Portra 400 and Ektar 100, at -100, -50, +50 and +100",
+   "fidelity": "fit_colour.film_score against Lightroom, mean over the 10 runs of section 3.3 / 5.3"
+  },
+  "saturation": {
+   "stage": "S-A, luma blend with Lightroom's luminance, k = 1 + s, on the print",
+   "reproduceDE": {
+    "mean": 0.3,
+    "p99": 1.0
+   },
+   "chromaRatioError%": {
+    "-50": [
+     9.0,
+     7.2
+    ],
+    "+50": [
+     11.0,
+     8.6
+    ],
+    "+100": [
+     25.0,
+     22.1
+    ]
+   },
+   "hueP95": {
+    "-50": [
+     7.0,
+     5.3
+    ],
+    "+50": [
+     8.5,
+     6.8
+    ],
+    "+100": [
+     13.0,
+     11.6
+    ]
+   },
+   "lightnessP95": {
+    "-50": [
+     0.6,
+     0.39
+    ],
+    "+50": [
+     0.7,
+     0.44
+    ],
+    "+100": [
+     1.5,
+     1.21
+    ]
+   },
+   "greyAtMinus100C": [
+    0.1,
+    0.02
+   ]
+  },
+  "vibrance": {
+   "stage": "V-A with the fitted constants (m = 1), on the print, after Saturation",
+   "reproduceDE": {
+    "mean": 0.5,
+    "p99": 2.0
+   },
+   "chromaRatioError%": {
+    "-50": [
+     16.0,
+     13.4
+    ],
+    "+50": [
+     12.0,
+     9.4
+    ],
+    "+100": [
+     38.0,
+     35.2
+    ]
+   },
+   "hueP95": {
+    "-50": [
+     5.0,
+     3.2
+    ],
+    "+50": [
+     3.0,
+     1.3
+    ],
+    "+100": [
+     6.0,
+     4.2
+    ]
+   },
+   "lightnessP95": {
+    "-100": [
+     9.5,
+     8.5
+    ],
+    "-50": [
+     4.5,
+     3.98
+    ],
+    "+50": [
+     1.5,
+     1.1
+    ],
+    "+100": [
+     3.5,
+     3.07
+    ]
+   }
+  }
+ }
+}

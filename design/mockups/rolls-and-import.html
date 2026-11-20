@@ -1,0 +1,493 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Argent — Rolls & Import mockup</title>
+<style>
+  :root {
+    --chrome: #1e2030; --ws: #24273a; --well: #1b1d2b;
+    --ink: 202, 211, 245;
+    --text: #cad3f5; --sec: rgba(var(--ink), .70); --ter: rgba(var(--ink), .50);
+    --hair: rgba(var(--ink), .09); --border: rgba(var(--ink), .13);
+    --edge: #e3a25a; /* edge-print amber */
+    --base: rgba(12, 13, 20, .88); /* film base */
+    --primTop: #e6e8f2; --primBot: #c9ccda; --onPrim: #181926;
+    --sans: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  html, body { margin: 0; }
+  .shot { margin: 0 0 14px; }
+  .cap { font: 600 13px/1.3 var(--font-sans, var(--sans)); color: var(--foreground, #ddd); margin: 0 2px 8px; display: flex; gap: 8px; align-items: baseline; }
+  .cap b { font-family: var(--font-mono, var(--mono)); font-size: 11px; color: var(--muted-foreground, #999); font-weight: 500; }
+  .cap span { font-weight: 400; color: var(--muted-foreground, #999); font-size: 12px; }
+  .wrap { position: relative; width: 100%; overflow: hidden; border-radius: 9px; }
+  .win { position: absolute; top: 0; left: 0; width: 1280px; height: 640px; transform-origin: 0 0;
+         background: var(--chrome); border-radius: 14px; overflow: hidden; color: var(--text);
+         font-family: var(--sans); -webkit-font-smoothing: antialiased; user-select: none; }
+  /* chrome */
+  .tb { position: absolute; left: 0; right: 0; top: 0; height: 52px; display: flex; align-items: center; }
+  .lights { position: absolute; left: 20px; top: 20px; display: flex; gap: 8px; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; background: rgba(var(--ink), .22); }
+  .wordmark { position: absolute; left: 94px; font-size: 19px; }
+  .ctx { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; }
+  .ctx .t { font-size: 13px; font-weight: 600; } .ctx .s { font-size: 11px; color: var(--sec); margin-top: 1px; }
+  .tbr { position: absolute; right: 16px; display: flex; gap: 10px; }
+  .rail { position: absolute; left: 0; top: 52px; bottom: 6px; width: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .ri { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: var(--sec); position: relative; }
+  .ri.dis { opacity: .38; }
+  .ri.sel { color: var(--text); background: rgba(var(--ink), .10); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .25), 0 1px 6px rgba(0,0,0,.3); }
+  .ri svg { width: 19px; height: 19px; }
+  .ri .dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--text); box-shadow: 0 0 0 2px var(--chrome); }
+  .rsep { width: 20px; height: 1px; background: var(--hair); margin: 4px 0; }
+  .ws { position: absolute; left: 60px; top: 52px; right: 6px; bottom: 6px; border-radius: 16px; background: var(--ws); overflow: hidden; }
+  .ws canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .page { position: absolute; inset: 0; overflow-y: auto; scrollbar-width: none; }
+  .page::-webkit-scrollbar { display: none; }
+
+  /* controls */
+  .btn { height: 32px; padding: 0 14px; border-radius: 8px; font: 600 14px var(--sans); display: inline-flex; align-items: center; gap: 7px; cursor: default; border: 0; color: var(--text); background: rgba(var(--ink), .12); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .18); white-space: nowrap; }
+  .btn:hover { background: rgba(var(--ink), .17); }
+  .btn.prim { background: linear-gradient(var(--primTop), var(--primBot)); color: var(--onPrim); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .btn.prim:hover { filter: brightness(1.05); }
+  .btn.quiet { background: transparent; box-shadow: none; font-weight: 400; font-size: 13px; color: var(--sec); }
+  .btn.sm { height: 28px; font-size: 13px; padding: 0 11px; border-radius: 7px; }
+  .btn.dis { opacity: .45; }
+  .kbd { font: 500 11px var(--sans); opacity: .55; margin-left: 2px; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(var(--ink), .07); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .1); }
+  .seg button { all: unset; height: 24px; padding: 0 10px; border-radius: 6px; font: 13px var(--sans); color: var(--sec); display: inline-flex; align-items: center; gap: 5px; flex: 1; justify-content: center; white-space: nowrap; }
+  .seg button.on { background: rgba(var(--ink), .18); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .seg button .n { font-variant-numeric: tabular-nums; opacity: .7; }
+  .seg.fill { display: flex; }
+  .field { height: 30px; border-radius: 7px; background: rgba(0,0,0,.18); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .18); display: flex; align-items: center; padding: 0 10px; gap: 7px; font-size: 13px; color: var(--text); }
+  .field .ph { color: var(--ter); }
+  .glass { background: rgba(36, 39, 58, .72); backdrop-filter: blur(22px) saturate(1.3); -webkit-backdrop-filter: blur(22px) saturate(1.3); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .16), 0 10px 40px rgba(0,0,0,.35); }
+
+  /* rolls page */
+  .col { width: 1060px; margin: 0 auto; padding: 40px 0 60px; position: relative; }
+  .head { display: flex; align-items: flex-end; gap: 12px; }
+  .head h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.2px; }
+  .head .sub { font-size: 13px; color: var(--sec); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .head .sp { flex: 1; }
+  .menuface { height: 30px; padding: 0 10px; border-radius: 7px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sec); background: rgba(var(--ink), .06); box-shadow: inset 0 0 0 .5px rgba(var(--ink), .12); }
+  .offer { margin-top: 26px; height: 58px; border-radius: 12px; display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; border: 1px dashed rgba(var(--ink), .30); background: rgba(24, 26, 40, .55); backdrop-filter: blur(10px); }
+  .offer .ico { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: rgba(var(--ink), .08); position: relative; }
+  .offer .ico::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--edge); box-shadow: 0 0 0 2px var(--ws); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .offer .t { font-size: 14px; font-weight: 600; } .offer .s { font-size: 12px; color: var(--sec); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .month { display: flex; align-items: center; gap: 12px; margin: 34px 0 14px; font: 600 11px var(--sans); letter-spacing: 1.4px; color: var(--ter); }
+  .month::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+  .month .c { font-weight: 400; letter-spacing: .2px; }
+
+  .roll { display: grid; grid-template-columns: 236px 1fr; gap: 24px; align-items: center; margin-bottom: 22px; position: relative; cursor: default; }
+  .meta { padding: 10px 0 10px 14px; border-left: 2px solid transparent; transition: border-color .2s; }
+  .roll.open .meta { border-left-color: var(--text); }
+  .meta .d { font: 500 10.5px var(--mono); letter-spacing: .8px; color: var(--ter); }
+  .meta .n { font-size: 18px; font-weight: 600; margin-top: 5px; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .pill { font: 600 10px var(--sans); letter-spacing: .5px; padding: 2px 6px; border-radius: 5px; background: rgba(var(--ink), .14); color: var(--text); text-transform: uppercase; }
+  .meta .i { font-size: 13px; color: var(--sec); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .meta .p { font-size: 11.5px; color: var(--ter); margin-top: 7px; display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+  .bar { width: 64px; height: 3px; border-radius: 2px; background: rgba(var(--ink), .14); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--text); }
+  .roll:hover .meta .n { text-decoration: underline; text-decoration-color: rgba(var(--ink), .3); text-underline-offset: 4px; }
+
+  .strip { position: relative; -webkit-mask-image: linear-gradient(90deg, #000 72%, transparent 99%); mask-image: linear-gradient(90deg, #000 72%, transparent 99%); }
+  .film { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .3s; filter: drop-shadow(0 6px 14px rgba(0,0,0,.35)); }
+  .roll:hover .film { transform: translateX(-56px); }
+  .reb { height: 20px; background: var(--base); position: relative; width: 1500px;
+         -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='20'%3E%3Cpath fill-rule='evenodd' d='M0 0h18v20H0z M6.5 4h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z'/%3E%3C/svg%3E") repeat-x;
+                 mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='20'%3E%3Cpath fill-rule='evenodd' d='M0 0h18v20H0z M6.5 4h5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z'/%3E%3C/svg%3E") repeat-x; }
+  .reb.bot { -webkit-mask-position: 0 0; transform: scaleY(-1); }
+  .print { position: absolute; left: 0; height: 9px; font: 600 7.5px/9px var(--mono); letter-spacing: 1.2px; color: var(--edge); opacity: .72; white-space: pre; width: 1500px; pointer-events: none; }
+  .print.top { top: 11px; } .print.bot { bottom: 1px; display: flex; }
+  .print.bot span { width: 152px; flex: none; padding-left: 4px; box-sizing: border-box; }
+  .frames { display: flex; gap: 0; background: var(--base); width: 1500px; padding: 0; }
+  .fr { width: 144px; height: 96px; flex: none; margin: 0 4px; border-radius: 1.5px; position: relative; overflow: hidden; }
+  .fr.latent { background: rgba(var(--ink), .035) !important; box-shadow: inset 0 0 0 .5px rgba(var(--ink), .08); }
+  .fr.dev { animation: develop 1.6s ease-out infinite alternate; }
+  @keyframes develop { from { filter: brightness(.25) contrast(.6) saturate(0); } to { filter: none; } }
+  .roll.off .film { filter: grayscale(1) brightness(.6); opacity: .55; }
+  .roll.off .meta { opacity: .6; }
+  .warn { color: var(--edge); }
+  .open-arrow { position: absolute; right: 18px; top: 50%; translate: 0 -50%; opacity: 0; transition: opacity .2s; }
+  .roll:hover .open-arrow { opacity: 1; }
+
+  .cmenu { position: absolute; z-index: 5; width: 232px; padding: 5px; border-radius: 10px; font-size: 13px; background: rgba(40, 43, 62, .9); }
+  .cmenu div { padding: 4px 9px; border-radius: 5px; display: flex; justify-content: space-between; }
+  .cmenu div.hi { background: rgba(var(--ink), .16); }
+  .cmenu div span { color: var(--ter); }
+  .cmenu hr { border: 0; height: 1px; background: var(--hair); margin: 5px 9px; }
+  .cmenu small { display: block; font-size: 11px; color: var(--ter); padding: 0 9px 3px; }
+  .link { display: inline-flex; align-items: center; gap: 4px; }
+  /* sheet */
+  .scrim { position: absolute; inset: 0; background: rgba(10, 11, 18, .38); }
+  .sheet { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 540px; border-radius: 18px; padding: 22px 24px; box-sizing: border-box; }
+  .sheet h2 { margin: 0; font-size: 19px; font-weight: 600; }
+  .sheet .lede { font-size: 13px; color: var(--sec); margin-top: 6px; line-height: 1.45; }
+  .sect { font: 600 11px var(--sans); letter-spacing: 1.2px; text-transform: uppercase; color: var(--ter); margin: 22px 0 8px 2px; }
+  .src { display: flex; align-items: center; gap: 13px; padding: 11px 12px; border-radius: 11px; margin-bottom: 6px; box-shadow: inset 0 0 0 .5px rgba(var(--ink), .1); background: rgba(var(--ink), .03); }
+  .src.on { background: rgba(var(--ink), .09); box-shadow: inset 0 0 0 1.5px rgba(var(--ink), .55); }
+  .src .ico { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; background: rgba(var(--ink), .07); flex: none; }
+  .src .t { font-size: 14px; font-weight: 600; } .src .s { font-size: 12px; color: var(--sec); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .src .grow { flex: 1; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(var(--ink), .35); }
+  .src.on .radio { box-shadow: inset 0 0 0 5px var(--text); }
+  .cap-bar { width: 120px; height: 4px; border-radius: 2px; background: rgba(var(--ink), .12); margin-top: 7px; overflow: hidden; }
+  .cap-bar i { display: block; height: 100%; width: 62%; background: rgba(var(--ink), .5); }
+  .sheet .foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; align-items: center; }
+  .sheet .foot .note { flex: 1; font-size: 12px; color: var(--ter); }
+
+  /* review */
+  .review { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 312px; }
+  .grid-area { position: relative; overflow: hidden; }
+  .filter { display: flex; align-items: center; padding: 16px 18px 10px; gap: 12px; }
+  .filter .hint { flex: 1; text-align: right; font-size: 12px; color: var(--ter); }
+  .thumbs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px 12px; padding: 4px 18px 30px; }
+  .th { position: relative; }
+  .th .im { aspect-ratio: 3/2; border-radius: 4px; position: relative; overflow: hidden; transition: opacity .25s, filter .25s; }
+  .th .lbl { font-size: 12px; color: var(--sec); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .th.left .im { opacity: .42; filter: saturate(.4); }
+  .th .badge { position: absolute; left: 6px; bottom: 6px; font-size: 11px; padding: 3px 7px; border-radius: 6px; background: rgba(20, 21, 32, .78); backdrop-filter: blur(6px); display: none; align-items: center; gap: 5px; color: var(--text); }
+  .th.left .badge { display: inline-flex; }
+  .th .burst { position: absolute; right: 6px; top: 6px; font: 600 10px var(--mono); padding: 2px 5px; border-radius: 4px; background: rgba(20, 21, 32, .7); color: var(--sec); }
+  .fadeb { position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(transparent, var(--ws)); pointer-events: none; }
+  .insp { margin: 10px 12px 12px 0; border-radius: 16px; padding: 14px 18px 14px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .insp h3 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .insp h3 .grow { flex: 1; }
+  .insp .row { margin-top: 8px; } .insp > .tiny { display: none; }
+  .insp .row .k { font-size: 12px; color: var(--sec); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .insp .row .k em { font-style: normal; color: var(--ter); }
+  .insp .div { height: 1px; background: var(--hair); margin: 11px -18px; }
+  .insp .tiny { font-size: 11.5px; color: var(--ter); line-height: 1.4; }
+  .path { font: 11px var(--mono); color: var(--sec); margin-top: 7px; display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .switch { width: 32px; height: 19px; border-radius: 10px; background: rgba(var(--ink), .18); position: relative; transition: background .2s; cursor: default; flex: none; }
+  .switch::after { content: ""; position: absolute; left: 2px; top: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.4); transition: left .2s; }
+  .switch.on { background: #9aa3e0; } .switch.on::after { left: 15px; }
+  .cull-body { transition: opacity .25s; }
+  .cull-body.off { opacity: .35; pointer-events: none; }
+  .remember { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 11.5px; color: var(--ter); }
+  .remember a { color: var(--sec); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: rgba(var(--ink), .3); }
+  .split { height: 6px; border-radius: 3px; overflow: hidden; display: flex; background: rgba(var(--ink), .12); margin-top: 10px; }
+  .split i { background: var(--text); transition: width .3s; }
+  .tally { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--sec); font-variant-numeric: tabular-nums; }
+  .tally b { color: var(--text); font-weight: 600; }
+  .insp .go { margin-top: auto; padding-top: 10px; }
+  .insp .go .btn { width: 100%; justify-content: center; height: 36px; }
+
+  /* copying */
+  .prog { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: rgba(var(--ink), .1); }
+  .prog i { display: block; height: 100%; background: var(--edge); width: 31%; box-shadow: 0 0 8px var(--edge); }
+  .toast { position: absolute; left: 50%; bottom: 18px; translate: -50% 0; border-radius: 14px; padding: 10px 12px 10px 16px; display: flex; gap: 14px; align-items: center; font-size: 13px; }
+  .toast .s { color: var(--sec); font-variant-numeric: tabular-nums; }
+  .ring { width: 18px; height: 18px; border-radius: 50%; background: conic-gradient(var(--text) 31%, rgba(var(--ink), .15) 0); -webkit-mask: radial-gradient(circle, transparent 6px, #000 6.5px); mask: radial-gradient(circle, transparent 6px, #000 6.5px); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const W = 1280, H = 640;
+const I = {
+  rolls: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="1.5"/><path d="M2.5 8.2h19M2.5 15.8h19M9 8.2v7.6M15 8.2v7.6"/><path d="M5 6.6h1M8.5 6.6h1M12 6.6h1M15.5 6.6h1M19 6.6h.5M5 17.4h1M8.5 17.4h1M12 17.4h1M15.5 17.4h1M19 17.4h.5" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
+  photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></svg>',
+  layers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M12 4l9 4.5-9 4.5-9-4.5z"/><path d="M3 12.5l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5"/></svg>',
+  sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="1.8" fill="var(--chrome)"/><circle cx="15" cy="12" r="1.8" fill="var(--chrome)"/><circle cx="8" cy="17" r="1.8" fill="var(--chrome)"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9H6a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1h-2"/><path d="M12 3v11M8.5 6.5L12 3l3.5 3.5"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.5 2.9-.8.7 2.9 2.9.8-.8 2.9 2.5 1.6-2.5 1.6.8 2.9-2.9.7-.7 2.9-2.9-.8L12 21.2l-1.6-2.5-2.9.8-.7-2.9-2.9-.7.8-2.9L2.8 12l2.5-1.6-.8-2.9 2.9-.8.7-2.9 2.9.8z" stroke-linejoin="round"/></svg>',
+  plus: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  sd: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M7 2.5h8.5L19 6v15.5H7a1 1 0 0 1-1-1v-17a1 1 0 0 1 1-1z"/><path d="M9.5 3v3.5M12 3v3.5M14.5 3v3.5"/></svg>',
+  drive: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="17" cy="12" r=".9" fill="currentColor"/><path d="M6.5 12h6"/></svg>',
+  folder: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>',
+  search: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>',
+  chev: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  right: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  eye: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><path d="M4 20L20 4"/></svg>',
+  soft: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><circle cx="12" cy="12" r="8"/></svg>',
+  same: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/></svg>',
+  link: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+  eject: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5l7 8H5z"/><rect x="5" y="16" width="14" height="2.5" rx="1"/></svg>',
+  plusfolder: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><path d="M8.5 13.5h4M17 14.5l-2.5-2.5M14.5 17l2.5-2.5" stroke-linecap="round" opacity="0"/><path d="M10 13.5a2.2 2.2 0 0 1 2.2-2.2h1.6M14 13.5a2.2 2.2 0 0 1-2.2 2.2h-1.6" stroke-linecap="round"/></svg>',
+  clock: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+};
+
+/* ---------- placeholder photographs ---------- */
+function rng(seed) { let s = seed * 9301 + 49297; return () => ((s = (s * 9301 + 49297) % 233280) / 233280); }
+const PAL = {
+  market: [[28,40],[18,30],[200,215],[35,25]],
+  autumn: [[38,48],[90,110],[28,40],[200,210]],
+  bw: [[0,0],[0,0],[0,0],[0,0]],
+  night: [[225,245],[30,40],[260,280],[200,215]],
+  coast: [[195,210],[185,200],[40,50],[25,35]],
+  stage: [[225,240],[220,235],[10,20],[30,40]],
+};
+function photo(seed, pal) {
+  const r = rng(seed), p = PAL[pal], bw = pal === 'bw';
+  const h = i => p[i][0] + r() * (p[i][1] - p[i][0]);
+  const sat = bw ? 0 : 1;
+  const dark = pal === 'night' || pal === 'stage';
+  const sky = `hsl(${h(0)} ${30 * sat + r() * 20 * sat}% ${dark ? 10 + r() * 10 : 55 + r() * 25}%)`;
+  const sky2 = `hsl(${h(3)} ${25 * sat}% ${dark ? 18 + r() * 8 : 45 + r() * 20}%)`;
+  const gnd = `hsl(${h(1)} ${30 * sat + r() * 25 * sat}% ${dark ? 8 + r() * 8 : 22 + r() * 22}%)`;
+  const gnd2 = `hsl(${h(1)} ${20 * sat}% ${dark ? 4 : 14 + r() * 12}%)`;
+  const subj = `hsl(${h(2)} ${45 * sat + r() * 30 * sat}% ${dark ? 45 + r() * 20 : 30 + r() * 40}%)`;
+  const light = `hsl(${h(2)} ${70 * sat}% 70%)`;
+  const hz = 35 + r() * 30, sx = 20 + r() * 60, sw = 10 + r() * 14, sh = 22 + r() * 22;
+  const fig = (x, y, hgt, c) => [
+    `radial-gradient(ellipse ${hgt * .16}% ${hgt * .13}% at ${x}% ${y - hgt * .62}%, ${c} 0, ${c} 55%, transparent 80%)`,
+    `radial-gradient(ellipse ${hgt * .22}% ${hgt * .55}% at ${x}% ${y}%, ${c} 0, ${c} 50%, transparent 78%)`];
+  const n = 1 + Math.floor(r() * 3), hgt = 30 + r() * 30;
+  let layers = [];
+  for (let k = 0; k < n; k++) {
+    const c = `hsl(${h(2)} ${(25 + r() * 25) * sat}% ${dark ? 40 + r() * 20 : 22 + r() * 45}%)`;
+    layers.push(...fig(sx + k * (9 + r() * 6), hz + 30, hgt * (.85 + r() * .3), c));
+  }
+  layers.push(`radial-gradient(ellipse 60% 40% at ${r() * 100}% ${hz - 5}%, hsl(${h(1)} ${30 * sat}% ${dark ? 12 : 28}% / .8) 0, transparent 70%)`);
+  layers.unshift('radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgba(0,0,0,.35) 100%)');
+  if (dark) for (let k = 0; k < 4; k++) layers.push(`radial-gradient(circle at ${r() * 100}% ${r() * 50}%, ${light} 0, transparent ${3 + r() * 6}%)`);
+  layers.push(`linear-gradient(180deg, ${sky} 0%, ${sky2} ${hz}%, ${gnd} ${hz + 2}%, ${gnd2} 100%)`);
+  return `background:${layers.join(',')}`;
+}
+
+/* ---------- pieces ---------- */
+function rail(sel) {
+  const it = (k, c = '') => `<div class="ri ${c}">${I[k]}</div>`;
+  return `<div class="rail">${it('rolls', sel === 'rolls' ? 'sel' : '')}<div class="rsep"></div>${it('grid', sel === 'rolls' ? '' : 'dis')}${it('photo', 'dis')}<div class="rsep"></div>${it('layers', 'dis')}${it('sliders', 'dis')}<div class="rsep"></div>${it('share', 'dis')}<div class="rsep"></div>${it('gear')}</div>`;
+}
+function chrome(sel, center = '', right = '') {
+  return `<div class="tb"><div class="lights"><i></i><i></i><i></i></div><div class="wordmark">Argent</div>${center ? `<div class="ctx">${center}</div>` : ''}${right ? `<div class="tbr">${right}</div>` : ''}</div>${rail(sel)}`;
+}
+function filmStrip(roll, opts = {}) {
+  const n = 10;
+  let fr = '';
+  for (let k = 0; k < n; k++) {
+    let cls = 'fr', style = photo(roll.seed * 31 + k, roll.pal);
+    if (opts.copied != null) {
+      if (k === opts.copied) cls += ' dev';
+      else if (k > opts.copied) { cls += ' latent'; style = ''; }
+    }
+    fr += `<div class="${cls}" style="${style}"></div>`;
+  }
+  let nums = '';
+  for (let k = 0; k < n; k++) nums += `<span>▸${k + 1}    ${k + 1}A</span>`;
+  const label = `ARGENT  ${roll.stock.toUpperCase()}  ◂ ${roll.code} ▸  ${roll.name.toUpperCase()}  ·  ${roll.frames} EXP`;
+  return `<div class="strip"><div class="film">
+    <div class="reb top"></div><div class="print top">${(label + '            ').repeat(3)}</div>
+    <div class="frames">${fr}</div>
+    <div class="reb bot"></div><div class="print bot">${nums}</div>
+  </div></div>`;
+}
+function rollRow(roll, opts = {}) {
+  let status;
+  if (opts.copying) status = `<div class="p"><div class="bar"><i style="width:31%;background:var(--edge)"></i></div>Copying 48 of 153</div>`;
+  else if (roll.off) status = `<div class="p warn">On “T7 Shield”, not connected</div>`;
+  else if (roll.linked && !opts.finished) status = `<div class="p link">${I.link} Added in place · ${roll.linked}</div>`;
+  else status = `<div class="p"><div class="bar"><i style="width:${Math.round(roll.dev / roll.frames * 100)}%"></i></div>${roll.dev === roll.frames ? 'All developed' : `${roll.dev} of ${roll.frames} developed`}</div>`;
+  const menu = opts.menu ? `<div class="cmenu glass" style="left:150px;top:58px"><div>Open</div><div>Show in Finder</div><div>Rename…</div><hr><div class="hi">Remove from Rolls</div><small>Argent forgets the roll. Its folder and files stay where they are.</small></div>` : '';
+  return `<div class="roll ${roll.open ? 'open' : ''} ${roll.off ? 'off' : ''}" style="${opts.menu ? 'z-index:5' : ''}">${menu}
+    <div class="meta"><div class="d">${roll.date.toUpperCase()}</div>
+      <div class="n">${roll.name}${roll.open ? '<span class="pill">Open</span>' : ''}${opts.copying ? '<span class="pill" style="background:rgba(227,162,90,.2);color:var(--edge)">New</span>' : ''}</div>
+      <div class="i">${roll.frames} frames · ${roll.stock}</div>${status}</div>
+    ${filmStrip(roll, opts)}
+  </div>`;
+}
+const ROLLS = [
+  { name: 'Saturday market', date: 'Sat 8 Nov 2026', code: '08·11·26', frames: 84, dev: 84, stock: 'Portra 400', pal: 'market', seed: 3, open: true, month: 'November 2026' },
+  { name: '2026-10-24', date: 'Fri 24 Oct 2026', code: '24·10·26', frames: 153, dev: 38, stock: 'Gold 200', pal: 'autumn', seed: 7, linked: '~/Desktop/2026-10-24', month: 'October 2026' },
+  { name: 'Titos', date: 'Sat 11 Oct 2026', code: '11·10·26', frames: 36, dev: 12, stock: 'Tri-X 400', pal: 'bw', seed: 11, month: 'October 2026' },
+  { name: 'Recital', date: 'Sun 5 Oct 2026', code: '05·10·26', frames: 212, dev: 0, stock: 'Portra 800', pal: 'stage', seed: 5, month: 'October 2026' },
+  { name: 'Misc', date: 'Tue 16 Sep 2026', code: '16·09·26', frames: 41, dev: 41, stock: 'Ektar 100', pal: 'coast', seed: 13, month: 'September 2026' },
+  { name: 'Untitled', date: 'Sat 30 Aug 2026', code: '30·08·26', frames: 27, dev: 9, stock: 'Portra 400', pal: 'night', seed: 17, off: true, month: 'August 2026' },
+];
+function rollsList(rolls, extra = {}) {
+  let out = '', month = '';
+  const counts = {};
+  rolls.forEach(r => counts[r.month] = (counts[r.month] || 0) + 1);
+  rolls.forEach(r => {
+    if (r.month !== month) { month = r.month; out += `<div class="month">${month.toUpperCase()} <span class="c">${counts[month]} roll${counts[month] > 1 ? 's' : ''}</span></div>`; }
+    out += rollRow(r, r === extra.copyingRoll ? { copying: true, copied: 3 } : r === extra.menuRoll ? { menu: true } : {});
+  });
+  return out;
+}
+function rollsPage({ offer = true, rolls = ROLLS, copyingRoll = null, importDisabled = false, menuRoll = null } = {}) {
+  const total = rolls.reduce((a, r) => a + r.frames, 0);
+  return `<div class="page"><div class="col">
+    <div class="head"><div><h1>Rolls</h1><div class="sub">${rolls.length} rolls · ${total.toLocaleString()} frames · ~/Pictures/Argent</div></div>
+      <div class="sp"></div>
+      <div class="field glass" style="width:190px;box-shadow:inset 0 0 0 .5px rgba(var(--ink),.16)">${I.search}<span class="ph">Filter rolls</span></div>
+      <div class="menuface">Newest first ${I.chev}</div>
+      <button class="btn prim ${importDisabled ? 'dis' : ''}" data-go="sheet">${I.plus} Import roll <span class="kbd">⌘I</span></button>
+    </div>
+    ${offer ? `<div class="offer"><div class="ico">${I.sd}</div><div style="flex:1"><div class="t">Card “SONY A7 IV” inserted</div><div class="s">214 frames · 61 not in any roll yet</div></div>
+      <button class="btn quiet sm">Not now</button><button class="btn sm" data-go="review">Import 61 new…</button></div>` : ''}
+    ${rollsList(rolls, { copyingRoll, menuRoll })}
+  </div></div>`;
+}
+
+/* ---------- screens ---------- */
+const S = {};
+S.rolls = () => chrome('rolls') + `<div class="ws"><canvas></canvas>${rollsPage({ menuRoll: ROLLS[0] })}</div>`;
+
+S.sheet = () => chrome('rolls') + `<div class="ws"><canvas></canvas>${rollsPage({ offer: false })}<div class="scrim"></div>
+  <div class="sheet glass">
+    <h2>Import a roll</h2>
+    <div class="lede">Argent copies the frames into a new roll folder and keeps it on the Rolls page. Nothing on the source is changed.</div>
+    <div class="sect">Cards and drives</div>
+    <div class="src on"><div class="ico">${I.sd}</div><div class="grow"><div class="t">SONY A7 IV</div><div class="s">214 ARW · 61 not in any roll yet · 8 Nov to 14 Nov</div><div class="cap-bar"><i></i></div></div><div class="radio"></div></div>
+    <div class="src"><div class="ico">${I.drive}</div><div class="grow"><div class="t">T7 Shield</div><div class="s">3 folders with ARW files</div></div><span style="color:var(--ter)">${I.right}</span></div>
+    <div class="sect">Folders</div>
+    <div class="src"><div class="ico">${I.folder}</div><div class="grow"><div class="t">Import from a folder…</div><div class="s">Copies its ARW files into a new roll</div></div></div>
+    <div class="src"><div class="ico">${I.plusfolder}</div><div class="grow"><div class="t">Add an existing folder…</div><div class="s">Keeps the folder where it is and adds it as a roll. Nothing is copied.</div></div><span class="kbd" style="opacity:.5">⌘O</span></div>
+    <div class="foot"><div class="note">You can also drop a folder or card on the window.</div><button class="btn">Cancel</button><button class="btn prim" data-go="review">Continue</button></div>
+  </div></div>`;
+
+const SHOTS = Array.from({ length: 20 }, (_, k) => k);
+const REASON = { 2: ['soft', 'Soft focus', 'normal'], 5: ['eye', 'Eyes closed', 'eyes'], 6: ['same', 'Same moment as DSC07106', 'same'], 7: ['same', 'Same moment as DSC07106', 'same'],
+  11: ['soft', 'Soft focus', 'strict'], 12: ['soft', 'Soft focus', 'normal'], 14: ['eye', 'Eyes closed', 'eyes'], 17: ['same', 'Same moment as DSC07116', 'same'], 18: ['soft', 'Soft focus', 'strict'] };
+const BURST = { 5: 'B1', 6: 'B1', 7: 'B1', 16: 'B2', 17: 'B2' };
+S.review = () => chrome('rolls',
+  `<div class="t">SONY A7 IV</div><div class="s" id="ctxs">153 to import, 61 left on the card</div>`,
+  `<button class="btn">Close</button><button class="btn prim" id="gobtn">Import 153 frames <span class="kbd">↩</span></button>`) +
+  `<div class="ws"><canvas style="opacity:.55"></canvas><div class="review">
+    <div class="grid-area"><div class="filter">
+      <div class="seg"><button class="on">All <span class="n">214</span></button><button>To import <span class="n" id="ni">153</span></button><button>Left on the card <span class="n" id="nl">61</span></button></div>
+      <div class="hint">Click a frame or press Space to change where it goes</div></div>
+      <div class="thumbs">${SHOTS.map(k => {
+        const rs = REASON[k];
+        return `<div class="th" data-r="${rs ? rs[2] : ''}"><div class="im" style="${photo(400 + k * 7, k < 10 ? 'autumn' : 'market')}"></div>${BURST[k] ? `<span class="burst">${BURST[k]}</span>` : ''}${rs ? `<span class="badge">${I[rs[0]]} ${rs[1]}</span>` : ''}<div class="lbl">DSC0${7100 + k}</div></div>`;
+      }).join('')}</div><div class="fadeb"></div></div>
+    <div class="insp glass">
+      <h3>Roll</h3>
+      <div class="row"><div class="k">Name</div><div class="field"><span>2026-11-14</span><span class="ph" style="margin-left:auto;font-size:11px">date of first frame</span></div></div>
+      <div class="row"><div class="k">Copy to</div><div class="menuface" style="width:100%;box-sizing:border-box;justify-content:space-between;color:var(--text)">~/Pictures/Argent ${I.chev}</div>
+        <div class="path">→ ~/Pictures/Argent/2026-11-14/</div></div>
+      <div class="div"></div>
+      <h3><span class="grow">Cull</span><div class="switch on" id="cullsw"></div></h3>
+      <div class="tiny" style="margin-top:6px">Leaves frames you would likely skip on the card. You can still move any frame by hand.</div>
+      <div class="cull-body" id="cullbody">
+        <div class="row"><div class="k">Burst gap <em>frames this close are one burst</em></div><div class="seg fill" data-seg="burst"><button>0.2 s</button><button class="on">0.35 s</button><button>0.6 s</button></div></div>
+        <div class="row"><div class="k">Soft focus</div><div class="seg fill" data-seg="soft"><button>Strict</button><button class="on">Normal</button><button>Loose</button></div></div>
+        <div class="row"><div class="k">Eyes closed</div><div class="seg fill" data-seg="eyes"><button class="on">Leave on card</button><button>Keep</button></div></div>
+        <div class="row"><div class="k">Same moment</div><div class="seg fill" data-seg="same"><button>Narrow</button><button class="on">Normal</button><button>Wide</button></div></div>
+        <div class="remember">${I.clock} <span>As your last import</span> · <a>Reset to defaults</a></div>
+      </div>
+      <div class="div"></div>
+      <div class="split"><i id="splitbar" style="width:71.5%"></i></div>
+      <div class="tally"><span><b id="ti">153</b> to import</span><span><b id="tl">61</b> left on the card</span></div>
+    </div></div></div>`;
+
+const NEW = { name: '2026-11-14', date: 'Fri 14 Nov 2026', code: '14·11·26', frames: 153, dev: 0, stock: 'Portra 400', pal: 'autumn', seed: 57, month: 'November 2026' };
+S.copying = () => {
+  const rolls = [NEW, ...ROLLS.map(r => ({ ...r, open: false }))];
+  return chrome('rolls') + `<div class="ws"><canvas></canvas><div class="prog"><i></i></div>${rollsPage({ offer: false, rolls, copyingRoll: NEW, importDisabled: true })}
+  <div class="toast glass"><div class="ring"></div><div><b>Copying 48 of 153</b> <span class="s">to ~/Pictures/Argent/2026-11-14 · about 1 min left</span></div><button class="btn sm">Cancel</button><button class="btn sm prim">Open roll</button></div></div>`;
+};
+S.empty = () => chrome('rolls') + `<div class="ws"><canvas></canvas><div class="page" style="display:grid;place-items:center">
+  <div style="text-align:center;width:420px">
+    <div style="width:180px;margin:0 auto 26px;opacity:.9">${filmStrip({ ...NEW, name: 'unexposed', stock: 'Argent', frames: 0 }, { copied: -1 }).replace('class="strip"', 'class="strip" style="-webkit-mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent);mask-image:linear-gradient(90deg,transparent,#000 20%,#000 80%,transparent);overflow:hidden"')}</div>
+    <div style="font-size:26px;font-weight:600">No rolls yet</div>
+    <div style="font-size:15px;color:var(--sec);margin-top:8px">Import a camera card or a folder of ARW files.<br>Argent copies it into a roll and keeps it here.</div>
+    <button class="btn prim" style="margin-top:28px;height:36px;padding:0 18px" data-go="sheet">${I.plus} Import roll</button>
+    <div style="font-size:12px;color:var(--ter);margin-top:14px">or drop a folder or card anywhere on the window</div>
+  </div></div></div>`;
+
+S.done = () => {
+  const done = { ...NEW, dev: 0 };
+  const rolls = [done, ...ROLLS.map(r => ({ ...r, open: false }))];
+  return chrome('rolls') + `<div class="ws"><canvas></canvas>${rollsPage({ offer: false, rolls })}
+  <div class="toast glass"><div style="width:22px;height:22px;border-radius:50%;background:rgba(var(--ink),.14);display:grid;place-items:center;font-size:12px">✓</div><div><b>153 frames imported into 2026-11-14</b> <span class="s">· 61 left on the card</span></div><button class="btn sm">${I.eject} Eject “SONY A7 IV”</button><button class="btn sm prim">Open roll</button></div></div>`;
+};
+const SHOWN = [
+  ['rolls', 'Rolls', 'Each roll is a strip of negatives. 2026-10-24 was added in place. Right-click: Remove from Rolls only forgets.'],
+  ['sheet', 'Import roll → choose a source', 'Cards and drives, a folder to copy, or an existing folder to add in place.'],
+  ['review', 'Import review with Cull beside it', 'Remembers your last choice and recounts as you change it.'],
+  ['copying', 'Copying', 'The new roll appears at once; frames fill in as they copy.'],
+  ['done', 'Finished', 'Offers to eject the card. Nothing on it is deleted.'],
+];
+
+/* ---------- mount ---------- */
+const root = document.getElementById('root');
+root.innerHTML = SHOWN.map(([k, t, s], i) => `<div class="shot"><div class="cap"><b>${String.fromCharCode(65 + i)}</b>${t}<span>— ${s}</span></div><div class="wrap" data-k="${k}"><div class="win">${S[k]()}</div></div></div>`).join('');
+function fit() {
+  document.querySelectorAll('.wrap').forEach(w => {
+    const s = w.clientWidth / W;
+    w.style.height = (H * s) + 'px';
+    w.querySelector('.win').style.transform = `scale(${s})`;
+  });
+}
+fit(); addEventListener('resize', fit);
+
+/* review interactivity */
+const review = document.querySelector('[data-k="review"]');
+const state = { on: true, soft: 'Normal', eyes: 'Leave on card', same: 'Normal' };
+function recount() {
+  let left = 0;
+  review.querySelectorAll('.th').forEach(th => {
+    const r = th.dataset.r;
+    let isLeft = false;
+    if (state.on && r) {
+      if (r === 'strict') isLeft = state.soft === 'Strict';
+      else if (r === 'normal') isLeft = state.soft !== 'Loose';
+      else if (r === 'eyes') isLeft = state.eyes === 'Leave on card';
+      else if (r === 'same') isLeft = state.same !== 'Narrow';
+    }
+    th.classList.toggle('left', isLeft);
+  });
+  if (state.on) {
+    left = 61 + (state.soft === 'Strict' ? 18 : state.soft === 'Loose' ? -14 : 0) + (state.eyes === 'Keep' ? -9 : 0) + (state.same === 'Narrow' ? -21 : state.same === 'Wide' ? 15 : 0);
+  }
+  const imp = 214 - left;
+  review.querySelector('#ni').textContent = imp; review.querySelector('#nl').textContent = left;
+  review.querySelector('#ti').textContent = imp; review.querySelector('#tl').textContent = left;
+  review.querySelector('#splitbar').style.width = (imp / 214 * 100) + '%';
+  review.querySelector('#gobtn').firstChild.textContent = `Import ${imp} frames `;
+  review.querySelector('#ctxs').textContent = left ? `${imp} to import, ${left} left on the card` : `All ${imp} to import`;
+}
+review.querySelector('#cullsw').onclick = e => { state.on = !state.on; e.currentTarget.classList.toggle('on', state.on); review.querySelector('#cullbody').classList.toggle('off', !state.on); recount(); };
+review.querySelectorAll('[data-seg]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+  seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  if (seg.dataset.seg in state) state[seg.dataset.seg] = b.textContent.trim();
+  recount();
+}));
+recount();
+document.querySelectorAll('.seg:not([data-seg]) button').forEach(b => b.onclick = () => b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)));
+
+/* ---------- Latent image backdrop (approximation) ---------- */
+function hash(x, y) { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vn(x, y) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+const CELL = 4;
+const backs = [...document.querySelectorAll('.ws canvas')].map(cv => {
+  const ws = cv.parentElement; const w = ws.offsetWidth, h = ws.offsetHeight;
+  cv.width = w; cv.height = h;
+  const o = { cv, ctx: cv.getContext('2d'), w, h, px: -999, py: -999, vis: true };
+  ws.addEventListener('mousemove', e => { const r = ws.getBoundingClientRect(), s = r.width / w; o.px = (e.clientX - r.left) / s; o.py = (e.clientY - r.top) / s; });
+  ws.addEventListener('mouseleave', () => { o.px = o.py = -999; });
+  return o;
+});
+const io = new IntersectionObserver(es => es.forEach(e => { const b = backs.find(b => b.cv === e.target); if (b) b.vis = e.isIntersecting; }));
+backs.forEach(b => io.observe(b.cv));
+const LV = [[0, 0], [1, .16], [2, .15], [2, .24], [3, .26]];
+function draw(b, t) {
+  const { ctx, w, h } = b; ctx.clearRect(0, 0, w, h);
+  const cols = Math.ceil(w / CELL), rows = Math.ceil(h / CELL);
+  const buckets = [[], [], [], [], []];
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+    let n = .62 * vn(x * .028 + t * .045, y * .028 - t * .02) + .38 * vn(x * .085 - t * .07, y * .085 + t * .03);
+    const dx = x * CELL - b.px, dy = y * CELL - b.py, d2 = dx * dx + dy * dy;
+    if (d2 < 22000) n += .35 * (1 - d2 / 22000);
+    let lv = n < .34 ? 0 : n < .46 ? 1 : n < .58 ? 2 : n < .7 ? 3 : 4;
+    if (lv === 1 && ((x + y) & 1)) continue;
+    if (lv === 0 && !((x + y) & 1) && !(x & 1)) lv = 1;
+    if (lv) buckets[lv].push(x, y);
+  }
+  for (let l = 1; l < 5; l++) {
+    const [s, a] = LV[l]; ctx.fillStyle = `rgba(202,211,245,${a})`; const B = buckets[l];
+    for (let i = 0; i < B.length; i += 2) ctx.fillRect(B[i] * CELL + (CELL - s) / 2, B[i + 1] * CELL + (CELL - s) / 2, s, s);
+  }
+}
+let last = 0;
+function loop(ts) { if (ts - last > 66) { last = ts; backs.forEach(b => b.vis && draw(b, ts / 1000)); } requestAnimationFrame(loop); }
+backs.forEach(b => draw(b, 0));
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
