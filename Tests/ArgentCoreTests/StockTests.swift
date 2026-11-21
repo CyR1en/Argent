@@ -74,6 +74,21 @@ import Testing
         }
     }
 
+    @Test func fallsBackToATabSeparatedCube() throws {
+        let directory = try ToyStock.write(size: 9)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let spaced = try Stock.load(from: directory)
+        for name in ["negative.cube", "print.cube"] {
+            let url = directory.appendingPathComponent(name)
+            try String(contentsOf: url, encoding: .utf8).replacingOccurrences(of: " ", with: "\t")
+                .write(to: url, atomically: true, encoding: .utf8)
+        }
+
+        let tabbed = try Stock.load(from: directory)
+        #expect(tabbed.negative.values == spaced.negative.values)
+        #expect(tabbed.print.values == spaced.print.values)
+    }
+
     @Test func prefersTheBinaryFileOverTheCube() throws {
         let directory = try ToyStock.write(size: 9, binary: true)
         defer { try? FileManager.default.removeItem(at: directory) }

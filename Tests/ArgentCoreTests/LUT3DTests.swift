@@ -49,6 +49,27 @@ import Testing
         #expect(lut.sample(encoded: SIMD3<Float>(0.5, 0.25, 1)) == SIMD3<Float>(0.5, 0.25, 1))
     }
 
+    @Test func tabSeparatedCubeMatchesSpaceSeparatedCube() throws {
+        let spaced = LUT3D.identity(size: 2).cubeText(title: "identity")
+        let expected = try LUT3D.parseCube(spaced).values
+        // Tabs alone, and tabs mixed with spaces, separate fields as a single space does.
+        for separator in ["\t", " \t ", "\t\t"] {
+            let lut = try LUT3D.parseCube(spaced.replacingOccurrences(of: " ", with: separator))
+            #expect(lut.size == 2)
+            #expect(lut.values == expected)
+        }
+    }
+
+    @Test func tabSeparatedRowsStillNeedThreeNumbers() throws {
+        let text = "LUT_3D_SIZE\t2\n0\t0\n" + String(repeating: "0\t0\t0\n", count: 8)
+        let error = #expect(throws: LUTError.self) { try LUT3D.parseCube(text) }
+        guard case .malformedCube(let line, _) = error else {
+            Issue.record("expected malformedCube, got \(String(describing: error))")
+            return
+        }
+        #expect(line == 2)
+    }
+
     @Test func identityTetrahedralSamplingReturnsItsInput() {
         let lut = LUT3D.identity(size: 17)
         for point in [SIMD3<Float>(0, 0, 0), SIMD3<Float>(1, 1, 1), SIMD3<Float>(0.3, 0.7, 0.1),
