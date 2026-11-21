@@ -15,17 +15,7 @@ cd "${0:A:h}/.."
 models_dir=${models_dir:-build/models}
 version=1
 models=(s3od-sod-sq1024-f16 eomt-sq768-f16 vitmatte-s-c1k-sq1024-f16)
-licences=(
-  NOTICE.txt
-  DINOv3-LICENSE.md
-  S3OD-LICENSE-MIT.txt
-  EoMT-LICENSE-MIT.txt
-  ViTMatte-LICENSE-MIT.txt
-  ADE20K-terms.txt
-  FLUX1-Krea-dev-LICENSE.md
-  S3OD-sod-model-card.md
-  ViTMatte-S-Composition1k-model-card.md
-)
+licences=("${(@f)$(<scripts/models/subject-licences.txt)}")
 out=build/argent-subject-models-$version.aar
 stage=build/.subject-models-$version
 
