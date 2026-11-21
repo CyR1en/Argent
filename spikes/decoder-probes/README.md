@@ -1,8 +1,7 @@
 # decoder-probes
 
-Swift probes of Apple's `CIRAWFilter` (decoder version 8) on a7 IV files. Each pins what
-`AppleRawDecoder` pins and varies one thing. Findings: [M1-spikes.md](../../docs/M1-spikes.md);
-current pins: [Decoder section 8](../../docs/decoder.md#8-apples-decoder-pins-modes-and-baseline).
+Swift probes of Apple's `CIRAWFilter` (decoder version 8) on a7 IV files. Each varies one
+setting from the baseline used for these measurements.
 Build each with the Command Line Tools (all four compiled 2026-10-06, Swift 6.4, macOS 27.0):
 
     swiftc -O -framework CoreImage -framework CoreGraphics -framework Metal -framework ImageIO NAME.swift -o NAME

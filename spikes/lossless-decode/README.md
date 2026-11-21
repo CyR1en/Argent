@@ -1,9 +1,8 @@
 # lossless-decode
 
 Does a LibRaw path, or the format itself, beat Apple's 415 to 560 ms lossless L decode? Measured
-2026-10-05 and 2026-10-06 on the M4 (macOS 27.0, Apple clang 21, LibRaw 0.22.2). Write-up:
-[M1-spikes.md](../../docs/M1-spikes.md#lossless-compressed-decode); the production decoder it shaped:
-[Decoder section 1](../../docs/decoder.md#1-the-lossless-l-format-and-the-tile-decoder-2026-10-06).
+2026-10-05 and 2026-10-06 on the M4 (macOS 27.0, Apple clang 21, LibRaw 0.22.2).
+The results below informed Argent's in-house tile decoder.
 
 | File | What it is |
 | --- | --- |

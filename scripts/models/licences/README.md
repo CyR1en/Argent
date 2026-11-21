@@ -11,8 +11,8 @@ anyone else, ask counsel** (P0-S5 section 3.7); `scripts/build-dmg.sh --no-model
 **These weights must not be sold or distributed unless their terms are cleared or the models are replaced.**
 
 **Revised by the owner, 2026-11-20 (the Subject models' download):** S3OD-sod, EoMT and ViTMatte-S may be offered as one optional, free,
-non-commercial download, the Subject models (`scripts/build-subject-models.zsh`, `SubjectModelPack`), on these conditions, which follow
-from the texts as read in `~/Documents/ArgentResearch/subject-swap-20261119.noindex/reports/Hosting S3OD and ViTMatte.md` (a reading, not legal advice):
+non-commercial download, the Subject models (`scripts/build-subject-models.zsh`, `SubjectModelPack`), on these conditions
+(an interpretation of the terms, not legal advice):
 
 - The download happens only after the app has shown the models' terms and the user has agreed (`SubjectModelsSheet`), and it carries these texts.
 - "Built with DINOv3" is displayed (the About window), and the DINOv3 License goes with every copy; no term is added to S3OD's or EoMT's beyond it (DINOv3 §1.b.i).

@@ -18,4 +18,4 @@ Result (2026-10-06): normalize 2.0 ms; demosaic 4.3 (bilinear), 5.1 (Malvar-He-C
 (Hamilton-Adams, two passes); NR 27 ms as a five-level decimated Laplacian pyramid against 76 to 110
 ms for a full-resolution a-trous wavelet and 233 ms for non-local means; lens 5.2 (bilinear) to 14.5
 ms (Catmull-Rom); the chain 53 ms. The demosaic matched Apple's to 0.044 stops median after a 3 by 3
-colour fit. Write-up: [M1 follow-ups](../../docs/M1-spikes.md#follow-ups-after-the-review).
+colour fit.
