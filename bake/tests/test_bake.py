@@ -468,12 +468,19 @@ class TestCommandLine:
         out = capsys.readouterr().out
         for name in ("gray card", "ISO 5800 speed", "unmixing", "cross-talk", "inversion", "density range"):
             assert f"pass  {name}" in out
-        assert "all gates pass" in out and "-1.5417" in out
+        assert "all negative gates pass" in out and "-1.5417" in out
         assert "kodak-portra-400 (Portra 400, after Kodak Portra 400, status datasheet" in out
         # The print's tone is reported after the gates, never as one.
         assert "print tone (docs/research/film-sim/print.md" in out and "US5300381 FIG. 2" in out and "US7372597" in out
         assert "print stage acceptance checks" in out
-        assert out.index("all gates pass") < out.index("print tone")
+        assert out.index("all negative gates pass") < out.index("print tone")
+
+    def test_check_labels_print_failures_as_advisory(self, capsys):
+        assert main(["check", "--profile", str(STOCKS / "ektar100.json")]) == 0
+        out = capsys.readouterr().out
+        assert "all negative gates pass" in out
+        assert "print stage acceptance checks (advisory; do not affect exit status)" in out
+        assert "FAIL  neutral axis:" in out
 
     def test_check_fails_when_a_gate_fails(self, tmp_path, capsys):
         data = json.loads((STOCKS / "portra400.json").read_text())
@@ -482,7 +489,7 @@ class TestCommandLine:
         path.write_text(json.dumps(data))
         assert main(["check", "--profile", str(path)]) == 1
         out = capsys.readouterr().out
-        assert "FAIL  gray card" in out and "1 gate(s) fail" in out
+        assert "FAIL  gray card" in out and "1 negative gate(s) fail" in out
 
     def test_bake_refuses_a_profile_that_fails_a_gate(self, tmp_path, capsys):
         data = json.loads((STOCKS / "portra400.json").read_text())
