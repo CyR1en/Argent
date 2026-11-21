@@ -163,6 +163,12 @@ public final class ToneBaseField {
     private let map: MTLComputePipelineState
     private let timing = NSLock()
     private var gpuSeconds: Double = 0
+    private let cacheLock = NSLock()
+    private var cached: (image: PooledTexture, parameters: ToneBaseParameters, field: PooledTexture)?
+    private var builds = 0
+    private var cacheGeneration: UInt64 = 0
+    var buildCount: Int { cacheLock.withLock { builds } }
+
     /// The GPU time of the last field made, for measurements.
     var lastGPUSeconds: Double { timing.withLock { gpuSeconds } }
 
@@ -175,10 +181,25 @@ public final class ToneBaseField {
         map = try gpu.device.makeComputePipelineState(function: function)
     }
 
+    public func removeAll() {
+        cacheLock.withLock {
+            cached = nil
+            cacheGeneration &+= 1
+        }
+    }
+
     /// The field for `frame` under `parameters`: an `rg32Float` texture of the field's size from
     /// the pool, `box(a)` in red and `box(b)` in green, for `tone_base_log2`. Run now; it holds
-    /// two more textures of its size while it runs and none of the frame's.
-    public func field(for frame: LinearFrame, parameters: ToneBaseParameters) throws -> PooledTexture {
+    /// two more textures of its size while it runs. With `reuse`, keeps the last field and its decode's
+    /// loan alive until replaced or cleared; neither texture can return to the pool while cached.
+    public func field(for frame: LinearFrame, parameters: ToneBaseParameters, reuse: Bool = false) throws -> PooledTexture {
+        let (hit, generation) = cacheLock.withLock { () -> (PooledTexture?, UInt64) in
+            if reuse, let cached, cached.image === frame.image, cached.parameters == parameters {
+                return (cached.field, cacheGeneration)
+            }
+            return (nil, cacheGeneration)
+        }
+        if let hit { return hit }
         let size = parameters.fieldSize(width: frame.width, height: frame.height)
         func texture() throws -> PooledTexture {
             try gpu.texturePool.acquire(width: size.width, height: size.height, pixelFormat: .rg32Float)
@@ -194,6 +215,10 @@ public final class ToneBaseField {
         withExtendedLifetime((frame, first, second)) { commandBuffer.waitUntilCompleted() }
         if let error = commandBuffer.error { throw error }
         timing.withLock { gpuSeconds = commandBuffer.gpuEndTime - commandBuffer.gpuStartTime }
+        cacheLock.withLock {
+            builds += 1
+            if reuse, generation == cacheGeneration { cached = (frame.image, parameters, output) }
+        }
         return output
     }
 

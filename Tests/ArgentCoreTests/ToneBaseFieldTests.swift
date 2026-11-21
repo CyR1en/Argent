@@ -393,6 +393,47 @@ import Testing
         #expect(gpu.texturePool.allocationCount == start + 3)
         #expect(gpu.texturePool.idleByteCount == 3 * size.width * size.height * 8)
     }
+
+    @Test func cachesOnlyTheSameDecodeAndParameters() throws {
+        let gpu = try GPU(), field = try ToneBaseField(gpu: gpu)
+        let (first, _) = try Self.frame(gpu, width: 48, height: 32) { Self.gray(Float($0 + $1) / 20) }
+        let (second, _) = try Self.frame(gpu, width: 48, height: 32) { Self.gray(Float($0 - $1) / 20) }
+        let a = try field.field(for: first, parameters: Self.compiler, reuse: true)
+        #expect(try field.field(for: first, parameters: Self.compiler, reuse: true) === a)
+        #expect(field.buildCount == 1)
+        let b = try field.field(for: second, parameters: Self.compiler, reuse: true)
+        #expect(b !== a)
+        #expect(field.buildCount == 2)
+        let changed = ToneBaseParameters(radiusFraction: Self.compiler.radiusFraction, epsilon: Self.compiler.epsilon + 1,
+                                       fieldLongSide: Self.compiler.fieldLongSide,
+                                       coefficientRadiusShare: Self.compiler.coefficientRadiusShare)
+        #expect(try field.field(for: second, parameters: changed, reuse: true) !== b)
+        #expect(field.buildCount == 3)
+        field.removeAll()
+        _ = try field.field(for: second, parameters: changed, reuse: true)
+        #expect(field.buildCount == 4)
+    }
+
+    @Test func cacheRetainsTheDecodeAndReleasesItWhenClearedOrReplaced() throws {
+        let gpu = try GPU(), field = try ToneBaseField(gpu: gpu)
+        weak var image: PooledTexture?
+        weak var output: PooledTexture?
+        do {
+            let (frame, _) = try Self.frame(gpu, width: 48, height: 32) { _, _ in Self.gray(0) }
+            image = frame.image
+            output = try field.field(for: frame, parameters: Self.compiler, reuse: true)
+        }
+        #expect(image != nil && output != nil)
+        do {
+            let (other, _) = try Self.frame(gpu, width: 48, height: 32) { _, _ in Self.gray(1) }
+            _ = try field.field(for: other, parameters: Self.compiler, reuse: true)
+            #expect(image == nil && output == nil)
+            image = other.image
+            output = try field.field(for: other, parameters: Self.compiler, reuse: true)
+        }
+        field.removeAll()
+        #expect(image == nil && output == nil)
+    }
 }
 
 /// The local tone base on the CC0 a7 IV sample and at a develop's size: how a develop's base

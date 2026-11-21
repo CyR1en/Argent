@@ -105,6 +105,7 @@ public final class FilmRenderer {
     private let printPass: PrintPass
     private let halationField: HalationField
     private let toneBaseField: ToneBaseField
+    var toneBaseBuildCount: Int { toneBaseField.buildCount }
     private let negativeTexture: MTLTexture
     private let printTexture: MTLTexture
     /// The stock's grain sigma per layer over normalized dye amounts, when it has grain.
@@ -184,23 +185,27 @@ public final class FilmRenderer {
         }
     }
 
+    public func clearToneBase() { toneBaseField.removeAll() }
+
     /// `frame` through the film with `settings`. With `inPlace` the print is written over the
     /// frame's own texture, which the Negative LUT has finished reading by then, and the frame
     /// must not be used again: a full-size develop then holds two frame-sized textures instead of
     /// three, 262 MB less at 33 MP, for the same pixels (tested; docs/M2-shell.md section 10).
+    /// `reuseToneBase` retains the last decode and its field for interactive previews only; ignored with `inPlace`.
     ///
     /// A smart mask's seeds come from `seeds` where given, as a develop gives what its lane loaded and checked (`MaskSeeds`), and from
     /// `GPU.maskRefiner.seeds` otherwise, as the previews set it.
-    public func render(_ frame: LinearFrame, settings: DevelopSettings, inPlace: Bool = false,
+    public func render(_ frame: LinearFrame, settings: DevelopSettings, inPlace: Bool = false, reuseToneBase: Bool = false,
                        seeds: (any MaskSeedProvider)? = nil, densities: PooledTexture? = nil) throws -> RenderedFrame {
-        try render(frame, settings: settings, inPlace: inPlace, seeds: seeds, presence: nil, densities: densities)
+        try render(frame, settings: settings, inPlace: inPlace, reuseToneBase: reuseToneBase, seeds: seeds, presence: nil, densities: densities)
     }
 
     /// The same with Presence's inputs given rather than made (`presenceInputs`): a stage package's test renders its stage with fields,
     /// weights and a block it made by hand, and nothing of another package's.
-    func render(_ frame: LinearFrame, settings: DevelopSettings, inPlace: Bool = false, seeds: (any MaskSeedProvider)? = nil,
+    func render(_ frame: LinearFrame, settings: DevelopSettings, inPlace: Bool = false, reuseToneBase: Bool = false, seeds: (any MaskSeedProvider)? = nil,
                 presence given: PresenceRenderInputs?, densities: PooledTexture? = nil) throws -> RenderedFrame {
         try settings.manual.validateSupportedVersion()
+        if inPlace { clearToneBase() }
         let densities = try densities.flatMap {
             $0 !== frame.image && $0.width == frame.width && $0.height == frame.height
                 && $0.texture.pixelFormat == frame.texture.pixelFormat ? $0 : nil
@@ -265,7 +270,7 @@ public final class FilmRenderer {
         // made once here and read by both the halation source and the Negative LUT pass.
         let printOffset = SIMD3(printParams.offsetR, printParams.offsetG, printParams.offsetB)
         var (scene, toneBase) = try sceneInputs(frame, settings: settings, exposureStops: negativeParams.exposureStops, seeds: seeds,
-                                                printOffset: printOffset)
+                                                printOffset: printOffset, reuseToneBase: reuseToneBase && !inPlace)
         // Presence's analysis is made from the untouched decode, so it is asked for before any pass writes over the frame.
         let presence = try given ?? presenceInputs(frame, settings: settings, exposureStops: negativeParams.exposureStops,
                                                    printOffset: printOffset)
@@ -297,10 +302,10 @@ public final class FilmRenderer {
 
     /// What the Negative LUT pass and the halation source read of the scene for `frame` under `settings`, and the base field they share.
     func sceneInputs(_ frame: LinearFrame, settings: DevelopSettings, exposureStops: Float, seeds: (any MaskSeedProvider)? = nil,
-                     printOffset: SIMD3<Float>) throws -> (scene: ManualSceneInputs, base: PooledTexture?) {
+                     printOffset: SIMD3<Float>, reuseToneBase: Bool = false) throws -> (scene: ManualSceneInputs, base: PooledTexture?) {
         var toneBase: PooledTexture?
         if settings.manual.needsToneBase || settings.tone.isActive {
-            toneBase = try toneBaseField.field(for: frame, parameters: .compiler2026_10_29_1)
+            toneBase = try toneBaseField.field(for: frame, parameters: .compiler2026_10_29_1, reuse: reuseToneBase)
         }
         let tone = try toneInputs(settings, exposureStops: exposureStops, printOffset: printOffset)
         let masks = try maskInputs(frame, settings: settings, exposureStops: exposureStops, printOffset: printOffset, seeds: seeds,
