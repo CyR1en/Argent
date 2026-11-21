@@ -16,21 +16,11 @@ public final class LUTPass {
     private let placeholders: ManualSceneInputs.Placeholders
 
     public init(gpu: GPU) throws {
-        let library = try gpu.shaderLibrary()
-        guard let function = library.makeFunction(name: "apply_lut3d") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d")
-        }
-        guard let withHalation = library.makeFunction(name: "apply_lut3d_halation") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d_halation")
-        }
-        self.pipeline = try gpu.device.makeComputePipelineState(function: function)
-        self.halationPipeline = try gpu.device.makeComputePipelineState(function: withHalation)
-        guard let toned = library.makeFunction(name: "apply_lut3d_toned"),
-              let tonedWithHalation = library.makeFunction(name: "apply_lut3d_halation_toned") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d_toned")
-        }
-        self.tonedPipeline = try gpu.device.makeComputePipelineState(function: toned)
-        self.tonedHalationPipeline = try gpu.device.makeComputePipelineState(function: tonedWithHalation)
+        let pipelines = try gpu.filmPipelines()
+        self.pipeline = pipelines.negative
+        self.halationPipeline = pipelines.negativeHalation
+        self.tonedPipeline = pipelines.negativeToned
+        self.tonedHalationPipeline = pipelines.negativeTonedHalation
         self.gpu = gpu
         placeholders = try ManualSceneInputs.Placeholders(gpu: gpu)
     }

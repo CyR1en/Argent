@@ -47,14 +47,10 @@ public final class HalationField {
     private let placeholders: ManualSceneInputs.Placeholders
 
     public init(gpu: GPU) throws {
-        let library = try gpu.shaderLibrary()
-        func pipeline(_ name: String) throws -> MTLComputePipelineState {
-            guard let function = library.makeFunction(name: name) else { throw GPUError.shaderFunctionMissing(name) }
-            return try gpu.device.makeComputePipelineState(function: function)
-        }
+        let pipelines = try gpu.filmPipelines()
         self.gpu = gpu
-        source = try pipeline("halation_source")
-        mix = try pipeline("halation_mix")
+        source = pipelines.halationSource
+        mix = pipelines.halationMix
         placeholders = try ManualSceneInputs.Placeholders(gpu: gpu)
     }
 

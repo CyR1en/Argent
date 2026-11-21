@@ -172,13 +172,12 @@ public final class ToneBaseField {
     /// The GPU time of the last field made, for measurements.
     var lastGPUSeconds: Double { timing.withLock { gpuSeconds } }
 
-    /// Builds the pipelines; call it on one thread, as the shader library is not thread-safe.
+    /// Takes the GPU's shared pipelines (`GPU.filmPipelines()`); call it on one thread, as the shader library is not thread-safe.
     public init(gpu: GPU) throws {
-        let library = try gpu.shaderLibrary()
+        let pipelines = try gpu.filmPipelines()
         self.gpu = gpu
-        kernels = try Kernels(library: library, device: gpu.device)
-        guard let function = library.makeFunction(name: "tone_base_map") else { throw GPUError.shaderFunctionMissing("tone_base_map") }
-        map = try gpu.device.makeComputePipelineState(function: function)
+        kernels = pipelines.toneBase
+        map = pipelines.toneBaseMap
     }
 
     public func removeAll() {

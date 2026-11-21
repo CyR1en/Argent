@@ -67,6 +67,8 @@ public final class GPU {
     /// made the first time a render of it has Texture, Clarity or Dehaze set. Nothing of it is made until then.
     public let presenceAnalyses: PresenceAnalyses
     private var compiledLibrary: MTLLibrary?
+    private let filmPipelineLock = NSLock()
+    private var filmPipelineSet: FilmPipelines?
     private let localMaskLock = NSLock()
     private var localMask: LocalMaskPipelines?
 
@@ -142,6 +144,16 @@ public final class GPU {
                                              options: nil)
         compiledLibrary = library
         return library
+    }
+
+    /// The film passes' pipelines from `shaderLibrary()`, made the first time a pass asks and shared by every pass on this GPU after.
+    func filmPipelines() throws -> FilmPipelines {
+        try filmPipelineLock.withLock {
+            if let filmPipelineSet { return filmPipelineSet }
+            let made = try FilmPipelines(library: try shaderLibrary(), device: device)
+            filmPipelineSet = made
+            return made
+        }
     }
 
     /// The masked kernels' pipelines, compiled in a library of their own the first time a frame has masks (plan section 4, rule 4), so

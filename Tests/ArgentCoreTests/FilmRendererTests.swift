@@ -138,6 +138,17 @@ import Testing
         #expect(Self.mean(overexposed) > Self.mean(boxed))
     }
 
+    @Test func renderersOnOneGPUShareItsFilmPipelines() throws {
+        let gpu = try GPU()
+        _ = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
+        let first = try gpu.filmPipelines()
+        _ = try FilmRenderer(gpu: gpu, stock: ToyStock.make(size: 9))
+        let second = try gpu.filmPipelines()
+        #expect(first.negative === second.negative && first.print === second.print && first.halationSource === second.halationSource
+                && first.toneBase.box === second.toneBase.box && first.toneBaseMap === second.toneBaseMap)
+        #expect(try GPU().filmPipelines().negative !== first.negative)
+    }
+
     @Test func rendersRepeatedFramesWithoutGrowingThePool() throws {
         let gpu = try GPU()
         let renderer = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
