@@ -168,6 +168,10 @@ import Testing
 
     // MARK: The words
 
+    @Test func noCapturedStocksHasNoStockName() {
+        #expect(DevelopStatusText.stockName([]) == nil)
+    }
+
     @Test func runningDevelopSummaryUsesCapturedStocks() async throws {
         try await FlagStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("other", in: fixture.stocks)

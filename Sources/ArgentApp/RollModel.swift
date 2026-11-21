@@ -108,6 +108,7 @@ final class RollModel {
     @ObservationIgnored var decisionSave: Task<Void, Never>?
     /// A develop is waiting for the roll's settled decision; its status row says so.
     var isDevelopBalancing = false
+    /// The output and stocks captured for the running develop, independent of later selection changes.
     var runningDevelopSummary = ""
     /// Measures a frame in place of the previews, for tests that choose what each measurement comes
     /// to and when it arrives; and what a settled decision and a develop's jobs were, for tests.

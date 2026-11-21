@@ -204,6 +204,11 @@ enum DevelopStatusText {
         }
     }
 
+    /// The captured stocks' shared name, or "Mixed stocks" where they differ.
+    static func stockName(_ stocks: [Stock]) -> String? {
+        Set(stocks.map(\.id)).count > 1 ? "Mixed stocks" : stocks.first?.displayName
+    }
+
     /// The output a develop writes and through what: "JPEG · Display P3 · Portra 400".
     static func outputSummary(_ output: OutputSettings, stock: String?) -> String {
         ([output.format.title, output.space.title] + (stock.map { [$0] } ?? [])).joined(separator: " · ")

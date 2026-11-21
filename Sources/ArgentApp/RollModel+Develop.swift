@@ -305,8 +305,7 @@ extension RollModel {
             }, uniquingKeysWith: { first, _ in first })
             var inputs = DevelopInputs(self, frames: frames.map(\.url))
             let controls = inputs.controls, overrides = inputs.overrides, output = inputs.output
-            let stockIDs = Set(stocks.values.map { $0.0.id })
-            let stockName = stockIDs.count > 1 ? "Mixed stocks" : stocks.values.first?.0.displayName
+            let stockName = DevelopStatusText.stockName(stocks.values.map { $0.0 })
             runningDevelopSummary = DevelopStatusText.outputSummary(output, stock: stockName)
             let edits = inputs.manualEdits, recipes = manualRecipes, revision = editRevision, lineage = editLineage
             let library = recipeLibrary, lineages = manualLineages
