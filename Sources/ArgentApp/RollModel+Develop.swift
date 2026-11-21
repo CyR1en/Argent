@@ -239,6 +239,7 @@ extension RollModel {
             }
         }
         guard let developer else { return }
+        runningDevelopSummary = DevelopStatusText.outputSummary(output, stock: nil)
         developPhase = .developing(DevelopProgress(total: developing.count))
         // The last develop's failures are what this one is retrying; its report replaces them.
         isIssueDetailsShown = false
@@ -304,6 +305,8 @@ extension RollModel {
             }, uniquingKeysWith: { first, _ in first })
             var inputs = DevelopInputs(self, frames: frames.map(\.url))
             let controls = inputs.controls, overrides = inputs.overrides, output = inputs.output
+            let stockName = DevelopStatusText.stockName(stocks.values.map { $0.0 })
+            runningDevelopSummary = DevelopStatusText.outputSummary(output, stock: stockName)
             let edits = inputs.manualEdits, recipes = manualRecipes, revision = editRevision, lineage = editLineage
             let library = recipeLibrary, lineages = manualLineages
             // An issue with an edit stops the develop. A lost seed does not: that frame alone fails, with its reason, when the

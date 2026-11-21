@@ -206,7 +206,7 @@ struct DevelopPanel: View {
             .accessibilityLabel("Develop progress")
             .accessibilityValue(progress.label)
         // "JPEG · Display P3 · Portra 400": what the develop writes, and through what.
-        Text(verbatim: DevelopStatusText.outputSummary(model.output, stock: model.stockName))
+        Text(verbatim: model.runningDevelopSummary)
             .font(Graphite.Typeface.small)
             .foregroundStyle(Graphite.secondaryText)
             .lineLimit(1)
