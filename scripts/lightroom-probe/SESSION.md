@@ -14,10 +14,8 @@ sliders, whether a mask over everything equals the global slider, and the range 
 ## Before you start
 
 - Mac on power, the lid open, and at least **15 GB free**. The exports take about 7.5 GB.
-- Open a terminal and go to the checkout this kit is in, the one that has `references/` and `samples/`:
-  `cd /Users/cyr1en/Developer/Argent`
-  Every command below is run from there. If `scripts/lightroom-probe/SESSION.md` is not there, the kit has not been applied
-  to this checkout yet: stop and ask the coordinator.
+- Open a terminal at the root of the Argent checkout containing `references/` and `samples/`.
+  Run every command below from there. The session's research data is not included in the public checkout.
 - Nothing heavy running (no Argent develop, no model run).
 
 ## The steps, with time

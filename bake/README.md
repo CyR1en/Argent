@@ -8,8 +8,9 @@ Ten stocks are based on Kodak or Fujifilm datasheets; ColorPlus 200 and CineStil
 labeled proxy data. Portra Natural uses Portra 160 with 60% interlayer coupling,
 a chosen rendering rather than a measured film.
 The base stocks print on ENDURA Premier; the Portras add a lab tone stage from
-US5300381 FIG. 2. Cinema 500 is an optional print variant of Tungsten 500 that models
-projection through Kodak VISION Color Print Film 2383. None is fitted to scans.
+US5300381 FIG. 2. Cinema 500 is the bundled print variant of Tungsten 500 that models
+projection through Kodak VISION Color Print Film 2383. That makes 14 looks in the app.
+None is fitted to scans.
 
 ## Usage
 

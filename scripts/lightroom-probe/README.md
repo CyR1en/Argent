@@ -1,7 +1,7 @@
 # Lightroom slider probe
 
-The tools behind [Lightroom's Light controls, measured](../../docs/research/lightroom-sliders.md):
-renders of one raw by Lightroom Classic at each Basic-panel tone value, the output-L* targets
+These tools measure Lightroom Classic's Light controls by rendering one raw at each
+Basic-panel tone value. They produce the output-L* targets
 fitted from them (`Sources/ArgentCore/Film/LightroomToneTargets.swift`), the tone base field's
 constants, and a scorecard of how close Argent's controls come. The data stay out of Git, under
 `references/lightroom-probe/` (Lightroom's exports, the raw clones, caches, reports, renders);
@@ -33,8 +33,7 @@ swift build -c release --product argent-spike
 
 `score.py` runs unchanged on any branch with this spike's flags; `--spike` points it at another
 checkout's build. Its renders set one control each, so `2026-10-29-1` and `2026-11-06-1` score the same
-bytes; what separates them, Exposure with Highlights or Shadows, is in
-[the sliders note](../../docs/research/lightroom-sliders.md#12-highlights-and-shadows-read-the-base-before-exposure-2026-11-06).
+bytes. Exposure combined with Highlights or Shadows distinguishes the two versions.
 
 ## The render as arrays
 
@@ -80,7 +79,7 @@ What holds, measured on the probe raw with Portra 400:
 
 Lightroom's renders for Texture, Clarity, Dehaze, Vibrance and Saturation: 523 renders of the probe raw, 20 charts and ten
 photographs, with no one at the keyboard. The smoke test, the manifest and the chart layouts are in the Presence research
-folder (`~/Documents/ArgentResearch/presence-20261111.noindex/probe/`); the data are `references/lightroom-probe/p-charts/`,
+folder (not included in the checkout); the data are `references/lightroom-probe/p-charts/`,
 `inputs/p-*` and `exports-p-*`.
 
 | Tool | What it does |
@@ -107,11 +106,11 @@ coarse detail) and takes, one frame a scene, the one farthest from round 1's pho
 Its manifest goes to the research folder's `probe/round2/`, beside round 1's, which it does not touch.
 
 ```sh
-P=scripts/lightroom-probe; R2=~/Documents/ArgentResearch/presence-20261111.noindex/probe/round2
-.venv/bin/python -I $P/presence_plan.py frames $R2
+P=scripts/lightroom-probe; R2=/path/to/research/probe/round2
+.venv/bin/python -I $P/presence_plan.py frames "$R2"
 .venv/bin/python -I $P/make_charts.py presence references/lightroom-probe/q-charts --prefix q-
 .venv/bin/python -I $P/presence_plan.py write --round 2 all && .venv/bin/python -I $P/jobs.py run
-.venv/bin/python -I $P/presence_plan.py manifest $R2 --round 2
+.venv/bin/python -I $P/presence_plan.py manifest "$R2" --round 2
 ```
 
 What the run found about driving Lightroom (plug-in 1.1.0, Lightroom Classic 15.6, measured):
@@ -142,7 +141,7 @@ chart: it is the photograph decoded by the main checkout's spike and written as 
 (`presence_charts.sky_matrix`), because every profile Lightroom ships for the a7 IV carries a look table.
 
 ```sh
-P=scripts/lightroom-probe; R3=~/Documents/ArgentResearch/presence-20261111.noindex/probe/round3
+P=scripts/lightroom-probe; R3=/path/to/research/probe/round3
 .venv/bin/python -I $P/make_charts.py presence references/lightroom-probe/r-charts --prefix r-
 .venv/bin/python -I $P/presence_plan.py write --round 3 'r-crop-flag-*' && .venv/bin/python -I $P/jobs.py run
 .venv/bin/python -I $P/presence_plan.py write --round 3 r-haze-neutral r-haze-neutral-crop r-haze-two r-haze-two-crop \
@@ -151,7 +150,7 @@ P=scripts/lightroom-probe; R3=~/Documents/ArgentResearch/presence-20261111.noind
 .venv/bin/python -I $P/presence_plan.py write --round 3 'r-end-*' && .venv/bin/python -I $P/jobs.py run
 .venv/bin/python -I $P/presence_plan.py write --round 3 'r-again-haze-*' && .venv/bin/python -I $P/jobs.py run
 .venv/bin/python -I $P/presence_plan.py write --round 3 'r-again-photo-*' && .venv/bin/python -I $P/jobs.py run
-.venv/bin/python -I $P/presence_plan.py manifest $R3 --round 3
+.venv/bin/python -I $P/presence_plan.py manifest "$R3" --round 3
 ```
 
 What round 3 found about driving Lightroom (plug-in 1.1.0, measured):

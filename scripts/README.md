@@ -1,12 +1,12 @@
 # scripts
 
-Build, sample fetch, regression gate and measurement kits. `docs/ci-regression.md` explains
-the checks; each script's header says what it does. This page covers the one set of files that are
-built once and never committed: the smart masks' models.
+Build, sample fetch, regression checks and measurement kits. See the [README's build and
+validation instructions](../README.md#build-locally) for the supported toolchain and local
+checks. This page covers the optional models, which are built locally and never committed.
 
 ## The smart masks' models
 
-Sky and the new Subject (docs/masking-plan.md sections 3, 7 and decisions 19 to 24) run four converted models that the app bundles:
+Sky, Subject and Background use these converted models when installed or bundled:
 
 | File in `build/models/` | Model | Recipe id | Size |
 | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ scripts/convert-vitmatte.zsh       # ViTMatte-S: the same venv, a 113 MB downloa
 scripts/build-app.sh               # clones all four into Argent.app/Contents/Resources/Models with cp -c
 ```
 
-**The Subject models' download.** A public build carries no model. Subject and Background offer S3OD-sod, EoMT and
+**The Subject models' download.** Published app builds carry no model. Subject and Background offer S3OD-sod, EoMT and
 ViTMatte-S as one download, after a screen with their terms (`SubjectModelsSheet`), installed in Application Support's
 `Models` (`SubjectModelPack`). `PIN=1 scripts/build-subject-models.zsh` packs the three from `build/models` with the
 licence texts into `build/argent-subject-models-<version>.aar` (about 841 MB) and pins its size and SHA-256 in
@@ -68,8 +68,7 @@ which the owner's revision of 2026-11-20 allows on the conditions written there.
 ## Remove's model
 
 ObjectClear as four Core AI graphs and one small file of text states, 5.94 GB, built by a pinned recipe like the mask
-models' and run by `argent-remove`, a helper the app starts as its child (`docs/remove-plan.md`, sections
-4.5, 14 and 15):
+models' and run by `argent-remove`, a helper the app starts when needed:
 
 ```sh
 scripts/convert-objectclear.zsh    # about four minutes with its parity checks; the UNet's conversion peaks at 11.3 GB

@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#the-workflow">The workflow</a> ·
+  <a href="#install-argent">Install Argent</a> ·
   <a href="#build-locally">Build locally</a> ·
   <a href="#documentation">Documentation</a>
 </p>
@@ -22,7 +23,7 @@ Argent turns a folder of RAW files into a roll of finished film-look images. Cho
 let Auto find the print exposure and lab balance, and refine only the frames that need it.
 The photograph stays at the centre, in a native SwiftUI interface built around the roll.
 
-**Open source (Apache 2.0) · [Nightly and tagged builds](https://github.com/CyR1en/Argent/releases) · macOS 27 · Apple silicon**
+**Open source (Apache 2.0) · [Download Argent](https://github.com/CyR1en/Argent/releases/tag/nightly) · macOS 27 · Apple silicon**
 
 ## Film, not a filter
 
@@ -41,24 +42,37 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
 
 ## The workflow
 
-1. **Bring in a roll.** Open a folder or import from a card. Review the contact sheet in capture
-   order, flag the frames to keep in view, and work with one frame or a selection.
+1. **Bring in a roll.** Use File › Add Existing Folder (⌘O) to keep a folder of Sony a7 IV
+   `.ARW` files where it is, or File › Import Roll (⌘I) to copy frames from a card or folder
+   into a new roll. Review the contact sheet in capture order, flag the frames to keep in view,
+   and work with one frame or a selection.
 2. **Choose the film.** Set Stock, Rated at and Lab balance for the roll. Auto measures each
    frame and smooths its decisions across the roll. Compare against neutral RAW, then use
    Light, Curve, Masks or Lens when a frame needs more attention. Edits autosave, support
    Undo/Redo, and can be copied between frames.
-3. **Develop.** Write the frames shown to JPEG, HEIC or 16-bit TIFF in sRGB, Display P3 or
-   Adobe RGB, with EXIF, GPS and XMP metadata. Recipes keep the settings; a stopped develop
-   can resume.
+3. **Develop.** Open the Develop page (⌘D), choose a destination, and write the frames shown
+   to JPEG, HEIC or 16-bit TIFF in sRGB, Display P3 or Adobe RGB. Output retains EXIF, GPS and
+   XMP metadata from the source. Recipes keep the settings; a stopped develop can resume.
 
 Edits leave the source RAW data untouched, and image processing stays on the Mac. Auto is a
 starting point, not a guarantee of identical brightness across reframings.
 
-## Build locally
+Settings (⌘,) saves appearance changes automatically, including the window shell, frame
+surround and Rolls backdrop. Develop output settings are kept per roll.
 
-Argent is self-signed, not notarized. [Releases](https://github.com/CyR1en/Argent/releases) carry a disk image
-of every `v*` tag and a nightly of `main`, without the smart masks' or Remove's models; the first time a downloaded copy
-opens, macOS asks once, in System Settings › Privacy & Security › Open Anyway. To build it yourself:
+## Install Argent
+
+On a Mac with Apple silicon and macOS 27, download `Argent-nightly.dmg` from the
+[nightly release](https://github.com/CyR1en/Argent/releases/tag/nightly), open it, and drag Argent
+to Applications. The app is self-signed, not notarized. If macOS blocks the first launch, go to
+System Settings › Privacy & Security › Open Anyway after trying to open the app.
+
+The [releases page](https://github.com/CyR1en/Argent/releases) also lists versioned disk images
+when published. Published app builds omit the smart-mask and Remove models. Sky and Remove
+are unavailable without local models; Subject and Background offer a separate, free
+non-commercial download with its licence terms shown before download.
+
+## Build locally
 
 - **macOS 27** on Apple silicon.
 - **Xcode 27** with Swift 6.4; Command Line Tools alone cannot build the app.
@@ -72,7 +86,8 @@ python3 -m venv .venv
 scripts/build-app.sh debug open
 ```
 
-The script bakes the stock library, builds and signs `build/Argent.app` (ad-hoc unless the keychain holds "Argent Self-Signed"), then opens it.
+The script bakes the stock library, builds the Swift package's app and helper with SwiftPM,
+signs `build/Argent.app` (ad-hoc unless the keychain holds "Argent Self-Signed"), then opens it.
 Import a roll in the app, or open one directly:
 
 ```sh
@@ -81,13 +96,10 @@ open -a "$PWD/build/Argent.app" /path/to/roll
 
 `scripts/build-dmg.sh` packs a release build into `build/Argent-<version>.dmg`, a drag-to-Applications
 image with the models `build/Argent.app` holds; `--no-models` leaves them out for a copy that goes to
-anyone else. The app is self-signed or ad-hoc, never notarized, so a Mac that downloads it asks once, in System Settings ›
-Privacy & Security › Open Anyway.
+anyone else. The disk image script needs Python 3.11 or newer in `.venv`.
 
-Smart masks and model-backed Remove need separately converted models. The app builds without
-them: Sky and Remove are unavailable, and Subject and Background offer their models as a free,
-non-commercial download behind a screen with their licences. See [model setup and licences](scripts/README.md)
-before enabling the rest; Remove's weights must not be distributed unless cleared or replaced.
+For optional local models, see [model setup and licences](scripts/README.md). Remove's weights
+must not be distributed unless cleared or replaced.
 
 <details>
 <summary>Development and validation</summary>
@@ -107,9 +119,14 @@ scripts/fetch-samples.sh && scripts/regression.sh
 scripts/build-app.sh
 ```
 
-The full validation pass also verifies the app signature
-and runs `BakedStockContractTests` for every baked stock. It covers Xcode selection, fixtures
-and opt-in measurement suites.
+After building the app, check the bundled signature and the baked stocks with:
+
+```sh
+codesign --verify --deep --strict build/Argent.app
+(for stock in build/stocks/*/; do
+  ARGENT_BAKED_STOCK="$PWD/${stock%/}" swift test --filter BakedStockContractTests || exit 1
+done)
+```
 
 The command-line spike can develop a roll using a baked stock:
 
@@ -125,13 +142,12 @@ contracts, see [argent-bake](bake/README.md).
 
 ## Documentation
 
-This README, [the stock model](bake/README.md) and [the build and model scripts](scripts/README.md)
-are the public documentation.
+- [Stock model and bake tool](bake/README.md)
+- [Build and optional model scripts](scripts/README.md)
+- [Design sources](design/README.md) and [research prototypes](spikes/README.md)
 
-Argent's design notes, research and records are kept in a separate private repository. Code
-comments still cite them by path, such as `docs/provenance.md` or `docs/remove-plan.md`, section 4.5,
-so a reader knows where a decision was recorded. They aren't needed to build, run or test the
-app. With access, `scripts/docs.sh` clones them into `docs/`.
+References to `docs/` in the code point to separate project notes that are not in this
+checkout. They are not needed to build, run or test the app.
 
 ## Licence
 
