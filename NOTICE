@@ -43,21 +43,33 @@ Frame view surround specimen and README banner
 Machine-learning models (not in this repository)
 -------------------------------------------------------------------------------
 
-No model weights are in this repository. The scripts in scripts/convert-*.zsh download and
-convert them on your Mac, and scripts/build-app.sh bundles them with their licence texts in
+Built with DINOv3.
+
+No model weights are in this repository or in public app builds. For Subject and Background
+masks, Argent offers S3OD-sod, EoMT-DINOv3-L and ViTMatte-S as an optional, free,
+non-commercial download after showing their terms in the app (SubjectModelPack); their
+user-facing licence texts are carried in Argent.app/Contents/Resources/Model Licences and
+in Licences/ inside the pack. Locally, scripts/convert-*.zsh downloads and converts all
+models on your Mac, and scripts/build-app.sh bundles them with their licence texts in
 Argent.app/Contents/Resources/Models/Licences (from scripts/models/licences). Each model's
 terms are its own, and some are NON-COMMERCIAL; an app built with them may be used and shared
 only as those terms allow. scripts/models/licences/README.md records what each text says.
 
   Depth Anything 3 Mono-Large     Apache-2.0
-  EoMT-DINOv3-L                   code MIT; weights under Meta's DINOv3 License Agreement;
-                                  trained on ADE20K (non-commercial research images)
-  S3OD-sod                        code MIT; weights treated as a DINOv3 derivative; trained
+  EoMT-DINOv3-L                   code MIT; Built with DINOv3, weights under Meta's DINOv3
+                                  License Agreement; trained on ADE20K (non-commercial
+                                  research images, BSD-3-Clause annotations)
+  S3OD-sod                        code MIT; Built with DINOv3, weights treated as a DINOv3
+                                  derivative under Meta's DINOv3 License Agreement; trained
                                   partly on FLUX.1 Krea-dev images (FLUX.1 [dev]
                                   Non-Commercial License)
-  ViTMatte-S (Composition-1k)     code MIT; weights tagged Apache-2.0; trained on Adobe's
-                                  research matting data
-  ObjectClear                     NTU S-Lab License 1.0: non-commercial use only
+  ViTMatte-S (Composition-1k)     code MIT; DINO v1 ViT-S/16 backbone (Apache-2.0); trained
+                                  on Adobe's Deep Image Matting dataset (non-commercial use
+                                  and distribution only, may not be sold; citation: Ning Xu,
+                                  Brian Price, Scott Cohen and Thomas Huang. Deep Image
+                                  Matting. CVPR 2017.)
+  ObjectClear                     NTU S-Lab License 1.0: non-commercial use only; local
+                                  builds only (not distributed)
 
 -------------------------------------------------------------------------------
 Trademarks

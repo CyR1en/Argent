@@ -246,8 +246,6 @@ public final class MaskModels: @unchecked Sendable {
     /// Where the models are looked for, in order: the app's own folder, then the downloaded models' (`SubjectModelPack`). A model is taken from
     /// the first folder that holds its file.
     public let directories: [URL]
-    /// The first folder looked in, `nil` when there is none.
-    public var directory: URL? { directories.first }
     /// The ledger of compiled copies: for each model, the file, macOS build and options it was last prepared for, and the bookmark
     /// that names that compiled copy (`AIModel.bookmarkData`, about 181 bytes).
     public let ledgerFile: URL
