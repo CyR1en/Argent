@@ -99,20 +99,30 @@ enum MaskTileAvailability: Equatable, Sendable {
     case waiting(String)
     /// Not in this build or on this Mac.
     case unavailable(String)
+    /// Not until the Subject models are downloaded: the tile stays clickable and opens their licence screen.
+    case offersModels(String)
 
     var isLive: Bool { self == .live }
+    /// Whether a click does something: makes the mask, or offers the models.
+    var isEnabled: Bool {
+        switch self {
+        case .live, .offersModels: true
+        case .waiting, .unavailable: false
+        }
+    }
 
     /// Why it cannot be used, for the help tag and VoiceOver.
     var reason: String? {
         switch self {
         case .live: nil
-        case .waiting(let why), .unavailable(let why): why
+        case .waiting(let why), .unavailable(let why), .offersModels(let why): why
         }
     }
 
     /// `tile`'s availability: what the build can do comes first (a smart tile's kind, `smart`), then whether this frame can take
-    /// a mask (`frame`, nil when it can). The gradients and the brush need nothing but the frame.
+    /// a mask (`frame`, nil when it can). The gradients and the brush need nothing but the frame. The Subject models can be fetched whatever the frame.
     static func of(_ tile: MaskTile, frame: String?, smart: SmartAvailability?) -> MaskTileAvailability {
+        if tile.smartKind != nil, case .needsModels(let why) = smart { return .offersModels(why) }
         if tile.smartKind != nil, let why = (smart ?? .unavailable("Smart masks are not available.")).reason { return .unavailable(why) }
         if let frame { return .waiting(frame) }
         return .live
@@ -221,11 +231,15 @@ struct MaskPicker: View {
         let editor = model.maskEditor
         let availability = MaskTileAvailability.of(tile, frame: waiting, smart: tile.smartKind.map(model.smartAvailability))
         return Button {
+            if case .offersModels = availability {
+                model.showSubjectModels()
+                return
+            }
             if let tool = tile.tool { model.perform(.newMask(tool)) }
             if let kind = tile.smartKind { model.addSmartMask(kind, for: frame) }
         } label: { label() }
             .buttonStyle(MaskTileStyle(isChosen: MaskCopy.isChosen(tile, tool: editor.tool, operation: editor.pendingOperation)))
-            .disabled(!availability.isLive)
+            .disabled(!availability.isEnabled)
             // Why it cannot be used, on hover, in place of what it does.
             .help(availability.reason ?? tile.help(preparing: nil))
             .accessibilityLabel(tile.accessibilityLabel)

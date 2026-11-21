@@ -481,16 +481,6 @@ import Testing
         let background = try #require(AppleSegmentation.background(from: subject).seed)
         #expect(background.kind == .background && background.raster == subject.seed?.raster && background.edge == .crisp && background.provenance == subject.provenance)
     }
-
-    @Test func aFallbackKeepsTodaysSeedAndEdgeAndSaysWhy() throws {
-        let rig = try Rig(outputs: Self.outputs(cw: 1024, ch: 768, pixels: []))
-        let vision = try rig.visionSeed()
-        let fallback = AppleSegmentation.fallback(vision, why: "s3od-sod-sq1024-f16 is unavailable")
-        #expect(fallback.seed?.raster == vision.seed?.raster && fallback.seed?.edge == .guided)
-        #expect(fallback.provenance.engine == AppleSegmentation.subjectEngine && fallback.provenance.parameters["fallback"] == "s3od-sod-sq1024-f16 is unavailable")
-        let nothing = AppleSegmentation.fallback(rig.visionNothing(), why: "why")
-        #expect(nothing.seed == nil && nothing.provenance.parameters["fallback"] == "why")
-    }
 }
 
 /// A box a test's closure writes to from a task that does not cross into another.

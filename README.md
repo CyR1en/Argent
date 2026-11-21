@@ -85,8 +85,9 @@ anyone else. The app is self-signed or ad-hoc, never notarized, so a Mac that do
 Privacy & Security › Open Anyway.
 
 Smart masks and model-backed Remove need separately converted models. The app builds without
-them, with those features unavailable or using a fallback. See [model setup and licences](scripts/README.md)
-before enabling them; some weights must not be sold or distributed unless cleared or replaced.
+them: Sky and Remove are unavailable, and Subject and Background offer their models as a free,
+non-commercial download behind a screen with their licences. See [model setup and licences](scripts/README.md)
+before enabling the rest; Remove's weights must not be distributed unless cleared or replaced.
 
 <details>
 <summary>Development and validation</summary>
@@ -136,8 +137,9 @@ app. With access, `scripts/docs.sh` clones them into `docs/`.
 
 Argent is licensed under the [Apache License 2.0](LICENSE). A few files keep their own terms, the CIE
 tables in `bake/argent_bake/data/` (CC BY-SA 4.0) and the Hanken Grotesk font (SIL OFL 1.1), as
-[NOTICE](NOTICE) lists. No model weights are in this repository: the conversion scripts download them
-under their own licences, some of them non-commercial ([model licences](scripts/models/licences/README.md)).
+[NOTICE](NOTICE) lists. Built with DINOv3. No model weights are in this repository: the optional
+Subject models download is offered free for non-commercial use under its own licences (shown before
+download), and the conversion scripts download the rest under theirs ([model licences](scripts/models/licences/README.md)).
 Constants chosen on research-only data must be refit before any commercial use; [NOTICE](NOTICE)
 names them. Film names identify the stocks whose published
 data each model follows; Argent is not affiliated with their makers.

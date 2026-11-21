@@ -211,6 +211,8 @@ final class RollModel {
     let maskEditor = MaskEditor()
     /// Smart masks' selections under way and what they came to (`RollModel+SmartMasks`).
     let smartMasks = SmartMasks()
+    /// The Subject models' licence screen and download (`SubjectModelsSheet`).
+    let subjectModels = SubjectModelsDownload()
     /// The Remove tab's state that is not in the frame's edit (`RemoveState.swift`).
     let remove = RemoveSession()
     /// Remove's steps, its runs under way and what its patches say of themselves (`RollModel+Remove`).
@@ -289,6 +291,11 @@ final class RollModel {
     /// The quick develop dialog is up: set only as it comes and goes, never at a choice made in it, so the menu bar,
     /// which disables on it what would act on the roll under the dialog, is not asked again at each (`MenuState`).
     private(set) var isAskingToDevelop = false
+    /// A modal sheet is up over the workspace (Quick Develop or the Subject models' licence screen): keys and menus leave
+    /// the roll and frame under it alone.
+    var isSheetShown: Bool { isAskingToDevelop || subjectModels.isShown }
+    /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
+    @ObservationIgnored var subjectModelStagingSweep: Task<Void, Never>?
     var importSettings = ImportSettings(defaults: .standard) {
         didSet {
             importSettings.save(to: .standard)
@@ -488,6 +495,10 @@ final class RollModel {
         self.library = bookmarks.rolls
         maskEditor.model = self
         smartMasks.makeInference = { [weak self] in self?.makeMaskInference() }
+        let modelsFolder = downloadedModelsFolder
+        subjectModels.folder = { modelsFolder }
+        subjectModels.beforeStart = { [weak self] in await self?.subjectModelStagingSweep?.value }
+        subjectModels.onInstalled = { [weak self] in self?.smartMasks.modelsChanged() }
         removalRuns.makeSteps = { [weak self] in self?.makeRemovalSteps() }
         (maskEditor.overlay.field as? MaskSeedCoverage)?.seeds = maskSeeds
         (maskEditor.overlay.field as? MaskSeedCoverage)?.refined = films
@@ -1242,7 +1253,8 @@ final class RollModel {
                          canDevelopFrame: selected.canDevelopFrame, canShowRAW: selected.isSelected,
                          canShowDevelopedFile: selected.hasDevelopedFile,
                          isSeveralSelected: selected.isSeveral, canChangeFrames: selected.canChangeFrames,
-                         moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop)
+                         moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop,
+                         isShowingSubjectModels: subjectModels.isShown)
     }
 
     /// Frame > Open Frame and the rail's Frame: on the sheet, a frame selected or one shown

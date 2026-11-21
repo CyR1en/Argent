@@ -173,7 +173,7 @@ jobs:
             fi
             echo "**Install:** open the disk image and drag Argent to Applications. Argent is self-signed, not notarized, so the first time it opens, macOS asks: allow it in System Settings › Privacy & Security › Open Anyway."
             echo
-            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable, Subject uses Vision, and Remove has no model."
+            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable, Subject and Background offer the Subject models as a separate download, and Remove has no model."
             if [[ $KIND == nightly ]]; then
               echo
               echo '```'

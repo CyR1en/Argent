@@ -26,9 +26,16 @@ public enum SmartStage: Sendable, Equatable {
 public enum SmartAvailability: Sendable, Equatable {
     case available
     case unavailable(String)
+    /// Not until the Subject models are downloaded (`SubjectModelPack`): why, in the tile's words. The tile offers the download.
+    case needsModels(String)
 
     public var isAvailable: Bool { self == .available }
-    public var reason: String? { if case .unavailable(let why) = self { return why } else { return nil } }
+    public var reason: String? {
+        switch self {
+        case .available: return nil
+        case .unavailable(let why), .needsModels(let why): return why
+        }
+    }
 }
 
 /// What a selection came to.
@@ -92,7 +99,7 @@ public struct SmartModelPins: Sendable, Equatable {
         switch kind {
         case .subject, .background:
             if provenance.engine == AppleSegmentation.subjectEngine {
-                // Today's Vision seed, in an existing record or made where the models were absent: offered Update once this build has the new Subject; nothing changes it silently.
+                // A Vision seed an earlier Argent made, in an existing record or where the models were absent: offered Update once this build has the new Subject; nothing changes it silently.
                 return provenance.engineRevision != subjectRevision || subject != nil
             }
             guard let subject, let recipe = p["model.recipe"], let weights = p["model.weights"] else { return false }

@@ -209,18 +209,20 @@ private struct MaskList: View, Equatable {
             .onChange(of: hasKeyboard) { _, has in if has, let id = editor.selection?.mask { reader.scrollTo(id) } }
             .accessibilityLabel("Mask list")
             .onChange(of: editor.selection?.mask, initial: true) { _, id in if let id { reader.scrollTo(id) } }
-            .onKeyPress(.upArrow) { step(-1) }
-            .onKeyPress(.downArrow) { step(1) }
+            // Under a workspace sheet the list's keys are the sheet's.
+            .onKeyPress(.upArrow) { model.isSheetShown ? .ignored : step(-1) }
+            .onKeyPress(.downArrow) { model.isSheetShown ? .ignored : step(1) }
             .onKeyPress(.return) {
-                guard let id = editor.selection?.mask, editor.renaming == nil else { return .ignored }
+                guard !model.isSheetShown, let id = editor.selection?.mask, editor.renaming == nil else { return .ignored }
                 editor.renaming = id
                 return .handled
             }
             .onKeyPress(.escape) {
+                guard !model.isSheetShown else { return .ignored }
                 if !editor.escape() { listFocused = false; editor.requestPhotographFocus() }
                 return .handled
             }
-            .onKeyPress(keys: MaskKeys.delete) { _ in editor.deleteSelection() ? .handled : .ignored }
+            .onKeyPress(keys: MaskKeys.delete) { _ in !model.isSheetShown && editor.deleteSelection() ? .handled : .ignored }
         }
     }
 

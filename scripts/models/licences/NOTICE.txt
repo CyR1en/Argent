@@ -1,0 +1,56 @@
+Subject Models for Argent — Licences and Notices
+
+Built with DINOv3.
+
+The Subject models (S3OD-sod, EoMT-DINOv3-L, and ViTMatte-S) are made by third
+parties. They are not part of Argent and are not licensed under Argent's
+Apache-2.0 licence. They are offered here as an optional, free download for
+non-commercial use only, and are never sold or made part of a paid product.
+
+Conditions of use and distribution
+
+- Non-commercial use only; never sold. Under Adobe's Deep Image Matting dataset
+  agreement (§2), models trained using the dataset can only be used and
+  distributed for non-commercial purposes and may not be sold.
+- Built with DINOv3. S3OD-sod and EoMT-DINOv3-L are built with Meta's DINOv3
+  and distributed under the DINOv3 License (DINOv3-LICENSE.md). A copy of the
+  DINOv3 License accompanies every copy, and no term is added to S3OD-sod or
+  EoMT beyond the DINOv3 License (§1.b.i). Its terms include trade controls
+  (§1.b.iii), no reverse engineering (§1.b.iv), and no military use (§1.b.v).
+- Required citation (Adobe Deep Image Matting dataset agreement §3):
+  Ning Xu, Brian Price, Scott Cohen and Thomas Huang. Deep Image Matting. CVPR 2017.
+
+Models included in this pack
+
+1. S3OD-sod (s3od-sod-sq1024-f16.aimodel) — finds the subject
+   - Code (KupynOrest/s3od): MIT License, Copyright (c) 2024 S3OD Team
+     (S3OD-LICENSE-MIT.txt)
+   - Weights (okupyn/s3od-sod): S3OD-sod-model-card.md; Built with DINOv3,
+     distributed under Meta's DINOv3 License (DINOv3-LICENSE.md)
+   - Training data: includes images generated with FLUX.1 Krea-dev under the
+     FLUX.1 [dev] Non-Commercial License (FLUX1-Krea-dev-LICENSE.md), along
+     with DIS5K, HR-SOD, UHRSOD, and DUTS
+
+2. EoMT-DINOv3-L (eomt-sq768-f16.aimodel) — checks for a scene with no subject
+   - Code (tue-mps/eomt): MIT License, Copyright (c) 2025 Mobile Perception
+     Systems Lab at TU/e (EoMT-LICENSE-MIT.txt)
+   - Weights (tue-mps/eomt-dinov3-ade-semantic-large-512): fine-tuned from
+     DINOv3 ViT-L/16; Built with DINOv3, distributed under Meta's DINOv3
+     License (DINOv3-LICENSE.md)
+   - Training data (ADE20K): images for non-commercial research and educational
+     use; annotations under BSD-3-Clause, Copyright 2019 MIT CSAIL
+     (ADE20K-terms.txt)
+
+3. ViTMatte-S, Composition-1k (vitmatte-s-c1k-sq1024-f16.aimodel) — draws soft
+   edges in low light
+   - Code (hustvl/ViTMatte): MIT License, Copyright (c) 2023 Hust Vision Lab
+     (ViTMatte-LICENSE-MIT.txt)
+   - Weights (hustvl/vitmatte-small-composition-1k):
+     ViTMatte-S-Composition1k-model-card.md; DINO v1 ViT-S/16 backbone
+     (Apache-2.0)
+   - Training data (Composition-1k, Adobe Deep Image Matting dataset): for
+     non-commercial use and distribution only; may not be sold.
+     Citation: Ning Xu, Brian Price, Scott Cohen and Thomas Huang. Deep Image
+     Matting. CVPR 2017.
+
+Full licence texts and model cards are included beside this notice.

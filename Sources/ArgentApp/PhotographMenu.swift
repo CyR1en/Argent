@@ -70,7 +70,7 @@ import SwiftUI
         func row(_ tile: MaskTile, _ title: String, _ chord: KeyChord? = nil) -> MenuEntry {
             // Why it cannot is the tile's to say, on the tab; here only whether.
             let availability = MaskTileAvailability.of(tile, frame: canAdd ? nil : "", smart: tile.smartKind.map(model.smartAvailability))
-            return .action("photograph.newMask.\(tile.rawValue)", title, chord: chord, isEnabled: availability.isLive) {
+            return .action("photograph.newMask.\(tile.rawValue)", title, chord: chord, isEnabled: canAdd && availability.isEnabled) {
                 if let tool = tile.tool { model.perform(.newMask(tool)) }
                 if let kind = tile.smartKind { model.perform(.newSmart(kind)) }
             }

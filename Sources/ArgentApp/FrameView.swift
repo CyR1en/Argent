@@ -117,9 +117,10 @@ struct FrameView: View {
                 .onChange(of: model.isFrameOpen) { publish(layout, room) }
         }
         .background {
-            TrackpadEvents(magnify: { model.pinchFrame(by: $0, at: $1, ended: $2) },
-                           smartMagnify: { model.smartZoomFrame(at: $0) },
-                           scroll: { model.panFrame(by: $0, ended: $1) })
+            // Under a workspace sheet the trackpad is the sheet's: its licence texts scroll, and the photograph stays put.
+            TrackpadEvents(magnify: { if !model.isSheetShown { model.pinchFrame(by: $0, at: $1, ended: $2) } },
+                           smartMagnify: { if !model.isSheetShown { model.smartZoomFrame(at: $0) } },
+                           scroll: { !model.isSheetShown && model.panFrame(by: $0, ended: $1) })
         }
         .contentShape(Rectangle())
         // SwiftUI feeds this drag and the double-click below the events an AppKit child took as well
@@ -157,24 +158,24 @@ struct FrameView: View {
             model.closeFrame()
         })
         .onTapGesture { focused = true }
-        // Under the quick develop dialog no key is the photograph's, wherever the keys are: Return and Escape go on to
-        // the dialog's buttons (`QuickDevelopSheet`). The model is read as a key comes, not as the view is drawn.
+        // Under a workspace sheet no key is the photograph's, wherever the keys are: Return and Escape go on to
+        // the sheet's buttons (`QuickDevelopSheet`, `SubjectModelsSheet`). The model is read as a key comes, not as the view is drawn.
         .workspaceHorizontalArrows { step, _ in
             model.moveSelection(by: step)
             return .handled
         }
         .onKeyPress(.home) {
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             model.moveSelection(toLast: false)
             return .handled
         }
         .onKeyPress(.end) {
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             model.moveSelection(toLast: true)
             return .handled
         }
         .onKeyPress(.escape) {
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             // The press under way, the tool in hand and the selection go before the frame does; on the Remove tab, what is being
             // selected and then the newest run.
             if !model.maskEditor.escape(), !RemovePhotograph.escape(model) { model.closeFrame() }
@@ -183,7 +184,7 @@ struct FrameView: View {
         // With a gradient tool in hand and no pointer to draw with, Return places one. On the Remove tab it removes what is
         // selected, as the tab's button does.
         .onKeyPress(.return) {
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             if let frame = RemovePhotograph.frame(model), RemovePhotograph.canRemove(on: frame, model: model) {
                 model.commitRemoval(on: frame)
                 return .handled
@@ -193,17 +194,17 @@ struct FrameView: View {
         // The Remove brush's size, by the masks' brush's own keys. Their menu items are the masks' brush's and are disabled here,
         // and a disabled item passes its key on (measured, P0-S2), so the photograph takes it.
         .onKeyPress(keys: ["[", "]"]) { press in
-            guard !model.isAskingToDevelop, RemovePhotograph.frame(model) != nil else { return .ignored }
+            guard !model.isSheetShown, RemovePhotograph.frame(model) != nil else { return .ignored }
             model.stepBrush { press.key == "]" ? $0.larger() : $0.smaller() }
             return .handled
         }
         // The photograph's own key, never a menu's: a focused slider would pass Delete on to the menu.
         .onKeyPress(keys: MaskKeys.delete) { _ in
-            !model.isAskingToDevelop && model.maskEditor.deleteSelection() ? .handled : .ignored
+            !model.isSheetShown && model.maskEditor.deleteSelection() ? .handled : .ignored
         }
         // Compare: the neutral raw while space is down, film again when it comes up; the key's release always ends it.
         .onKeyPress(keys: [.space], phases: [.down, .repeat, .up]) { press in
-            guard !model.isAskingToDevelop || press.phase == .up else { return .ignored }
+            guard !model.isSheetShown || press.phase == .up else { return .ignored }
             model.isComparing = press.phase != .up
             return .handled
         }

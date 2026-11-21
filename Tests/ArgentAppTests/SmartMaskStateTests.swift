@@ -15,9 +15,10 @@ final class SessionSmartEngine: SmartMaskEngine, @unchecked Sendable {
     var pictureLenses: [LensSettings] = []
     var holds = false
     var current = SmartModelPins()
+    var availabilities: [SmartKind: SmartAvailability] = [:]
     private var held: [CheckedContinuation<Void, Never>] = []
 
-    func availability(of kind: SmartKind) -> SmartAvailability { .available }
+    func availability(of kind: SmartKind) -> SmartAvailability { lock.withLock { availabilities[kind] ?? .available } }
     var pins: SmartModelPins { lock.withLock { current } }
     func picture(of frame: Frame, lens: LensSettings, stopped: @escaping @Sendable () -> Bool) async -> SmartPictureHandle? {
         lock.withLock { pictureLenses.append(lens) }
@@ -564,6 +565,11 @@ final class SessionSmartEngine: SmartMaskEngine, @unchecked Sendable {
         #expect(MaskTileAvailability.of(.sky, frame: "Balancing roll…", smart: noModels) == .unavailable(noModels.reason!))
         #expect(MaskTileAvailability.of(.person, frame: "Balancing roll…", smart: .available) == .waiting("Balancing roll…"))
         #expect(MaskTileAvailability.of(.subject, frame: nil, smart: nil).reason != nil)
+        // Without the Subject models the tile offers them, whatever the frame, and a click on it opens their screen rather than making a mask.
+        let needs = SmartAvailability.needsModels(BundledSmartMasks.needsModels(.subject))
+        #expect(MaskTileAvailability.of(.subject, frame: "Balancing roll…", smart: needs) == .offersModels(needs.reason!))
+        #expect(MaskTileAvailability.of(.background, frame: nil, smart: needs).isEnabled && !MaskTileAvailability.of(.background, frame: nil, smart: needs).isLive)
+        #expect(!MaskTileAvailability.of(.sky, frame: nil, smart: noModels).isEnabled)
     }
 
     @Test func aBuildWithoutTheModelsSaysWhySkyIsUnavailable() async throws {

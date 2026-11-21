@@ -150,7 +150,18 @@ struct ContentView: View {
             if model.workspacePage == .roll {
                 QuickDevelopLayer()
             }
+            // The Subject models' licences and download, asked for by a Subject or Background tile.
+            if model.subjectModels.isShown {
+                Color.black.opacity(0.3)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.subjectModels.close() }
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+                SubjectModelsSheet()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
+        .animation(reduceMotion ? nil : Graphite.Motion.panel, value: model.subjectModels.isShown)
         .clipShape(shape)
         // Clicks too: a clip hides what runs past the workspace (a zoomed photograph, the frame view's
         // drag and taps) but would still let it take clicks over the title strip and the rail.
