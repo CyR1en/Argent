@@ -171,21 +171,8 @@ final class SubjectModelsDownload {
 
     /// The licence texts the app carries (`Contents/Resources/Model Licences`, copied by `scripts/build-app.sh` from `scripts/models/licences`), in reading order.
     static let texts: [(name: String, text: String)] = {
-        guard let folder = Bundle.main.resourceURL?.appendingPathComponent("Model Licences", isDirectory: true) else { return [] }
-        let order = [
-            "NOTICE.txt",
-            "DINOv3-LICENSE.md",
-            "S3OD-LICENSE-MIT.txt",
-            "EoMT-LICENSE-MIT.txt",
-            "ViTMatte-LICENSE-MIT.txt",
-            "ADE20K-terms.txt",
-            "FLUX1-Krea-dev-LICENSE.md",
-            "S3OD-sod-model-card.md",
-            "ViTMatte-S-Composition1k-model-card.md",
-        ]
-        return order.compactMap { name in
-            (try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8)).map { (name, $0) }
-        }
+        guard let resources = Bundle.main.resourceURL else { return [] }
+        return SubjectModelLicences.texts(in: resources)
     }()
 }
 
