@@ -149,6 +149,30 @@ import Testing
         // One density texture and one output texture, reused every frame.
         #expect(gpu.texturePool.allocationCount == 2)
     }
+
+    @Test(arguments: [false, true])
+    func toneBaseIsReusedAcrossEditsWithoutChangingPixels(masked: Bool) throws {
+        let gpu = try GPU()
+        let renderer = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
+        let frame = try makeFrame(gpu, pixels: Self.testPixels())
+        _ = try renderer.render(frame, settings: DevelopSettings())
+        #expect(renderer.toneBaseBuildCount == 0)
+        let mask = MaskRender.mask(MaskRender.linear(0, 0, 1, 1), try ManualAdjustments(shadows: 45))
+        func settings(_ exposure: Float) throws -> DevelopSettings {
+            DevelopSettings(labBalance: SIMD3(exposure / 10, 0, 0), manual: try MaskRender.manual(
+                ManualAdjustments(exposureEV: exposure, highlights: -60, shadows: 30), masks: masked ? [mask] : []))
+        }
+        _ = try renderer.render(frame, settings: settings(0))
+        #expect(renderer.toneBaseBuildCount == 1)
+        let cached = try renderer.render(frame, settings: settings(0.7))
+        #expect(renderer.toneBaseBuildCount == 1)
+        renderer.clearToneBase()
+        let uncached = try renderer.render(frame, settings: settings(0.7))
+        #expect(renderer.toneBaseBuildCount == 2)
+        #expect(MaskRender.bits(cached.image.texture) == MaskRender.bits(uncached.image.texture))
+        _ = try renderer.render(try makeFrame(gpu, pixels: Self.testPixels()), settings: settings(0.7))
+        #expect(renderer.toneBaseBuildCount == 3)
+    }
 }
 
 /// A stock baked by `argent-bake`, found through `ARGENT_BAKED_STOCK`. Baking the synthetic

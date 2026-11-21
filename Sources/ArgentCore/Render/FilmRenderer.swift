@@ -105,6 +105,7 @@ public final class FilmRenderer {
     private let printPass: PrintPass
     private let halationField: HalationField
     private let toneBaseField: ToneBaseField
+    var toneBaseBuildCount: Int { toneBaseField.buildCount }
     private let negativeTexture: MTLTexture
     private let printTexture: MTLTexture
     /// The stock's grain sigma per layer over normalized dye amounts, when it has grain.
@@ -183,6 +184,8 @@ public final class FilmRenderer {
             sigmaTexture = nil
         }
     }
+
+    public func clearToneBase() { toneBaseField.removeAll() }
 
     /// `frame` through the film with `settings`. With `inPlace` the print is written over the
     /// frame's own texture, which the Negative LUT has finished reading by then, and the frame

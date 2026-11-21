@@ -1173,6 +1173,7 @@ public final class FilmPreviews: @unchecked Sendable {
         gpu.maskFields.removeAll()
         gpu.maskRefiner.removeAll()
         gpu.presenceAnalyses.removeAll()
+        renderersLock.withLock { renderers.values.forEach { $0.clearToneBase() } }
         // Nor do they name its patches.
         lensStage.removeKeptPatches()
     }
