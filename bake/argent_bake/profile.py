@@ -154,8 +154,10 @@ def load_profile(source) -> StockProfile:
     if isinstance(source, (str, Path)):
         try:
             data = json.loads(Path(source).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
             raise ProfileError(f"cannot read profile {source}: {error}") from error
+        if not isinstance(data, dict):
+            raise ProfileError(f"cannot read profile {source}: expected a JSON object")
     else:
         data = source
 

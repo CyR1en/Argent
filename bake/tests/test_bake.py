@@ -318,6 +318,51 @@ class TestPortra400:
 
 
 class TestCommandLine:
+    @pytest.mark.parametrize("document", [
+        pytest.param(b"[]", id="array"),
+        pytest.param(b"null", id="null"),
+        pytest.param(b"\xff\xfe{", id="invalid-utf8"),
+        pytest.param(b"{", id="malformed-json"),
+        pytest.param(None, id="valid-object"),
+    ])
+    def test_check_reports_invalid_profile_documents(self, tmp_path, capsys, document):
+        path = tmp_path / "profile.json"
+        path.write_bytes(document if document is not None else json.dumps(synthetic.profile_dict()).encode())
+
+        assert main(["check", "--profile", str(path)]) == (0 if document is None else 2)
+
+        captured = capsys.readouterr()
+        assert "Traceback" not in captured.out + captured.err
+        if document is None:
+            assert captured.err == ""
+            assert "all gates pass" in captured.out
+        else:
+            assert captured.out == ""
+            assert len(captured.err.splitlines()) == 1
+            assert captured.err.startswith(f"error: cannot read profile {path}:")
+
+    @pytest.mark.parametrize("document", [b"[]", b"null", b"\xff\xfe{", b"{"])
+    def test_bake_all_continues_after_invalid_profile_document(self, tmp_path, capsys, monkeypatch, document):
+        import argent_bake.__main__ as cli
+
+        stocks = tmp_path / "stocks"
+        stocks.mkdir()
+        invalid = stocks / "a-invalid.json"
+        invalid.write_bytes(document)
+        (stocks / "z-valid.json").write_text(json.dumps(synthetic.profile_dict()))
+        monkeypatch.setattr(cli, "STOCKS_DIR", stocks)
+        out = tmp_path / "baked"
+
+        assert main(["bake", "--all", "--size", "5", "--out", str(out)]) == 2
+
+        captured = capsys.readouterr()
+        assert "Traceback" not in captured.out + captured.err
+        assert len(captured.err.splitlines()) == 1
+        assert captured.err.startswith(f"error: cannot read profile {invalid}:")
+        assert "wrote" in captured.out
+        assert (out / "synthetic-v0" / "stock.json").is_file()
+        assert (out / "synthetic-v0" / "print.lut3d").is_file()
+
     def test_bake_reports_working_directory_output_cleanly(self, tmp_path, capsys, monkeypatch):
         monkeypatch.chdir(tmp_path)
 
