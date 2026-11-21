@@ -169,7 +169,7 @@ final class SubjectModelsDownload {
         return f.string(fromByteCount: pack.bytes)
     }
 
-    /// The licence texts the app carries (`Contents/Resources/Model Licences`, copied by `scripts/build-app.sh` from `scripts/models/licences`), in reading order.
+    /// The bundled licence texts, in `scripts/models/subject-licences.txt` order (`scripts/build-app.sh` copies both).
     static let texts: [(name: String, text: String)] = {
         guard let resources = Bundle.main.resourceURL else { return [] }
         return SubjectModelLicences.texts(in: resources)

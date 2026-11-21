@@ -5,7 +5,7 @@ import Testing
 struct SubjectModelLicencesTests {
     @Test func theCheckedInListPinsTheReadingOrderAndExclusions() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let list = try String(contentsOf: root.appendingPathComponent("scripts/models/licences/subject-licences.txt"), encoding: .utf8)
+        let list = try String(contentsOf: root.appendingPathComponent("scripts/models/subject-licences.txt"), encoding: .utf8)
         let names = SubjectModelLicences.filenames(in: list)
         #expect(names == [
             "NOTICE.txt",

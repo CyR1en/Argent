@@ -119,8 +119,6 @@ scripts/fetch-samples.sh && scripts/regression.sh
 scripts/build-app.sh
 ```
 
-`swift test` includes `SubjectModelLicencesTests`, which pins the shared Subject licence list's reading order and exclusions.
-
 After building the app, check the bundled signature and the baked stocks with:
 
 ```sh

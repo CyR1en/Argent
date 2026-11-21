@@ -125,10 +125,11 @@ if [[ -d $app/Contents/Resources/Models && -d build/models/licences ]]; then
 fi
 # The Subject models' user-facing licence texts, in every build: the licence screen shows them before the user agrees to download them
 # (SubjectModelsSheet), so they are there in a build without the models too. Internal notes (README.md) and Remove's ObjectClear licence stay out.
+# Reading order lives in scripts/models/subject-licences.txt, outside the conversion recipes' licence-text glob.
 rm -rf "$app/Contents/Resources/Model Licences"
 mkdir -p "$app/Contents/Resources/Model Licences"
-cp scripts/models/licences/subject-licences.txt "$app/Contents/Resources/subject-licences.txt"
-subject_licences=("${(@f)$(<scripts/models/licences/subject-licences.txt)}")
+cp scripts/models/subject-licences.txt "$app/Contents/Resources/subject-licences.txt"
+subject_licences=("${(@f)$(<scripts/models/subject-licences.txt)}")
 for licence in $subject_licences; do
   cp "scripts/models/licences/$licence" "$app/Contents/Resources/Model Licences/$licence"
 done
