@@ -121,7 +121,7 @@ def main(argv=None) -> int:
         for gate in check_gates(profile):
             print(f"  {'pass' if gate.passed else 'FAIL'}  {gate.name}: {gate.detail}")
             failed += not gate.passed
-        print("all gates pass" if not failed else f"{failed} gate(s) fail")
+        print("all negative gates pass" if not failed else f"{failed} negative gate(s) fail")
         if profile.paper:
             from .print_checks import REFERENCE, check_stock, setup_for
             from .print_tone import print_tone, report_lines
@@ -132,7 +132,7 @@ def main(argv=None) -> int:
                 for line in report_lines(print_tone(profile, None, setup.stage, figure)):
                     print(line)
                 if profile.id in REFERENCE:
-                    print(f"print stage acceptance checks, {setup.label} (print.md section 3):")
+                    print(f"print stage acceptance checks (advisory; do not affect exit status), {setup.label} (print.md section 3):")
                     for item in check_stock(profile, setup):
                         state = "report" if item.passed is None else ("pass" if item.passed else "FAIL")
                         print(f"  {state:6s}{item.name}: {item.detail}")
