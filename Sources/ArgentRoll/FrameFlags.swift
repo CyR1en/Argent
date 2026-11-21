@@ -46,8 +46,17 @@ public struct FlagRecord: Sendable, Equatable, Codable {
 
     /// The record of `frames`, one entry a raw, in file name order.
     public init(frames: [Entry]) {
+        struct Identity: Hashable {
+            let fileName: String
+            let byteCount: Int
+            let captureMilliseconds: Int64?
+        }
+        var seen: Set<Identity> = []
         var kept: [Entry] = []
-        for entry in frames where !kept.contains(where: entry.matches) { kept.append(entry) }
+        for entry in frames {
+            let identity = Identity(fileName: entry.fileName, byteCount: entry.byteCount, captureMilliseconds: entry.captureMilliseconds)
+            if seen.insert(identity).inserted { kept.append(entry) }
+        }
         self.frames = kept.sorted {
             ($0.fileName, $0.captureMilliseconds ?? .min, $0.byteCount) < ($1.fileName, $1.captureMilliseconds ?? .min, $1.byteCount)
         }
