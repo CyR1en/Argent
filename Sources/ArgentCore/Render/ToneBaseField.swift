@@ -80,7 +80,8 @@ public struct ToneBaseParameters: Sendable, Equatable, Hashable {
 /// averaging differed by up to a stop), so a preview's base and a develop's agree. Its
 /// coefficients are `rg32Float`, eight bytes a texel as `rgba16Float` is, because `box(b)` is
 /// near the log luminance itself, up to 20 stops from zero, where a half float's step is a
-/// sixty-fourth of a stop. A renderer's lanes share the last field; lookup and construction are serialized.
+/// sixty-fourth of a stop. A renderer's lanes may make fields at once: each call has its own
+/// textures and command buffer.
 public final class ToneBaseField {
     /// The guide's floor, as the manual scene mapping's: luminance this far below zero is black.
     public static let guideEpsilon: Float = 1e-6
@@ -165,6 +166,7 @@ public final class ToneBaseField {
     private let cacheLock = NSLock()
     private var cached: (image: PooledTexture, parameters: ToneBaseParameters, field: PooledTexture)?
     private var builds = 0
+    private var cacheGeneration: UInt64 = 0
     var buildCount: Int { cacheLock.withLock { builds } }
 
     /// The GPU time of the last field made, for measurements.
@@ -179,18 +181,25 @@ public final class ToneBaseField {
         map = try gpu.device.makeComputePipelineState(function: function)
     }
 
-    public func removeAll() { cacheLock.withLock { cached = nil } }
+    public func removeAll() {
+        cacheLock.withLock {
+            cached = nil
+            cacheGeneration &+= 1
+        }
+    }
 
     /// The field for `frame` under `parameters`: an `rg32Float` texture of the field's size from
     /// the pool, `box(a)` in red and `box(b)` in green, for `tone_base_log2`. Run now; it holds
-    /// two more textures of its size while it runs. Keeps the last field and its decode's loan alive
-    /// until replaced or cleared, so neither texture can return to the pool while cached.
-    public func field(for frame: LinearFrame, parameters: ToneBaseParameters) throws -> PooledTexture {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        if let cached, cached.image === frame.image, cached.parameters == parameters {
-            return cached.field
+    /// two more textures of its size while it runs. With `reuse`, keeps the last field and its decode's
+    /// loan alive until replaced or cleared; neither texture can return to the pool while cached.
+    public func field(for frame: LinearFrame, parameters: ToneBaseParameters, reuse: Bool = false) throws -> PooledTexture {
+        let (hit, generation) = cacheLock.withLock { () -> (PooledTexture?, UInt64) in
+            if reuse, let cached, cached.image === frame.image, cached.parameters == parameters {
+                return (cached.field, cacheGeneration)
+            }
+            return (nil, cacheGeneration)
         }
+        if let hit { return hit }
         let size = parameters.fieldSize(width: frame.width, height: frame.height)
         func texture() throws -> PooledTexture {
             try gpu.texturePool.acquire(width: size.width, height: size.height, pixelFormat: .rg32Float)
@@ -206,8 +215,10 @@ public final class ToneBaseField {
         withExtendedLifetime((frame, first, second)) { commandBuffer.waitUntilCompleted() }
         if let error = commandBuffer.error { throw error }
         timing.withLock { gpuSeconds = commandBuffer.gpuEndTime - commandBuffer.gpuStartTime }
-        builds += 1
-        cached = (frame.image, parameters, output)
+        cacheLock.withLock {
+            builds += 1
+            if reuse, generation == cacheGeneration { cached = (frame.image, parameters, output) }
+        }
         return output
     }
 

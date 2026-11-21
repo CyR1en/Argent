@@ -1364,7 +1364,7 @@ public final class FilmPreviews: @unchecked Sendable {
     private func render(_ frame: LinearFrame, with renderer: FilmRenderer, settings: DevelopSettings,
                         space: OutputSpace, maxPixelSize: Int) throws -> CGImage {
         let began = CACurrentMediaTime()
-        let rendered = try renderer.render(frame, settings: settings)
+        let rendered = try renderer.render(frame, settings: settings, reuseToneBase: true)
         let image = try withExtendedLifetime(rendered) { try displayImage(rendered.image.texture, space: space, maxPixelSize: maxPixelSize) }
         let ended = CACurrentMediaTime()
         lock.withLock {

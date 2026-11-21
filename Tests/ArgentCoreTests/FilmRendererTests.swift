@@ -162,16 +162,56 @@ import Testing
             DevelopSettings(labBalance: SIMD3(exposure / 10, 0, 0), manual: try MaskRender.manual(
                 ManualAdjustments(exposureEV: exposure, highlights: -60, shadows: 30), masks: masked ? [mask] : []))
         }
-        _ = try renderer.render(frame, settings: settings(0))
+        _ = try renderer.render(frame, settings: settings(0), reuseToneBase: true)
         #expect(renderer.toneBaseBuildCount == 1)
-        let cached = try renderer.render(frame, settings: settings(0.7))
+        let cached = try renderer.render(frame, settings: settings(0.7), reuseToneBase: true)
         #expect(renderer.toneBaseBuildCount == 1)
         renderer.clearToneBase()
         let uncached = try renderer.render(frame, settings: settings(0.7))
         #expect(renderer.toneBaseBuildCount == 2)
         #expect(MaskRender.bits(cached.image.texture) == MaskRender.bits(uncached.image.texture))
-        _ = try renderer.render(try makeFrame(gpu, pixels: Self.testPixels()), settings: settings(0.7))
+        _ = try renderer.render(try makeFrame(gpu, pixels: Self.testPixels()), settings: settings(0.7), reuseToneBase: true)
         #expect(renderer.toneBaseBuildCount == 3)
+    }
+
+    @Test(arguments: [false, true])
+    func developsBuildEveryTimeAndReleaseTheirDecode(inPlace: Bool) throws {
+        let gpu = try GPU()
+        let renderer = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
+        let settings = DevelopSettings(manual: try ManualRenderSettings(
+            adjustments: ManualAdjustments(highlights: -60, shadows: 30), referenceStops: 0))
+        weak var image: PooledTexture?
+        do {
+            let frame = try makeFrame(gpu, pixels: Self.testPixels())
+            image = frame.image
+            for _ in 0..<2 {
+                if inPlace {
+                    let input = try makeFrame(gpu, pixels: Self.testPixels())
+                    image = input.image
+                    _ = try renderer.render(input, settings: settings, inPlace: true, reuseToneBase: true)
+                } else {
+                    _ = try renderer.render(frame, settings: settings)
+                }
+            }
+            #expect(renderer.toneBaseBuildCount == 2)
+        }
+        #expect(image == nil)
+    }
+
+    @Test func inPlaceInvalidatesAPreviouslyCachedDecode() throws {
+        let gpu = try GPU()
+        let renderer = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
+        let settings = DevelopSettings(manual: try ManualRenderSettings(
+            adjustments: ManualAdjustments(highlights: -60), referenceStops: 0))
+        weak var image: PooledTexture?
+        do {
+            let frame = try makeFrame(gpu, pixels: Self.testPixels())
+            image = frame.image
+            _ = try renderer.render(frame, settings: settings, reuseToneBase: true)
+            _ = try renderer.render(frame, settings: settings, inPlace: true, reuseToneBase: true)
+            #expect(renderer.toneBaseBuildCount == 2)
+        }
+        #expect(image == nil)
     }
 }
 
