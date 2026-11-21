@@ -168,6 +168,41 @@ import Testing
 
     // MARK: The words
 
+    @Test func runningDevelopSummaryUsesCapturedStocks() async throws {
+        try await FlagStateTests.withRoll { fixture in
+            try AutoDecisionStateTests.writeToyStock("other", in: fixture.stocks)
+            let model = FlagStateTests.model(fixture), gate = MeasurementGate()
+            let frames = try await FlagStateTests.open(fixture, in: model, through: gate)
+            defer { AutoDecisionStateTests.close(model, gate) }
+            model.developFolder.usesSubfolder = false
+            model.chooseDestination(fixture.folder.appendingPathComponent("Export"))
+            let rollStock = try #require(model.films?.stocks.firstIndex { $0.id == "toy" })
+            let ownStock = try #require(model.films?.stocks.firstIndex { $0.id == "other" })
+            model.stockIndex = rollStock
+            model.setStock(ownStock, for: frames[0])
+
+            var summaries: [String] = []
+            model.observeDevelopJobs = { jobs in
+                let names = Set(jobs.map(\.recipe.stock.displayName))
+                let expected = names.count == 1 ? names.first : "Mixed stocks"
+                #expect(model.runningDevelopSummary == DevelopStatusText.outputSummary(model.output, stock: expected))
+                let captured = model.runningDevelopSummary
+                model.stockIndex = ownStock
+                model.setStock(nil, for: frames[0])
+                #expect(model.runningDevelopSummary == captured)
+                summaries.append(captured)
+                model.stopDevelop()
+            }
+            await FlagStateTests.develop(model) { model.developFrame(frames[0]) }
+            model.stockIndex = rollStock
+            await FlagStateTests.develop(model) { model.develop() }
+            model.stockIndex = rollStock
+            model.setStock(ownStock, for: frames[0])
+            await FlagStateTests.develop(model) { model.develop() }
+            #expect(summaries.count == 3)
+        }
+    }
+
     @Test func countsAreTheReportsOwn() {
         #expect(DevelopStatusText.counts(.stopped(Self.report(saved: 32, stopped: 52))) == "32 frames saved · 52 remaining")
         #expect(DevelopStatusText.counts(.stopped(Self.report(saved: 1, stopped: 1))) == "1 frame saved · 1 remaining")
