@@ -331,6 +331,24 @@ import Testing
         }
     }
 
+    @Test func importSourceDefaultsToAnEligibleCard() async throws {
+        try await Self.withModel { model, _, _ in
+            let readable = Card(volume: URL(fileURLWithPath: "/Volumes/READABLE"), name: "Readable", rawCount: 24)
+            let unreadable = Card(volume: URL(fileURLWithPath: "/Volumes/UNREADABLE"), name: "Unreadable", rawCount: nil)
+            #expect(model.initialImportCard == nil)
+            model.cards = [readable, unreadable]
+            #expect(model.offeredCard == unreadable)
+            #expect(model.initialImportCard == readable)
+            #expect(model.initialImportCard.map { model.canImport($0) } == true)
+            model.cards = [unreadable]
+            #expect(model.initialImportCard == nil)
+            model.cards = [unreadable, readable]
+            #expect(model.initialImportCard == readable)
+            model.importedCards.insert(readable.volume.canonicalPath)
+            #expect(model.initialImportCard == nil)
+        }
+    }
+
     @Test func frameCounts() {
         #expect(RollModel.framesText(1) == "1 frame")
         #expect(RollModel.framesText(24) == "24 frames")
