@@ -130,20 +130,27 @@ public struct SubjectModelPack: Sendable, Equatable {
         }
         try Task.checkCancellation()
 
-        // Every check passed: the licences go in first, then the models, each replacing its old copy in place.
+        // Every check passed: the licences go in first, then the models. Each old copy moves aside into the work folder (the same volume, so
+        // every move is a rename) before its new one goes in; if any move fails, the new ones come out and the old ones go back.
         let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
-        for name in names {
-            let source = unpacked.appendingPathComponent(name)
-            let target = folder.appendingPathComponent(name)
-            do {
-                if manager.fileExists(atPath: target.path) {
-                    _ = try manager.replaceItemAt(target, withItemAt: source)
-                } else {
-                    try manager.moveItem(at: source, to: target)
+        let previous = work.appendingPathComponent("previous", isDirectory: true)
+        var placed: [String] = [], setAside: [String] = []
+        do {
+            try manager.createDirectory(at: previous, withIntermediateDirectories: true)
+            for name in names {
+                let target = folder.appendingPathComponent(name)
+                // Not `fileExists`, which follows a symbolic link and misses a broken one.
+                if (try? manager.attributesOfItem(atPath: target.path)) != nil {
+                    try manager.moveItem(at: target, to: previous.appendingPathComponent(name))
+                    setAside.append(name)
                 }
-            } catch {
-                throw Failure.install("could not put \(name) in place: \(error.localizedDescription)")
+                try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
+                placed.append(name)
             }
+        } catch {
+            for name in placed { try? manager.removeItem(at: folder.appendingPathComponent(name)) }
+            for name in setAside { try? manager.moveItem(at: previous.appendingPathComponent(name), to: folder.appendingPathComponent(name)) }
+            throw Failure.install("could not put the models in place: \(error.localizedDescription)")
         }
         step(.done)
     }
@@ -215,6 +222,8 @@ public struct SubjectModelPack: Sendable, Equatable {
         defer { try? handle.close() }
         var hash = SHA256()
         while true {
+            // 841 MB takes seconds: Stop and Quit are heard between chunks.
+            try Task.checkCancellation()
             let done: Bool = try autoreleasepool {
                 guard let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty else { return true }
                 hash.update(data: chunk)
@@ -254,7 +263,10 @@ public struct SubjectModelPack: Sendable, Equatable {
         guard let decompressed = ArchiveByteStream.decompressionStream(readingFrom: file) else { throw Failure.unpack("not a compressed archive") }
         var decompressedClosed = false
         defer { if !decompressedClosed { try? decompressed.close() } }
-        guard let decoded = ArchiveStream.decodeStream(readingFrom: decompressed) else { throw Failure.unpack("not an archive") }
+        // Cancelling is heard inside an entry too, not only between them: EoMT's one file is 630 MB.
+        guard let decoded = ArchiveStream.decodeStream(readingFrom: decompressed, selectUsing: { _, _, _ in isCancelled() ? .cancel : .ok }) else {
+            throw Failure.unpack("not an archive")
+        }
         var decodedClosed = false
         defer { if !decodedClosed { try? decoded.close() } }
         let rejected = RejectionBox()
@@ -321,15 +333,31 @@ private final class DownloadBox: @unchecked Sendable {
     private var task: URLSessionDownloadTask?
     private var observation: NSKeyValueObservation?
     private var cancelled = false
+    /// The fraction last passed on: the progress fires for every chunk, thousands over the pack, and only a half-percent step is passed on.
+    private var reported = 0.0
 
     func start(_ task: URLSessionDownloadTask, progress: @escaping @Sendable (Double) -> Void) {
         let go: Bool = lock.withLock {
             guard !cancelled else { return false }
             self.task = task
-            observation = task.progress.observe(\.fractionCompleted) { p, _ in progress(p.fractionCompleted) }
+            observation = task.progress.observe(\.fractionCompleted) { [weak self] p, _ in
+                guard let self, let fraction = self.step(to: p.fractionCompleted) else { return }
+                progress(fraction)
+            }
             return true
         }
         if go { task.resume() } else { task.cancel() }
+    }
+
+    /// `fraction`, clamped, when it is half a percent past the last one passed on or the end; `nil` otherwise.
+    private func step(to fraction: Double) -> Double? {
+        guard fraction.isFinite else { return nil }
+        let clamped = min(max(fraction, 0), 1)
+        return lock.withLock {
+            guard clamped - reported >= 0.005 || (clamped >= 1 && reported < 1) else { return nil }
+            reported = clamped
+            return clamped
+        }
     }
 
     func finish() {

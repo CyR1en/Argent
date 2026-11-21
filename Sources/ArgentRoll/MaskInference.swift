@@ -99,7 +99,7 @@ public struct SmartModelPins: Sendable, Equatable {
         switch kind {
         case .subject, .background:
             if provenance.engine == AppleSegmentation.subjectEngine {
-                // Today's Vision seed, in an existing record or made where the models were absent: offered Update once this build has the new Subject; nothing changes it silently.
+                // A Vision seed an earlier Argent made, in an existing record or where the models were absent: offered Update once this build has the new Subject; nothing changes it silently.
                 return provenance.engineRevision != subjectRevision || subject != nil
             }
             guard let subject, let recipe = p["model.recipe"], let weights = p["model.weights"] else { return false }

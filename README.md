@@ -85,7 +85,8 @@ anyone else. The app is self-signed or ad-hoc, never notarized, so a Mac that do
 Privacy & Security › Open Anyway.
 
 Smart masks and model-backed Remove need separately converted models. The app builds without
-them, with those features unavailable or using a fallback. See [model setup and licences](scripts/README.md)
+them: Sky and Remove are unavailable, and Subject and Background offer their models as a one-time download
+behind a screen with their licences. See [model setup and licences](scripts/README.md)
 before enabling them; some weights must not be sold or distributed unless cleared or replaced.
 
 <details>

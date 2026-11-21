@@ -463,28 +463,29 @@ struct ArgentCommands: Commands {
             }
             .disabled(!state.canShow || !state.actsOnFrames)
             Divider()
-            // The thumbnails' size on the sheet and the zoom in the frame view, as a pinch changes each.
+            // The thumbnails' size on the sheet and the zoom in the frame view, as a pinch changes each; not under the Subject models' screen,
+            // which covers them.
             Button(state.openFrame == nil ? "Larger Thumbnails" : "Zoom In") {
                 if model.isFrameOpen { model.zoomFrame(.zoomIn) } else { model.changeSize(by: 1) }
             }
             .keyboardShortcut("+")
-            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames)
+            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingSubjectModels)
             Button(state.openFrame == nil ? "Smaller Thumbnails" : "Zoom Out") {
                 if model.isFrameOpen { model.zoomFrame(.zoomOut) } else { model.changeSize(by: -1) }
             }
             .keyboardShortcut("-")
-            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames)
+            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingSubjectModels)
             Button("Actual Size") { model.zoomFrame(.actualSize) }
                 .keyboardShortcut("0")
-                .disabled(state.openFrame == nil || state.page != .roll)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
             Button("Zoom to Fit") { model.zoomFrame(.fit) }
                 .keyboardShortcut("9")
-                .disabled(state.openFrame == nil || state.page != .roll)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
             Divider()
             // The split comparison of the neutral raw and film, the frame view's Compare.
             Toggle("Split Compare", isOn: Binding(get: { model.isSplitComparing }, set: { model.isSplitComparing = $0 }))
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(state.openFrame == nil || state.page != .roll)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
             // The inspector edits the open frame, and its curve graph takes the keys: not under the dialog.
             Toggle("Adjustments", isOn: Binding(get: { model.isAdjustmentsShown }, set: { model.isAdjustmentsShown = $0 }))
                 .keyboardShortcut("a", modifiers: [.command, .shift])

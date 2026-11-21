@@ -31,6 +31,9 @@ final class SubjectModelsDownload {
         try await pack.install(into: folder, step: step)
     }
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// The newest install's task, kept after Stop until it has returned: a new install waits for it, so two never share the
+    /// Models folder (each sweeps the other's staging folder), and Quit waits for it to clean up.
+    @ObservationIgnored private var draining: Task<Void, Never>?
     @ObservationIgnored private(set) var generation: UInt64 = 0
 
     init(pack: SubjectModelPack = .current) {
@@ -56,9 +59,10 @@ final class SubjectModelsDownload {
         generation &+= 1
         let run = generation
         phase = .running(.downloading(0))
-        let pack = pack, folder = folder(), installer = installer, beforeStart = beforeStart
+        let pack = pack, folder = folder(), installer = installer, beforeStart = beforeStart, previous = draining
         // The download holds the object while it runs: it is the app model's, which outlives it.
-        task = Task {
+        let started = Task {
+            await previous?.value
             await beforeStart()
             guard !Task.isCancelled, run == generation else { return }
             do {
@@ -72,6 +76,8 @@ final class SubjectModelsDownload {
                 finish(.failed(String(describing: error)), run: run)
             }
         }
+        task = started
+        draining = started
     }
 
     func cancel() {
@@ -83,15 +89,15 @@ final class SubjectModelsDownload {
         running?.cancel()
     }
 
-    /// Cancels an active download on quit and waits briefly for its staging folder cleanup to finish.
-    func cancelForQuit() async {
-        guard let running = task else { return }
+    /// Cancels the download on quit, a running one or one already stopped and still cleaning up, and waits at most `limit`
+    /// for its staging folder to go; what is left then the next launch sweeps.
+    func cancelForQuit(limit: Duration = .seconds(1)) async {
+        guard let running = draining else { return }
         cancel()
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await running.value }
-            group.addTask { try? await Task.sleep(for: .seconds(1)) }
-            await group.next()
-            group.cancelAll()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let once = ResumeOnce(continuation)
+            Task { await running.value; once.resume() }
+            Task { try? await Task.sleep(for: limit); once.resume() }
         }
     }
 
@@ -148,7 +154,7 @@ final class SubjectModelsDownload {
 
     static let models: [Model] = [
         Model(name: "S3OD-sod", role: "Finds the subject.",
-              terms: "MIT licence, © 2024 S3OD Team. Built with DINOv3: fine-tuned from Meta's DINOv3, and distributed under the DINOv3 License."),
+              terms: "MIT licence, © 2024 S3OD Team. Built with DINOv3: fine-tuned from Meta's DINOv3, and distributed under the DINOv3 License. Trained partly on images made with FLUX.1 Krea-dev, under its non-commercial licence."),
         Model(name: "EoMT (DINOv3-L, ADE20K)", role: "Checks for a scene with no subject.",
               terms: "MIT licence, © 2025 Mobile Perception Systems Lab, TU/e. Built with DINOv3, under the DINOv3 License. Trained on ADE20K, whose images are for non-commercial research and education."),
         Model(name: "ViTMatte-S (Composition-1k)", role: "Draws soft edges in low light.",
@@ -181,6 +187,22 @@ final class SubjectModelsDownload {
             (try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8)).map { (name, $0) }
         }
     }()
+}
+
+/// Resumes a continuation once, whichever of its callers comes first.
+private final class ResumeOnce: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) { self.continuation = continuation }
+
+    func resume() {
+        let waiting: CheckedContinuation<Void, Never>? = lock.withLock {
+            defer { continuation = nil }
+            return continuation
+        }
+        waiting?.resume()
+    }
 }
 
 /// The screen itself, over the workspace as Quick Develop is over the roll.
@@ -279,6 +301,8 @@ struct SubjectModelsSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // Another licence starts at its top.
+                .id(chosenText)
                 .frame(minHeight: 120, maxHeight: 320)
             }
         }

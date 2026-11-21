@@ -39,6 +39,13 @@ extension RollModel {
         return MaskInference(engine: BundledSmartMasks(films: films, models: models, app: Self.software), turns: films.decodeTurns)
     }
 
+    /// The Subject models' licence and download screen, the only modal over the workspace: Quick Develop and Add's picker go.
+    func showSubjectModels() {
+        quickDevelop = nil
+        maskEditor.isPickerOpen = false
+        subjectModels.show()
+    }
+
     // MARK: The click
 
     /// A tile: a mask of `kind`, one undo step named for it, its row at once with its wait named, selected and showing its red as
@@ -46,8 +53,7 @@ extension RollModel {
     /// When the Subject models are not installed yet, opens their licence and download screen instead.
     func addSmartMask(_ kind: SmartKind, for frame: Frame) {
         if case .needsModels = smartAvailability(kind) {
-            maskEditor.isPickerOpen = false
-            subjectModels.show()
+            showSubjectModels()
             return
         }
         guard canAddMask(frame), smartAvailability(kind).isAvailable else { return }
@@ -288,7 +294,7 @@ extension RollModel {
     func retrySelection(_ id: UUID, for frame: Frame) {
         guard let kind = mask(id, for: frame)?.pendingSmart.first else { return }
         if case .needsModels = smartAvailability(kind) {
-            subjectModels.show()
+            showSubjectModels()
             return
         }
         askSelection(kind, mask: id, for: frame)
@@ -333,6 +339,10 @@ extension RollModel {
     /// Update on a stale seed: made again with the current model, the old one kept until the new one arrives (one undo step then).
     func updateSelection(_ id: UUID, for frame: Frame) {
         guard let kind = staleSelection(of: id, for: frame)?.kind else { return }
+        if case .needsModels = smartAvailability(kind) {
+            showSubjectModels()
+            return
+        }
         askSelection(kind, mask: id, for: frame, update: true)
     }
 
@@ -372,7 +382,8 @@ extension RollModel {
         return nil
     }
 
-    /// Whether Vision, not the bundled models, found `mask`'s selection, because a model was absent. Its provenance says why, in `fallback`.
+    /// Whether Vision, not the bundled models, found `mask`'s selection: a seed an earlier Argent made where a model was absent, its provenance
+    /// saying why in `fallback`. This build never makes one.
     private func isVisionFallback(of id: UUID, for frame: Frame) -> Bool {
         guard let mask = mask(id, for: frame) else { return false }
         return mask.components.contains { component in

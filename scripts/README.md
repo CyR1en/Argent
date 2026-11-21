@@ -62,7 +62,8 @@ derivative under Meta's DINOv3 Agreement and were trained on ADE20K (non-commerc
 images); S3OD-sod's code is MIT and its weights are treated as a DINOv3 derivative, and trained partly on FLUX.1 Krea-dev images;
 ViTMatte's code is MIT and its Composition-1k weights rest on Adobe's research data. No weights are in Git or in a published build; whoever runs these
 scripts downloads them under these terms. **Decision 24: these weights must not be sold or distributed unless cleared or replaced,** and counsel is to
-be asked before any copy goes to anyone else ([models/licences/README.md](models/licences/README.md)).
+be asked before any copy goes to anyone else ([models/licences/README.md](models/licences/README.md)), except the Subject models' download above,
+which the owner's revision of 2026-11-20 allows on the conditions written there.
 
 ## Remove's model
 

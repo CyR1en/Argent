@@ -118,19 +118,20 @@ import Testing
         download.start()
         let gen1 = download.generation
         try await waitFor { run1Gate.isWaiting }
-        // Cancel run 1 and immediately start run 2.
+        // Cancel run 1 and immediately start run 2: run 2 waits for run 1 to return, so two installs never share the folder.
         download.cancel()
         #expect(download.phase == .idle)
         download.start()
         let gen2 = download.generation
         #expect(gen2 > gen1)
-        try await waitFor { run2Gate.isWaiting }
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(callbacks.count == 1 && !run2Gate.isWaiting, "run 2 began while run 1 was still running")
 
-        // Stale step and completion from run 1 are ignored.
+        // A stale step from run 1 is ignored; its late return does not finish run 2, which starts only then.
         download.advance(to: .unpacking, run: gen1)
         #expect(download.phase == .running(.downloading(0)))
         run1Gate.resume()
-        try await Task.sleep(for: .milliseconds(30))
+        try await waitFor { run2Gate.isWaiting }
         #expect(download.phase == .running(.downloading(0)) && installedCount.value == 0)
 
         // Run 2's progress is clamped, ignores non-finite values, and never moves backwards.
@@ -156,6 +157,42 @@ import Testing
         run2Gate.resume()
         try await waitFor { download.phase == .done }
         #expect(installedCount.value == 1)
+    }
+
+    /// Quit waits for the download to clean up, a running one or one already stopped and still returning, but never past its limit.
+    @Test func cancelForQuitWaitsForTheDrainButNotPastItsLimit() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-quit-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let returned = CounterBox()
+        let stuck = ContinuationGate()
+
+        // One that never notices it was cancelled: Quit goes on at the limit.
+        let deaf = SubjectModelsDownload()
+        deaf.folder = { folder }
+        deaf.installer = { _, _, _ in try? await stuck.wait() }
+        deaf.start()
+        try await waitFor { stuck.isWaiting }
+        let began = ContinuousClock.now
+        await deaf.cancelForQuit(limit: .milliseconds(200))
+        let waited = ContinuousClock.now - began
+        #expect(waited >= .milliseconds(150) && waited < .seconds(2), "waited \(waited)")
+        stuck.resume()
+
+        // One stopped before Quit and still returning: Quit waits for it, though Stop already let go of it.
+        let draining = SubjectModelsDownload()
+        draining.folder = { folder }
+        draining.installer = { _, _, _ in
+            while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
+            try? await Task.sleep(for: .milliseconds(50))
+            returned.increment()
+            throw CancellationError()
+        }
+        draining.start()
+        try await Task.sleep(for: .milliseconds(20))
+        draining.cancel()
+        #expect(!draining.isRunning && returned.value == 0)
+        await draining.cancelForQuit(limit: .seconds(5))
+        #expect(returned.value == 1)
     }
 
     @Test func onInstalledRefreshesSmartMasksObservationAndPins() async throws {
@@ -306,13 +343,15 @@ private final class ContinuationGate: @unchecked Sendable {
 
 private final class CallbackBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var count = 0
+    private var calls = 0
+    /// One more install began; its number.
     func record(_ step: @escaping @Sendable (SubjectModelPack.Step) -> Void) -> Int {
         lock.withLock {
-            count += 1
-            return count
+            calls += 1
+            return calls
         }
     }
+    var count: Int { lock.withLock { calls } }
 }
 
 private final class CounterBox: @unchecked Sendable {

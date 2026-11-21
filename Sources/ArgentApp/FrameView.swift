@@ -117,9 +117,10 @@ struct FrameView: View {
                 .onChange(of: model.isFrameOpen) { publish(layout, room) }
         }
         .background {
-            TrackpadEvents(magnify: { model.pinchFrame(by: $0, at: $1, ended: $2) },
-                           smartMagnify: { model.smartZoomFrame(at: $0) },
-                           scroll: { model.panFrame(by: $0, ended: $1) })
+            // Under a workspace sheet the trackpad is the sheet's: its licence texts scroll, and the photograph stays put.
+            TrackpadEvents(magnify: { if !model.isSheetShown { model.pinchFrame(by: $0, at: $1, ended: $2) } },
+                           smartMagnify: { if !model.isSheetShown { model.smartZoomFrame(at: $0) } },
+                           scroll: { !model.isSheetShown && model.panFrame(by: $0, ended: $1) })
         }
         .contentShape(Rectangle())
         // SwiftUI feeds this drag and the double-click below the events an AppKit child took as well

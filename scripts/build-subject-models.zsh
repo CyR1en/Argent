@@ -9,7 +9,10 @@
 # Then upload the file, unchanged, as a release asset under the tag subject-models-<version> (SubjectModelPack.current's URL). Before it goes to anyone
 # else, read scripts/models/licences/README.md: the pack is offered free and non-commercially only, with its licences shown before download.
 set -euo pipefail
+# A relative MODELS_DIR is the caller's, so it is made absolute before the script moves to the repository.
+models_dir=${MODELS_DIR:+${MODELS_DIR:A}}
 cd "${0:A:h}/.."
+models_dir=${models_dir:-build/models}
 version=1
 models=(s3od-sod-sq1024-f16 eomt-sq768-f16 vitmatte-s-c1k-sq1024-f16)
 licences=(
@@ -25,7 +28,6 @@ licences=(
 )
 out=build/argent-subject-models-$version.aar
 stage=build/.subject-models-$version
-models_dir=${MODELS_DIR:-build/models}
 
 cleanup() { rm -rf "$stage"; }
 trap cleanup EXIT
@@ -41,13 +43,16 @@ done
 rm -rf "$stage"
 mkdir -p "$stage/Licences"
 for model in $models; do
-  cp -c -R "$models_dir/$model.aimodel" "$stage/" 2>/dev/null || cp -R "$models_dir/$model.aimodel" "$stage/"
+  # A clone fails across volumes; what it left is cleared before the plain copy.
+  cp -c -R "$models_dir/$model.aimodel" "$stage/" 2>/dev/null || { rm -rf "$stage/$model.aimodel"; cp -R "$models_dir/$model.aimodel" "$stage/" }
   cp "$models_dir/$model.manifest.json" "$stage/"
 done
 for licence in $licences; do
   cp "scripts/models/licences/$licence" "$stage/Licences/$licence"
 done
 find "$stage" -name .DS_Store -delete
+# The modes are in the archive too: the same under any umask.
+chmod -R u=rwX,go=rX "$stage"
 
 # Strip host- and time-varying metadata fields so rebuilding from the same models produces a byte-identical archive.
 rm -f "$out"

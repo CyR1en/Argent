@@ -232,8 +232,7 @@ struct MaskPicker: View {
         let availability = MaskTileAvailability.of(tile, frame: waiting, smart: tile.smartKind.map(model.smartAvailability))
         return Button {
             if case .offersModels = availability {
-                model.maskEditor.isPickerOpen = false
-                model.subjectModels.show()
+                model.showSubjectModels()
                 return
             }
             if let tool = tile.tool { model.perform(.newMask(tool)) }

@@ -207,6 +207,30 @@ struct SubjectModelPackTests {
         #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v2")
         #expect(models.isSubjectAvailable)
 
+        // A move that fails part way, the last old item locked in place: what went in comes out and every old item goes back.
+        let manager = FileManager.default
+        let last = try #require(SubjectModelPack.models.last).manifestName
+        let locked = installed.appendingPathComponent(last)
+        try manager.setAttributes([.immutable: true], ofItemAtPath: locked.path)
+        let pack3 = try Self.makeSyntheticPack(in: work, name: "v3", noticeText: "notice v3")
+        await #expect {
+            try await pack3.install(into: installed)
+        } throws: { error in
+            if case .install = error as? SubjectModelPack.Failure { true } else { false }
+        }
+        try manager.setAttributes([.immutable: false], ofItemAtPath: locked.path)
+        #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v2", "the old licences are back")
+        #expect(models.isSubjectAvailable)
+        #expect(try manager.contentsOfDirectory(atPath: installed.path).filter { $0.hasPrefix(".install-") }.isEmpty)
+
+        // A broken link where an item goes does not stop the install: it is set aside as any old copy is.
+        let first = try #require(SubjectModelPack.models.first).fileName
+        try manager.removeItem(at: installed.appendingPathComponent(first))
+        try manager.createSymbolicLink(atPath: installed.appendingPathComponent(first).path, withDestinationPath: "/nonexistent/argent-model")
+        try await pack3.install(into: installed)
+        #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v3")
+        #expect(models.isSubjectAvailable)
+
         // Remove clears installed models, Licences, and any orphaned staging folders, while keeping unrelated files.
         let orphan2 = installed.appendingPathComponent(".install-after", isDirectory: true)
         try FileManager.default.createDirectory(at: orphan2, withIntermediateDirectories: true)
