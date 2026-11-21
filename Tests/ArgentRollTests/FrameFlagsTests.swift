@@ -10,6 +10,50 @@ import Testing
     /// To the millisecond, as the a7 IV writes SubSecTimeOriginal.
     private static let start = Date(timeIntervalSince1970: 1_792_000_000.125)
 
+    private static func quadraticRecord(_ entries: [FlagRecord.Entry]) -> FlagRecord {
+        var kept: [FlagRecord.Entry] = []
+        for entry in entries where !kept.contains(where: entry.matches) { kept.append(entry) }
+        var record = FlagRecord(frames: [])
+        record.frames = kept.sorted {
+            ($0.fileName, $0.captureMilliseconds ?? .min, $0.byteCount) < ($1.fileName, $1.captureMilliseconds ?? .min, $1.byteCount)
+        }
+        return record
+    }
+
+    @Test func dedupKeepsTheFirstExactRepresentativeAndSortsIdentities() {
+        let first = Self.entry("DSC00001.ARW", bytes: 10, at: 0.0001)
+        let collision = Self.entry("DSC00001.ARW", bytes: 10, at: 0.0004)
+        let nextMillisecond = Self.entry("DSC00001.ARW", bytes: 10, at: 0.0006)
+        let undated = Self.entry("DSC00001.ARW", bytes: 10, at: nil)
+        let larger = Self.entry("DSC00001.ARW", bytes: 11, at: 0.0001)
+        let last = Self.entry("DSC00002.ARW", bytes: 1, at: nil)
+        #expect(first != collision && first.matches(collision))
+        #expect(!first.matches(nextMillisecond))
+        #expect(FlagRecord(frames: [last, first, nextMillisecond, larger, undated, collision, undated]).frames
+                == [undated, first, larger, nextMillisecond, last])
+        #expect(FlagRecord(frames: [collision, first]).frames == [collision])
+        #expect(FlagRecord(frames: []).frames.isEmpty)
+    }
+
+    @Test func encodedBytesMatchTheQuadraticReference() throws {
+        var state: UInt64 = 0xCAFE
+        func next(_ bound: Int) -> Int {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return Int((state >> 32) % UInt64(bound))
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        for count in [0, 1, 10, 100, 1000] {
+            var entries: [FlagRecord.Entry] = []
+            for _ in 0..<count {
+                let name = ["DSC00001.ARW", "DSC00002.ARW", "é.ARW", "e\u{301}.ARW"][next(4)]
+                entries.append(Self.entry(name, bytes: next(4), at: next(5) == 0 ? nil : Double(next(20) - 10) / 10000))
+                if next(3) == 0 { entries.append(entries[next(entries.count)]) }
+            }
+            #expect(try encoder.encode(FlagRecord(frames: entries)) == encoder.encode(Self.quadraticRecord(entries)))
+        }
+    }
+
     private static func frame(_ name: String, at seconds: Double?, folder: String = "/flags/Roll") -> Frame {
         Frame(id: 0, url: URL(fileURLWithPath: folder).appendingPathComponent(name),
               info: ARWFrameInfo(captureDate: seconds.map { start.addingTimeInterval($0) }))
