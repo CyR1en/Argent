@@ -16,10 +16,26 @@ extension RollModel {
         smartMasks.availability(of: kind) ?? .unavailable("Smart masks need the film previews, which need a stock.")
     }
 
+    /// Where downloaded models go: `Models` beside `recipeLibrary` (`ApplicationSupport.folder/Models` in the app, and a test's own folder in tests).
+    var downloadedModelsFolder: URL {
+        recipeLibrary.deletingLastPathComponent().appendingPathComponent("Models", isDirectory: true)
+    }
+
+    /// Removes orphaned `.install-*` staging folders in `downloadedModelsFolder` left behind by a quit or crash during download or install.
+    func sweepSubjectModelStaging() async {
+        guard !subjectModels.isRunning else { return }
+        let folder = downloadedModelsFolder
+        let task = Task.detached(priority: .utility) { SubjectModelPack.sweepStaging(in: folder) }
+        subjectModelStagingSweep = task
+        await task.value
+        subjectModelStagingSweep = nil
+    }
+
     /// The queue the app makes: the film previews' input pictures, and the app's models and the downloaded Subject models, whose ledger sits beside the recipes.
     func makeMaskInference() -> MaskInference? {
         guard let films else { return nil }
-        let models = MaskModels(appLedgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
+        let models = MaskModels(directories: [MaskModels.bundledDirectory, downloadedModelsFolder].compactMap(\.self),
+                                ledgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
         return MaskInference(engine: BundledSmartMasks(films: films, models: models, app: Self.software), turns: films.decodeTurns)
     }
 
@@ -27,7 +43,13 @@ extension RollModel {
 
     /// A tile: a mask of `kind`, one undo step named for it, its row at once with its wait named, selected and showing its red as
     /// soon as the selection lands. A second click of the same kind while one is being found on the frame selects that one instead.
+    /// When the Subject models are not installed yet, opens their licence and download screen instead.
     func addSmartMask(_ kind: SmartKind, for frame: Frame) {
+        if case .needsModels = smartAvailability(kind) {
+            maskEditor.isPickerOpen = false
+            subjectModels.show()
+            return
+        }
         guard canAddMask(frame), smartAvailability(kind).isAvailable else { return }
         maskEditor.finishPress()
         if let running = masks(for: frame).last(where: { mask in
@@ -262,8 +284,13 @@ extension RollModel {
     }
 
     /// Try Again on a failed or unfinished selection: asked again, no undo step, since the mask already waits for it.
+    /// When the Subject models are not installed yet, opens their licence and download screen instead.
     func retrySelection(_ id: UUID, for frame: Frame) {
         guard let kind = mask(id, for: frame)?.pendingSmart.first else { return }
+        if case .needsModels = smartAvailability(kind) {
+            subjectModels.show()
+            return
+        }
         askSelection(kind, mask: id, for: frame)
     }
 

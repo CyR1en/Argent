@@ -63,14 +63,24 @@ final class SmartMasks {
 
     private(set) var runs: [RunKey: Run] = [:]
     private(set) var kept: [String: String]
+    /// Advances when the installed models or the engine change, so views reading `availability(of:)` or `pins` re-evaluate.
+    private(set) var modelsVersion = 0
 
     @ObservationIgnored var arrived: [UUID: Arrival] = [:]
     /// The tasks that put each selection into its mask when it comes, by the ask's id, so a develop can wait for them.
     @ObservationIgnored var fills: [RunKey: (id: UUID, task: Task<Void, Never>)] = [:]
     @ObservationIgnored var timings: [UUID: Timing] = [:]
+    @ObservationIgnored private var _inference: MaskInference?
     /// The queue; made on first use from the film previews and the bundled models, or given by a test.
-    @ObservationIgnored var inference: MaskInference? {
-        didSet { cachedAvailability = [:] }
+    var inference: MaskInference? {
+        get { _inference }
+        set {
+            guard _inference !== newValue else { return }
+            _inference = newValue
+            cachedAvailability = [:]
+            cachedPins = nil
+            modelsVersion += 1
+        }
     }
     /// What makes the engine when none was given: the app's, from the previews and its library.
     @ObservationIgnored var makeInference: (() -> MaskInference?)?
@@ -92,20 +102,21 @@ final class SmartMasks {
 
     /// The queue, made if need be; `nil` without film previews (no stocks), when no tile is live.
     var queue: MaskInference? {
-        if inference == nil { inference = makeInference?() }
-        return inference
+        if _inference == nil, let made = makeInference?() { _inference = made }
+        return _inference
     }
 
-    /// What this build makes each kind with, read once.
+    /// What this build makes each kind with, read once per model version.
     var pins: SmartModelPins? {
+        _ = modelsVersion
         if cachedPins == nil { cachedPins = queue?.pins }
         return cachedPins
     }
 
-    /// Whether this build and this Mac can make `kind`, read once a queue, as `pins` is; `nil` with no queue. The picker asks for
-    /// every tile each time it is drawn, and the engine's answer for Sky reads two models' hashes and manifests from the bundle,
-    /// which do not change under a running app.
+    /// Whether this build and this Mac can make `kind`, read once per model version, as `pins` is; `nil` with no queue. The picker asks for
+    /// every tile each time it is drawn, and the engine's answer reads models' hashes and manifests from disk until `modelsChanged()` fires.
     func availability(of kind: SmartKind) -> SmartAvailability? {
+        _ = modelsVersion
         guard let queue else { return nil }
         if let cached = cachedAvailability[kind] { return cached }
         let found = queue.availability(of: kind)
@@ -139,6 +150,7 @@ final class SmartMasks {
     func modelsChanged() {
         cachedAvailability = [:]
         cachedPins = nil
+        modelsVersion += 1
     }
 
     /// Stops every run and forgets the session's: another roll, or quitting.

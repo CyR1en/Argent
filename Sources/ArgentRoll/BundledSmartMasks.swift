@@ -51,9 +51,10 @@ public final class BundledSmartMasks: SmartMaskEngine, @unchecked Sendable {
             }
             return Self.visionAvailability(VNClassifyImageRequest.self, revision: VNClassifyImageRequestRevision2, for: "Sky")
         case .subject, .background:
-            if models.subjectMissing != nil { return .needsModels(Self.needsModels(kind)) }
-            return Self.visionAvailability(VNGenerateForegroundInstanceMaskRequest.self,
-                                           revision: VNGenerateForegroundInstanceMaskRequestRevision1, for: kind.title)
+            let vision = Self.visionAvailability(VNGenerateForegroundInstanceMaskRequest.self,
+                                                 revision: VNGenerateForegroundInstanceMaskRequestRevision1, for: kind.title)
+            guard vision.isAvailable else { return vision }
+            return models.subjectMissing != nil ? .needsModels(Self.needsModels(kind)) : .available
         case .person:
             return Self.visionAvailability(VNGeneratePersonSegmentationRequest.self,
                                            revision: VNGeneratePersonSegmentationRequestRevision1, for: "Person")

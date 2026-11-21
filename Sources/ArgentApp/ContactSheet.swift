@@ -95,18 +95,18 @@ struct ContactSheet: View {
         .onKeyPress(keys: [.home]) { moveToEnd(last: false, extending: $0.modifiers.contains(.shift)) }
         .onKeyPress(keys: [.end]) { moveToEnd(last: true, extending: $0.modifiers.contains(.shift)) }
         .onKeyPress(.return) {
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             model.openFrame()
             return .handled
         }
         // Escape lets go of the frames selected beside the lead; with one selected it is not the sheet's key.
         .onKeyPress(.escape) {
-            guard !model.isAskingToDevelop, model.hasSeveralSelected else { return .ignored }
+            guard !model.isSheetShown, model.hasSeveralSelected else { return .ignored }
             model.collapseSelection()
             return .handled
         }
         // Edit > Select All, Command-A, while the sheet has the keys: every frame shown.
-        .onCommand(#selector(NSResponder.selectAll(_:))) { if !model.isAskingToDevelop { model.selectAllShown() } }
+        .onCommand(#selector(NSResponder.selectAll(_:))) { if !model.isSheetShown { model.selectAllShown() } }
         .onAppear {
             focused = true
             if isRollSheet { model.sheetGrid = grid }
@@ -179,7 +179,7 @@ struct ContactSheet: View {
     }()
 
     private func move(_ offset: Int, extending: Bool) -> KeyPress.Result {
-        guard !model.isAskingToDevelop else { return .ignored }
+        guard !model.isSheetShown else { return .ignored }
         if extending { model.extendSelection(by: offset) } else { model.moveSelection(by: offset) }
         if let selection = model.selection { grid.reveal(selection, centered: false, animated: true) }
         return .handled
@@ -187,7 +187,7 @@ struct ContactSheet: View {
 
     /// Home and End: the first or the last frame shown.
     private func moveToEnd(last: Bool, extending: Bool) -> KeyPress.Result {
-        guard !model.isAskingToDevelop else { return .ignored }
+        guard !model.isSheetShown else { return .ignored }
         if extending { model.extendSelection(toLast: last) } else { model.moveSelection(toLast: last) }
         if let selection = model.selection { grid.reveal(selection, centered: false, animated: true) }
         return .handled

@@ -1296,7 +1296,8 @@ enum Automation {
             }
             return total / 1_000_000
         }
-        let models = MaskModels(appLedgerFile: ApplicationSupport.folder.appendingPathComponent("Mask models.json"))
+        let models = MaskModels(directories: [MaskModels.bundledDirectory, SubjectModelPack.installedFolder].compactMap(\.self),
+                                ledgerFile: ApplicationSupport.folder.appendingPathComponent("Mask models.json"))
         say("folders \(models.directories.map(\.path)), Sky available \(models.isSkyAvailable) \(models.unavailable.map(\.description)), "
             + "macOS \(MaskModels.osBuild), needs preparation \(models.needsPreparation), coreai-cache \(cacheMB()) MB, footprint \(mb()) MB")
         guard models.isSkyAvailable else { say("done"); return }

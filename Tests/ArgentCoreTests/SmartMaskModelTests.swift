@@ -419,6 +419,48 @@ enum SmartMaskFixtures {
             #expect(pinned("CANARY_INPUT_SHA256") == model.canaryInputSHA256)
         }
     }
+
+    /// Multi-directory lookup takes each model from the first folder that holds its file, and falls through to later folders for the rest.
+    @Test func multiDirectoryPrecedenceTakesTheFirstFolderHoldingAModel() throws {
+        let root = try SmartMaskFixtures.temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundled = root.appendingPathComponent("Bundled", isDirectory: true)
+        let downloaded = root.appendingPathComponent("Downloaded", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundled, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: downloaded, withIntermediateDirectories: true)
+
+        func write(_ model: BundledMaskModel, in folder: URL, hashByte: UInt8, canary: String? = nil) throws {
+            let dir = folder.appendingPathComponent(model.fileName, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(repeating: hashByte, count: 32).write(to: dir.appendingPathComponent("main.hash"))
+            let manifest = ["recipe id": model.recipeID, "weights sha256": model.weightsSHA256, "canary output sha256": canary ?? model.canarySHA256]
+            try JSONSerialization.data(withJSONObject: manifest).write(to: folder.appendingPathComponent(model.manifestName))
+        }
+
+        // Bundled holds Sky and EoMT (0x11); Downloaded holds EoMT (0x22), S3OD and ViTMatte.
+        try write(.sky, in: bundled, hashByte: 0x11)
+        try write(.water, in: bundled, hashByte: 0x11)
+        try write(.water, in: downloaded, hashByte: 0x22)
+        try write(.subject, in: downloaded, hashByte: 0x22)
+        try write(.matte, in: downloaded, hashByte: 0x22)
+
+        let models = MaskModels(directories: [bundled, downloaded], ledgerFile: root.appendingPathComponent("ledger.json"))
+        #expect(models.isSkyAvailable && models.isSubjectAvailable)
+        #expect(models.folder(of: .sky) == bundled)
+        #expect(models.folder(of: .water) == bundled)
+        #expect(models.folder(of: .subject) == downloaded)
+        #expect(models.folder(of: .matte) == downloaded)
+        #expect(try models.url(of: .water) == bundled.appendingPathComponent(BundledMaskModel.water.fileName, isDirectory: true))
+        #expect(try models.identity(of: .water).fileSHA256 == String(repeating: "11", count: 32))
+        #expect(try models.url(of: .subject) == downloaded.appendingPathComponent(BundledMaskModel.subject.fileName, isDirectory: true))
+        #expect(try models.identity(of: .subject).fileSHA256 == String(repeating: "22", count: 32))
+
+        // A bad manifest in the earlier folder does not fall through silently.
+        try write(.subject, in: bundled, hashByte: 0x33, canary: String(repeating: "0", count: 64))
+        #expect(models.folder(of: .subject) == bundled)
+        #expect(!models.isSubjectAvailable)
+        #expect(throws: MaskModelError.self) { try models.url(of: .subject) }
+    }
 }
 
 /// The models' canary (docs/masking-plan.md section 8): their outputs' hashes on the CC0 sample's canary squares, which a macOS

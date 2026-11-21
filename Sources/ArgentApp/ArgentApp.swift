@@ -59,9 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard self.model == nil else { return }
         self.model = model
         model.watchCards()
-        // Once, at launch, before any undo history exists: the smart masks' seeds no edit names any more (`MaskRasterStore.sweep`),
+        // Once, at launch, before any undo history or download exists: any unfinished Subject models' staging folder
+        // (`SubjectModelPack.sweepStaging`), the smart masks' seeds no edit names any more (`MaskRasterStore.sweep`),
         // and the removals' patches likewise.
         Task {
+            await model.sweepSubjectModelStaging()
             await model.sweepMaskSeeds()
             await model.sweepPatches()
         }
@@ -81,8 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await model.finishWritesForQuit()
             let quits = await model.saveAdjustmentsForQuit()
             // The model Remove holds goes with the app: a helper left to itself would outlive the app that started it. Nothing is
-            // made here: a session that removed nothing has no queue.
-            if quits { await model.removalRuns.steps?.developWillStart() }
+            // made here: a session that removed nothing has no queue. Cancel any Subject models download so its staging folder cleans up.
+            if quits {
+                await model.subjectModels.cancelForQuit()
+                await model.removalRuns.steps?.developWillStart()
+            }
             sender.reply(toApplicationShouldTerminate: quits)
         }
         return .terminateLater
@@ -186,10 +191,15 @@ struct MenuState: Equatable {
     /// the selection under it is disabled, so no key does what the dialog does not show. It changes as the dialog comes and
     /// goes, not at a choice made in it. What leaves the roll's page, Develop…, Settings, another roll, stays: the dialog goes.
     var isAskingToDevelop = false
+    /// The Subject models' licence and download screen is up over the workspace (`SubjectModelsDownload.isShown`):
+    /// as `isAskingToDevelop`, keys and menus leave the roll and frame under it alone.
+    var isShowingSubjectModels = false
+    /// Either modal sheet is up over the workspace.
+    var isSheetShown: Bool { isAskingToDevelop || isShowingSubjectModels }
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
-    var actsOnRoll: Bool { page == .roll && !isAskingToDevelop }
+    var actsOnRoll: Bool { page == .roll && !isSheetShown }
     /// As `showsFrames`, with no dialog over the roll.
-    var actsOnFrames: Bool { showsFrames && !isAskingToDevelop }
+    var actsOnFrames: Bool { showsFrames && !isSheetShown }
 
     struct RecentItem: Equatable {
         var path: String
@@ -307,16 +317,16 @@ struct ArgentCommands: Commands {
             Toggle("Stock Panel", isOn: Binding(get: { model.isStockPanelShown && model.workspacePage == .roll },
                                                 set: { if $0 != (model.isStockPanelShown && model.workspacePage == .roll) { model.toggleStockPanel() } }))
                 .keyboardShortcut("k", modifiers: [.command, .shift])
-                .disabled(!state.hasRoll || model.stockNames.isEmpty || state.isAskingToDevelop)
+                .disabled(!state.hasRoll || model.stockNames.isEmpty || state.isSheetShown)
             Divider()
             // The number keys switch stocks, in library order; a tenth stock and later have no key. With the brush in hand they are
             // Flow's (Mask > Flow), and these stand aside; a key that beats the menu's refresh still does what the live tool says.
             ForEach(model.stockNames.indices, id: \.self) { index in
                 Toggle(model.stockNames[index], isOn: Binding(get: { model.shownStockIndex == index },
                                                               set: { isOn in
-                                                                  // A key can beat the menu's refresh: under the quick
-                                                                  // develop dialog the live model says a digit is no stock's.
-                                                                  if model.isAskingToDevelop { return }
+                                                                  // A key can beat the menu's refresh: under a sheet
+                                                                  // the live model says a digit is no stock's.
+                                                                  if model.isSheetShown { return }
                                                                   if model.maskEditor.tool == .brush {
                                                                       if index < 9 { model.digitPressed(index + 1) }
                                                                   } else if isOn {
@@ -343,11 +353,11 @@ struct ArgentCommands: Commands {
                 ForEach(OutputSettings.Grain.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             // The dialog has a Grain of its own, which its Develop makes this one.
-            .disabled(state.isAskingToDevelop)
+            .disabled(state.isSheetShown)
             // Always there, disabled while the roll is balancing: the menu bar does not follow items
             // that come and go.
             Button("Rebalance Roll") { onRoll { model.rebalanceRoll() } }
-                .disabled(!state.canRebalance || state.isAskingToDevelop)
+                .disabled(!state.canRebalance || state.isSheetShown)
             Divider()
             // The Develop page from anywhere, and on it its button (`developCommand`).
             Button(state.page == .develop ? "Develop" : "Develop…") { model.developCommand() }
@@ -376,7 +386,7 @@ struct ArgentCommands: Commands {
             // down flags once (`flagSelection`). A key can beat the menu's refresh, so under the quick develop dialog
             // the live model, not this item's state, keeps F from the frames under it.
             Button((state.isFlagged ? "Unflag" : "Flag") + (state.isSeveralSelected ? " Selected Frames" : "")) {
-                if !model.isAskingToDevelop { model.flagSelection(NSApp.currentEvent) }
+                if !model.isSheetShown { model.flagSelection(NSApp.currentEvent) }
             }
                 .keyboardShortcut("f", modifiers: [])
                 .disabled(!state.canFlag || !state.actsOnFrames)

@@ -54,7 +54,7 @@ existing seeds nothing to fear (seeds are stored, never remade), but the app's n
 compiles it again and deletes the old compiled copy by its bookmark.
 
 **Without the models** `scripts/build-app.sh` still builds and signs the app, says which model is missing,
-Sky reports itself unavailable, and Subject falls back to Vision with today's edge and says why in its row.
+Sky reports itself unavailable, and Subject and Background offer the Subject models' download.
 
 **Licences.** The scripts copy `models/licences/` beside the models, and the app bundle carries it in
 `Contents/Resources/Models/Licences/`: DA3 is Apache-2.0; EoMT's code is MIT, but its weights are a DINOv3

@@ -14,7 +14,7 @@ struct AboutView: View {
 
     /// The smart masks' models are not Argent's and not under its licence: their notice, and where their terms are.
     static let modelsNote = """
-        Built with DINOv3. Subject, Background and Sky use models made by others, under their own licences, which Argent shows before they download.
+        Built with DINOv3. Subject, Background and Sky use models made by others, under their own licences; Argent shows the Subject models' licences before they download.
         """
 
     /// "Version 0.2.0 (412)" for a release; a nightly or a local build names its channel and commit,

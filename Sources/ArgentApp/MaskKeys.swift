@@ -271,16 +271,16 @@ struct RemoveMenuItems: View {
 }
 
 extension MaskKey {
-    /// This item in a menu: disabled under the quick develop dialog, which the frame under it waits for. Its key can
+    /// This item in a menu: disabled under a workspace sheet, which the frame under it waits for. Its key can
     /// beat the menu's refresh, so the live model stops it there too.
     @MainActor func menuItem(model: RollModel, state: MenuState) -> some View {
         Button(title) {
-            guard !model.isAskingToDevelop else { return }
+            guard !model.isSheetShown else { return }
             guard !MaskKeys.isTypedIntoField(NSApp.currentEvent, firstResponder: NSApp.keyWindow?.firstResponder) else { return }
             model.perform(command)
         }
         .keyboardShortcut(chord?.shortcut)
-        .disabled(!isEnabled(state) || state.isAskingToDevelop)
+        .disabled(!isEnabled(state) || state.isSheetShown)
     }
 }
 

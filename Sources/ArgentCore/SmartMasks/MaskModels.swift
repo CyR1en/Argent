@@ -279,12 +279,16 @@ public final class MaskModels: @unchecked Sendable {
 
     /// The model's file, or why it cannot be used: absent, or built by another recipe than the pins name.
     public func url(of model: BundledMaskModel) throws -> URL {
-        _ = try identity(of: model)
-        return folder(of: model)!.appendingPathComponent(model.fileName, isDirectory: true)
+        try locate(model).directory.appendingPathComponent(model.fileName, isDirectory: true)
     }
 
     /// Which conversion of `model` is here, after checking its manifest against the pins.
     public func identity(of model: BundledMaskModel) throws -> MaskModelIdentity {
+        try locate(model).identity
+    }
+
+    /// The first folder that holds `model` and the verified identity found there.
+    private func locate(_ model: BundledMaskModel) throws -> (directory: URL, identity: MaskModelIdentity) {
         let script = model.script
         guard !directories.isEmpty else { throw MaskModelError.unavailable(model, "the app has no Models folder; build the models with \(script), then the app") }
         guard let directory = folder(of: model),
@@ -303,8 +307,9 @@ public final class MaskModels: @unchecked Sendable {
             throw MaskModelError.unavailable(model, "it was built by recipe \(manifest.recipeID) with canary \(manifest.canary.prefix(8)), not \(model.recipeID) "
                                              + "with \(model.canarySHA256.prefix(8)); build it again with \(script)")
         }
-        return MaskModelIdentity(recipeID: model.recipeID, weightsSHA256: model.weightsSHA256, canarySHA256: model.canarySHA256,
-                                 fileSHA256: hash.map { String(format: "%02x", $0) }.joined(), options: Self.optionsName)
+        let identity = MaskModelIdentity(recipeID: model.recipeID, weightsSHA256: model.weightsSHA256, canarySHA256: model.canarySHA256,
+                                         fileSHA256: hash.map { String(format: "%02x", $0) }.joined(), options: Self.optionsName)
+        return (directory, identity)
     }
 
     /// Why each model is unavailable, empty when all are here.

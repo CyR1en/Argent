@@ -241,9 +241,24 @@ import Testing
             // A smart tile that cannot be used here is disabled, as on the tab.
             for kind in [SmartKind.subject, .sky, .person, .background] {
                 let tile = try #require(MaskTile.allCases.first { $0.smartKind == kind })
-                let live = MaskTileAvailability.of(tile, frame: nil, smart: model.smartAvailability(kind)).isLive
-                #expect(bench.photograph.entry("photograph.newMask.\(tile.rawValue)")?.isEnabled == live)
+                let enabled = MaskTileAvailability.of(tile, frame: nil, smart: model.smartAvailability(kind)).isEnabled
+                #expect(bench.photograph.entry("photograph.newMask.\(tile.rawValue)")?.isEnabled == enabled)
             }
+            // When Subject/Background need the downloadable models, their New Mask rows stay enabled and open the licence screen.
+            let engine = SessionSmartEngine()
+            engine.availabilities = [
+                .subject: .needsModels(BundledSmartMasks.needsModels(.subject)),
+                .background: .needsModels(BundledSmartMasks.needsModels(.background)),
+                .sky: .unavailable("no sky"),
+            ]
+            model.smartMasks.inference = MaskInference(engine: engine, turns: DecodeTurns())
+            #expect(bench.photograph.entry("photograph.newMask.subject")?.isEnabled == true)
+            #expect(bench.photograph.entry("photograph.newMask.background")?.isEnabled == true)
+            #expect(bench.photograph.entry("photograph.newMask.sky")?.isEnabled == false)
+            #expect(bench.photograph.entry("photograph.newMask.person")?.isEnabled == true)
+            bench.photograph.entry("photograph.newMask.subject")?.choose()
+            #expect(model.subjectModels.isShown && bench.masks.count == 2)
+            model.subjectModels.close()
             // A frame that cannot take a mask yet: nothing in New Mask can act.
             model.manualReadySources[bench.frame.url] = nil
             #expect(!model.canAdjust(bench.frame))

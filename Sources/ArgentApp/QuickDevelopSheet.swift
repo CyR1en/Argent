@@ -141,13 +141,13 @@ extension View {
     }
 }
 
-/// Observe the layers here so changes inside Quick Develop do not redraw the workspace beneath it.
+/// Observe the layers here so changes inside Quick Develop or Subject models do not redraw the workspace beneath them.
 private struct WorkspaceFocusWatch: View {
     @Environment(RollModel.self) private var model
     let focus: () -> Void
 
     var body: some View {
-        let dialogShown = model.isAskingToDevelop
+        let dialogShown = model.isSheetShown
         Color.clear
             .allowsHitTesting(false)
             .accessibilityHidden(true)

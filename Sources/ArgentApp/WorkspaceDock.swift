@@ -48,7 +48,7 @@ struct WorkspaceDock: View {
         .background {
             if center == .stocks || settingsShown {
                 DockEscapeKey {
-                    guard model.workspacePage == .roll, !model.isAskingToDevelop,
+                    guard model.workspacePage == .roll, !model.isSheetShown,
                           settingsShown || center == .stocks else { return false }
                     dismissLayer()
                     return true
@@ -60,8 +60,8 @@ struct WorkspaceDock: View {
             if shown { shelfFocused = true }
         }
         .onChange(of: model.isFrameOpen) { settingsShown = false }
-        .onChange(of: model.isAskingToDevelop) { _, asking in
-            if asking { settingsShown = false }
+        .onChange(of: model.isSheetShown) { _, shown in
+            if shown { settingsShown = false }
         }
         .padding(.horizontal, Graphite.Metric.dockInset)
         .padding(.bottom, Graphite.Metric.dockInset)
@@ -187,7 +187,7 @@ private struct WorkspaceHorizontalArrows: ViewModifier {
 
     func body(content: Content) -> some View {
         content.onKeyPress(keys: [.leftArrow, .rightArrow]) { key in
-            guard !model.isAskingToDevelop else { return .ignored }
+            guard !model.isSheetShown else { return .ignored }
             let step = key.key == .rightArrow ? 1 : -1
             if model.isStockShelfVisible,
                key.modifiers.intersection([.shift, .control, .option, .command]).isEmpty {

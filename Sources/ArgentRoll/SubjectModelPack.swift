@@ -22,6 +22,8 @@ public struct SubjectModelPack: Sendable, Equatable {
     public static let models = MaskModels.subjectModels
     /// The licence texts' folder inside the pack and the installed folder.
     public static let licencesFolder = "Licences"
+    /// Prefix for staging folders created beside the installed models while an install runs.
+    static let stagingPrefix = ".install-"
 
     /// The pack this build of Argent installs. Made by `scripts/build-subject-models.zsh` from the models these pins name (2026-11-20).
     public static let current = SubjectModelPack(
@@ -37,6 +39,7 @@ public struct SubjectModelPack: Sendable, Equatable {
         case notThePinnedFile(String)
         case unpack(String)
         case notThePinnedModel(String)
+        case install(String)
         case noRoom(needed: Int64, free: Int64)
 
         public var description: String {
@@ -45,6 +48,7 @@ public struct SubjectModelPack: Sendable, Equatable {
             case .notThePinnedFile(let why): return "The downloaded file is not the one this version of Argent expects (\(why)). Nothing was installed."
             case .unpack(let why): return "The download could not be unpacked: \(why). Nothing was installed."
             case .notThePinnedModel(let why): return "A model in the download is not the one this version of Argent expects: \(why). Nothing was installed."
+            case .install(let why): return "The models could not be installed: \(why)."
             case .noRoom(let needed, let free):
                 let f = ByteCountFormatter()
                 return "The models need \(f.string(fromByteCount: needed)) of free space, and the disk has \(f.string(fromByteCount: free))."
@@ -69,16 +73,21 @@ public struct SubjectModelPack: Sendable, Equatable {
         self.installedBytes = installedBytes
     }
 
-    /// Downloads the pack, checks its size and SHA-256, unpacks it beside `folder`, checks every model against the pins, then moves the models and the
-    /// licences into `folder`, replacing what was there. Nothing in `folder` changes unless every check passes. Cancelling the calling task stops the download.
+    /// Downloads the pack, checks its size and SHA-256, unpacks it beside `folder`, checks every model against the pins, then puts the licences and models
+    /// into `folder`, replacing what was there. Nothing in `folder` changes unless every check passes. Cancelling the calling task stops the download.
     public func install(into folder: URL, step: @escaping @Sendable (Step) -> Void = { _ in }) async throws {
         let manager = FileManager.default
-        try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        do { try manager.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
+            throw Failure.install("the Models folder could not be created: \(error.localizedDescription)")
+        }
+        Self.sweepStaging(in: folder)
         let free = (try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]).volumeAvailableCapacityForImportantUsage) ?? .max
         if free < bytes + installedBytes { throw Failure.noRoom(needed: bytes + installedBytes, free: free) }
 
-        let work = folder.appendingPathComponent(".install-\(UUID().uuidString)", isDirectory: true)
-        try manager.createDirectory(at: work, withIntermediateDirectories: true)
+        let work = folder.appendingPathComponent("\(Self.stagingPrefix)\(UUID().uuidString)", isDirectory: true)
+        do { try manager.createDirectory(at: work, withIntermediateDirectories: true) } catch {
+            throw Failure.install("a temporary folder could not be created: \(error.localizedDescription)")
+        }
         defer { try? manager.removeItem(at: work) }
         let archive = work.appendingPathComponent("pack.aar")
 
@@ -89,41 +98,73 @@ public struct SubjectModelPack: Sendable, Equatable {
         step(.checking)
         let size = (try? manager.attributesOfItem(atPath: archive.path)[.size] as? Int64) ?? -1
         guard size == bytes else { throw Failure.notThePinnedFile("\(size) bytes, not \(bytes)") }
-        let digest = try Self.sha256(of: archive)
+        let digest: String
+        do { digest = try Self.sha256(of: archive) } catch {
+            throw Failure.notThePinnedFile("the archive could not be read: \(error.localizedDescription)")
+        }
         guard digest == sha256 else { throw Failure.notThePinnedFile("SHA-256 \(digest.prefix(12))…, not \(sha256.prefix(12))…") }
         try Task.checkCancellation()
 
         step(.unpacking)
         let unpacked = work.appendingPathComponent("unpacked", isDirectory: true)
-        try Self.extract(archive, into: unpacked)
+        try Self.extract(archive, into: unpacked, isCancelled: { Task.isCancelled })
         try? manager.removeItem(at: archive)
+        try Task.checkCancellation()
+
         let staged = MaskModels(directories: [unpacked], ledgerFile: work.appendingPathComponent("unused.json"))
         for model in Self.models {
-            do { _ = try staged.identity(of: model) } catch { throw Failure.notThePinnedModel(String(describing: error)) }
-            let hash = try Data(contentsOf: unpacked.appendingPathComponent(model.fileName).appendingPathComponent("main.hash"))
-            let file = try Data(contentsOf: unpacked.appendingPathComponent(model.fileName).appendingPathComponent("main.mlirb"), options: .mappedIfSafe)
-            guard Data(SHA256.hash(data: file)) == hash else { throw Failure.notThePinnedModel("\(model.fileName)'s main.mlirb is not its main.hash") }
+            let identity: MaskModelIdentity
+            do { identity = try staged.identity(of: model) } catch { throw Failure.notThePinnedModel(String(describing: error)) }
+            let mlirb = unpacked.appendingPathComponent(model.fileName, isDirectory: true).appendingPathComponent("main.mlirb")
+            let fileDigest: String
+            do { fileDigest = try Self.sha256(of: mlirb) } catch {
+                throw Failure.notThePinnedModel("\(model.fileName)'s main.mlirb could not be read: \(error.localizedDescription)")
+            }
+            guard fileDigest == identity.fileSHA256 else { throw Failure.notThePinnedModel("\(model.fileName)'s main.mlirb is not its main.hash") }
+            try Task.checkCancellation()
+        }
+        var isLicencesDirectory: ObjCBool = false
+        let stagedLicences = unpacked.appendingPathComponent(Self.licencesFolder)
+        guard manager.fileExists(atPath: stagedLicences.path, isDirectory: &isLicencesDirectory), isLicencesDirectory.boolValue else {
+            throw Failure.notThePinnedModel("the licence texts (\(Self.licencesFolder)) are missing")
         }
         try Task.checkCancellation()
 
-        // Every check passed: the models go in, each replacing its old copy.
-        var names = Self.models.flatMap { [$0.fileName, $0.manifestName] }
-        if manager.fileExists(atPath: unpacked.appendingPathComponent(Self.licencesFolder).path) { names.append(Self.licencesFolder) }
+        // Every check passed: the licences go in first, then the models, each replacing its old copy in place.
+        let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
         for name in names {
+            let source = unpacked.appendingPathComponent(name)
             let target = folder.appendingPathComponent(name)
-            if manager.fileExists(atPath: target.path) { try manager.removeItem(at: target) }
-            try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
+            do {
+                if manager.fileExists(atPath: target.path) {
+                    _ = try manager.replaceItemAt(target, withItemAt: source)
+                } else {
+                    try manager.moveItem(at: source, to: target)
+                }
+            } catch {
+                throw Failure.install("could not put \(name) in place: \(error.localizedDescription)")
+            }
         }
         step(.done)
     }
 
-    /// Deletes the downloaded models and their licences from `folder`.
+    /// Removes orphaned `.install-*` staging folders left behind by a quit or crash during download or install.
+    public static func sweepStaging(in folder: URL) {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(atPath: folder.path) else { return }
+        for name in entries where name.hasPrefix(stagingPrefix) {
+            try? manager.removeItem(at: folder.appendingPathComponent(name))
+        }
+    }
+
+    /// Deletes the downloaded models, their licences, and any orphaned staging folders from `folder`.
     public static func remove(from folder: URL) throws {
         let manager = FileManager.default
         for name in models.flatMap({ [$0.fileName, $0.manifestName] }) + [licencesFolder] {
             let target = folder.appendingPathComponent(name)
             if manager.fileExists(atPath: target.path) { try manager.removeItem(at: target) }
         }
+        sweepStaging(in: folder)
     }
 
     // MARK: Parts
@@ -138,7 +179,9 @@ public struct SubjectModelPack: Sendable, Equatable {
         let box = DownloadBox()
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-                let task = URLSession.shared.downloadTask(with: url) { temporary, response, error in
+                let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+                let task = URLSession.shared.downloadTask(with: request) { temporary, response, error in
+                    box.finish()
                     if let error {
                         let cancelled = (error as? URLError)?.code == .cancelled
                         continuation.resume(throwing: cancelled ? CancellationError() : Failure.download(error.localizedDescription))
@@ -171,27 +214,105 @@ public struct SubjectModelPack: Sendable, Equatable {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
         var hash = SHA256()
-        while let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty { hash.update(data: chunk) }
+        while true {
+            let done: Bool = try autoreleasepool {
+                guard let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty else { return true }
+                hash.update(data: chunk)
+                return false
+            }
+            if done { break }
+        }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Unpacks an Apple Archive (any compression `aa` writes) into `folder`.
-    static func extract(_ archive: URL, into folder: URL) throws {
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    /// Allows only directories and regular files with clean relative paths (no `..`, no leading `/`, no symlinks or hard links).
+    static func isAllowedEntry(header: ArchiveHeader, path: String) -> Bool {
+        guard let type = header.entryType, type == .directory || type == .regularFile else { return false }
+        if header.field(forKey: ArchiveHeader.FieldKey("LNK")) != nil || header.field(forKey: ArchiveHeader.FieldKey("HLC")) != nil { return false }
+        let headerPath = header.entryPath?.string ?? path
+        return isCleanRelativePath(path, isDirectory: type == .directory)
+            && isCleanRelativePath(headerPath, isDirectory: type == .directory)
+    }
+
+    private static func isCleanRelativePath(_ path: String, isDirectory: Bool) -> Bool {
+        if path.isEmpty { return isDirectory }
+        if path.hasPrefix("/") || path.hasSuffix("/") { return false }
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        return parts.allSatisfy { !$0.isEmpty && $0 != "." && $0 != ".." }
+    }
+
+    /// Unpacks an Apple Archive (any compression `aa` writes) into `folder`, allowing only directories and regular files with clean relative paths.
+    static func extract(_ archive: URL, into folder: URL, isCancelled: @escaping @Sendable () -> Bool = { false }) throws {
+        do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
+            throw Failure.unpack(error.localizedDescription)
+        }
         guard let file = ArchiveByteStream.fileStream(path: FilePath(archive.path), mode: .readOnly, options: [], permissions: FilePermissions(rawValue: 0o644)) else {
             throw Failure.unpack("the archive could not be opened")
         }
-        defer { try? file.close() }
+        var fileClosed = false
+        defer { if !fileClosed { try? file.close() } }
         guard let decompressed = ArchiveByteStream.decompressionStream(readingFrom: file) else { throw Failure.unpack("not a compressed archive") }
-        defer { try? decompressed.close() }
+        var decompressedClosed = false
+        defer { if !decompressedClosed { try? decompressed.close() } }
         guard let decoded = ArchiveStream.decodeStream(readingFrom: decompressed) else { throw Failure.unpack("not an archive") }
-        defer { try? decoded.close() }
-        guard let extracted = ArchiveStream.extractStream(extractingTo: FilePath(folder.path), flags: [.ignoreOperationNotPermitted]) else {
+        var decodedClosed = false
+        defer { if !decodedClosed { try? decoded.close() } }
+        let rejected = RejectionBox()
+        let filter: ArchiveHeader.EntryFilter = { message, path, data in
+            if isCancelled() { return .cancel }
+            switch message {
+            case .processExclude, .extractBegin:
+                guard case .header(let header)? = data, Self.isAllowedEntry(header: header, path: path.string) else {
+                    rejected.note("disallowed archive entry '\(path.string)'")
+                    return .cancel
+                }
+                return .ok
+            case .extractFail:
+                rejected.note("could not extract '\(path.string)'")
+                return .cancel
+            default:
+                return .ok
+            }
+        }
+        guard let extracted = ArchiveStream.extractStream(extractingTo: FilePath(folder.path), selectUsing: filter, flags: [.ignoreOperationNotPermitted]) else {
             throw Failure.unpack("the folder could not be written")
         }
-        defer { try? extracted.close() }
-        do { _ = try ArchiveStream.process(readingFrom: decoded, writingTo: extracted) } catch { throw Failure.unpack(String(describing: error)) }
+        var extractedClosed = false
+        defer { if !extractedClosed { try? extracted.close() } }
+        do {
+            _ = try ArchiveStream.process(readingFrom: decoded, writingTo: extracted, selectUsing: filter)
+            extractedClosed = true
+            try extracted.close()
+            decodedClosed = true
+            try decoded.close()
+            decompressedClosed = true
+            try decompressed.close()
+            fileClosed = true
+            try file.close()
+            if isCancelled() { throw CancellationError() }
+            if let why = rejected.reason { throw Failure.unpack(why) }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let failure as Failure {
+            throw failure
+        } catch {
+            if isCancelled() { throw CancellationError() }
+            if let why = rejected.reason { throw Failure.unpack(why) }
+            throw Failure.unpack(String(describing: error))
+        }
     }
+}
+
+/// First reason an entry filter rejected an archive entry, shared across Apple Archive's worker threads.
+private final class RejectionBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var message: String?
+
+    func note(_ text: String) {
+        lock.withLock { if message == nil { message = text } }
+    }
+
+    var reason: String? { lock.withLock { message } }
 }
 
 /// The task a download runs on, held so cancelling the caller cancels it, and its progress observed.
@@ -203,25 +324,35 @@ private final class DownloadBox: @unchecked Sendable {
 
     func start(_ task: URLSessionDownloadTask, progress: @escaping @Sendable (Double) -> Void) {
         let go: Bool = lock.withLock {
+            guard !cancelled else { return false }
             self.task = task
             observation = task.progress.observe(\.fractionCompleted) { p, _ in progress(p.fractionCompleted) }
-            return !cancelled
+            return true
         }
         if go { task.resume() } else { task.cancel() }
     }
 
-    func cancel() {
-        let task: URLSessionDownloadTask? = lock.withLock {
-            cancelled = true
-            return self.task
+    func finish() {
+        let observation: NSKeyValueObservation? = lock.withLock {
+            defer {
+                self.observation = nil
+                self.task = nil
+            }
+            return self.observation
         }
-        task?.cancel()
+        observation?.invalidate()
     }
-}
 
-extension MaskModels {
-    /// The app's: its own folder, then the downloaded Subject models.
-    public convenience init(appLedgerFile: URL) {
-        self.init(directories: [MaskModels.bundledDirectory, SubjectModelPack.installedFolder].compactMap(\.self), ledgerFile: appLedgerFile)
+    func cancel() {
+        let (task, observation): (URLSessionDownloadTask?, NSKeyValueObservation?) = lock.withLock {
+            cancelled = true
+            defer {
+                self.observation = nil
+                self.task = nil
+            }
+            return (self.task, self.observation)
+        }
+        observation?.invalidate()
+        task?.cancel()
     }
 }

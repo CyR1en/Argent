@@ -22,9 +22,16 @@ final class SubjectModelsDownload {
     let pack: SubjectModelPack
     /// Where it installs; a test gives its own.
     @ObservationIgnored var folder: () -> URL = { SubjectModelPack.installedFolder }
+    /// Awaited before a download creates its staging folder, so the launch sweep never deletes it.
+    @ObservationIgnored var beforeStart: @MainActor () async -> Void = {}
     /// Told once the models are in place, so the tiles ask again.
     @ObservationIgnored var onInstalled: () -> Void = {}
+    /// Performs the install; tests replace this to drive state without network or disk I/O.
+    @ObservationIgnored var installer: @Sendable (SubjectModelPack, URL, @escaping @Sendable (SubjectModelPack.Step) -> Void) async throws -> Void = { pack, folder, step in
+        try await pack.install(into: folder, step: step)
+    }
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private(set) var generation: UInt64 = 0
 
     init(pack: SubjectModelPack = .current) {
         self.pack = pack
@@ -33,46 +40,95 @@ final class SubjectModelsDownload {
     var isRunning: Bool { if case .running = phase { true } else { false } }
 
     func show() {
-        if phase == .done || { if case .failed = phase { true } else { false } }() { phase = .idle }
         showsTexts = false
         isShown = true
     }
 
-    /// Closes the screen; a download under way goes on, and its tile shows nothing new until it is done.
-    func close() { isShown = false }
+    /// Closes the screen; a download under way goes on, and an already-seen finished or failed state resets to idle.
+    func close() {
+        let wasShown = isShown
+        isShown = false
+        if wasShown, !isRunning { phase = .idle }
+    }
 
     func start() {
         guard !isRunning else { return }
+        generation &+= 1
+        let run = generation
         phase = .running(.downloading(0))
-        let pack = pack, folder = folder()
+        let pack = pack, folder = folder(), installer = installer, beforeStart = beforeStart
         // The download holds the object while it runs: it is the app model's, which outlives it.
         task = Task {
+            await beforeStart()
+            guard !Task.isCancelled, run == generation else { return }
             do {
-                try await pack.install(into: folder) { step in
-                    Task { @MainActor in self.advance(to: step) }
+                try await installer(pack, folder) { step in
+                    Task { @MainActor in self.advance(to: step, run: run) }
                 }
-                finish(.done)
+                finish(.done, run: run)
             } catch is CancellationError {
-                finish(.idle)
+                finish(.idle, run: run)
             } catch {
-                finish(.failed(String(describing: error)))
+                finish(.failed(String(describing: error)), run: run)
             }
         }
     }
 
-    func cancel() { task?.cancel() }
-
-    /// A step, kept only when it changes what the screen shows: the download's fraction moves by half a percent at least.
-    private func advance(to step: SubjectModelPack.Step) {
-        guard case .running(let now) = phase else { return }
-        if case .downloading(let old) = now, case .downloading(let new) = step, new - old < 0.005, new < 1 { return }
-        phase = .running(step)
+    func cancel() {
+        guard isRunning else { return }
+        generation &+= 1
+        let running = task
+        task = nil
+        phase = .idle
+        running?.cancel()
     }
 
-    private func finish(_ phase: Phase) {
+    /// Cancels an active download on quit and waits briefly for its staging folder cleanup to finish.
+    func cancelForQuit() async {
+        guard let running = task else { return }
+        cancel()
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await running.value }
+            group.addTask { try? await Task.sleep(for: .seconds(1)) }
+            await group.next()
+            group.cancelAll()
+        }
+    }
+
+    /// A step for `run`, kept only when it belongs to the active run, moves forward monotonically, and changes what the screen shows.
+    func advance(to step: SubjectModelPack.Step, run: UInt64) {
+        guard run == generation, case .running(let now) = phase else { return }
+        let next: SubjectModelPack.Step
+        switch step {
+        case .downloading(let fraction):
+            guard fraction.isFinite else { return }
+            next = .downloading(min(max(fraction, 0), 1))
+        case .checking, .unpacking, .done:
+            next = step
+        }
+        let nowRank = Self.rank(of: now), nextRank = Self.rank(of: next)
+        guard nextRank >= nowRank else { return }
+        if nextRank == nowRank {
+            guard case .downloading(let old) = now, case .downloading(let new) = next,
+                  new > old, new - old >= 0.005 || new >= 1 else { return }
+        }
+        phase = .running(next)
+    }
+
+    private static func rank(of step: SubjectModelPack.Step) -> Int {
+        switch step {
+        case .downloading: 0
+        case .checking: 1
+        case .unpacking: 2
+        case .done: 3
+        }
+    }
+
+    private func finish(_ next: Phase, run: UInt64) {
+        guard run == generation else { return }
         task = nil
-        self.phase = phase
-        if phase == .done { onInstalled() }
+        phase = next
+        if next == .done { onInstalled() }
     }
 
     // MARK: Words
@@ -108,19 +164,31 @@ final class SubjectModelsDownload {
     }
 
     /// The licence texts the app carries (`Contents/Resources/Model Licences`, copied by `scripts/build-app.sh` from `scripts/models/licences`), in reading order.
-    static var texts: [(name: String, text: String)] {
+    static let texts: [(name: String, text: String)] = {
         guard let folder = Bundle.main.resourceURL?.appendingPathComponent("Model Licences", isDirectory: true) else { return [] }
-        let order = ["DINOv3-LICENSE.md", "S3OD-LICENSE-MIT.txt", "EoMT-LICENSE-MIT.txt", "ViTMatte-LICENSE-MIT.txt", "ADE20K-terms.txt", "README.md"]
+        let order = [
+            "NOTICE.txt",
+            "DINOv3-LICENSE.md",
+            "S3OD-LICENSE-MIT.txt",
+            "EoMT-LICENSE-MIT.txt",
+            "ViTMatte-LICENSE-MIT.txt",
+            "ADE20K-terms.txt",
+            "FLUX1-Krea-dev-LICENSE.md",
+            "S3OD-sod-model-card.md",
+            "ViTMatte-S-Composition1k-model-card.md",
+        ]
         return order.compactMap { name in
             (try? String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8)).map { (name, $0) }
         }
-    }
+    }()
 }
 
-/// The screen itself, over the workspace as Import's sheet is over the Rolls page.
+/// The screen itself, over the workspace as Quick Develop is over the roll.
 struct SubjectModelsSheet: View {
     @Environment(RollModel.self) private var model
     @State private var chosenText = 0
+    /// The sheet has the keys while it is up, so none reaches the contact sheet or frame under it.
+    @FocusState private var focused: Bool
 
     var body: some View {
         let download = model.subjectModels
@@ -132,14 +200,28 @@ struct SubjectModelsSheet: View {
             if download.showsTexts {
                 texts
             } else {
-                summary(download)
+                ViewThatFits(in: .vertical) {
+                    summary(download)
+                    ScrollView { summary(download) }
+                        .scrollBounceBehavior(.basedOnSize)
+                }
             }
             footer(download)
                 .padding(.top, 20)
         }
         .padding(24)
-        .frame(width: 560)
+        .frame(maxWidth: 560)
         .graphiteCard(cornerRadius: 18)
+        .padding(Graphite.Metric.l)
+        .focusable()
+        .focused($focused)
+        .focusEffectDisabled()
+        .onAppear { focused = true }
+        .onKeyPress(.escape) {
+            download.close()
+            return .handled
+        }
+        .accessibilityAction(.escape) { download.close() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(SubjectModelsDownload.title)
         .accessibilityAddTraits(.isModal)
@@ -154,8 +236,14 @@ struct SubjectModelsSheet: View {
             ForEach(SubjectModelsDownload.models) { item in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(verbatim: item.name).font(Graphite.Typeface.body.weight(.semibold)).foregroundStyle(Graphite.text)
-                        Text(verbatim: item.role).font(Graphite.Typeface.small).foregroundStyle(Graphite.secondaryText)
+                        Text(verbatim: item.name)
+                            .font(Graphite.Typeface.body.weight(.semibold))
+                            .foregroundStyle(Graphite.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(verbatim: item.role)
+                            .font(Graphite.Typeface.small)
+                            .foregroundStyle(Graphite.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Text(verbatim: item.terms)
                         .font(Graphite.Typeface.small)
@@ -191,7 +279,7 @@ struct SubjectModelsSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(height: 320)
+                .frame(minHeight: 120, maxHeight: 320)
             }
         }
         .padding(.top, 10)
@@ -218,34 +306,71 @@ struct SubjectModelsSheet: View {
                 Text("The Subject models are installed. Subject and Background are ready.")
                     .font(Graphite.Typeface.small)
                     .foregroundStyle(Graphite.text)
+                    .fixedSize(horizontal: false, vertical: true)
             case .idle:
                 EmptyView()
             }
-            HStack(spacing: 10) {
-                Button(download.showsTexts ? "Summary" : "Read the licences") { download.showsTexts.toggle() }
-                    .buttonStyle(.graphite(.secondary))
-                Spacer()
-                switch download.phase {
-                case .running:
-                    Button("Close") { download.close() }
-                        .buttonStyle(.graphite(.secondary))
-                        .help("The download goes on")
-                    Button("Stop Download") { download.cancel() }
-                        .buttonStyle(.graphite(.secondary))
-                case .done:
-                    Button("Done") { download.close() }
-                        .buttonStyle(.graphite(.primary))
-                        .keyboardShortcut(.defaultAction)
-                case .idle, .failed:
-                    Button("Cancel") { download.close() }
-                        .buttonStyle(.graphite(.secondary))
-                        .keyboardShortcut(.cancelAction)
-                    Button(download.phase == .idle ? "Agree and Download (\(download.sizeWords))" : "Try Again") { download.start() }
-                        .buttonStyle(.graphite(.primary))
-                        .keyboardShortcut(.defaultAction)
-                        .help("Download the three models and install them for Argent only")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    licencesButton(download)
+                    Spacer(minLength: 10)
+                    actionButtons(download)
+                }
+                VStack(alignment: .trailing, spacing: 8) {
+                    HStack {
+                        licencesButton(download)
+                        Spacer(minLength: 0)
+                    }
+                    HStack(spacing: 10) {
+                        actionButtons(download)
+                    }
                 }
             }
+        }
+    }
+
+    private func licencesButton(_ download: SubjectModelsDownload) -> some View {
+        Button(download.showsTexts ? "Summary" : "Read the licences") { download.showsTexts.toggle() }
+            .buttonStyle(.graphite(.secondary))
+            .fixedSize()
+    }
+
+    @ViewBuilder private func actionButtons(_ download: SubjectModelsDownload) -> some View {
+        switch download.phase {
+        case .running:
+            Button("Close") { download.close() }
+                .buttonStyle(.graphite(.secondary))
+                .keyboardShortcut(.cancelAction)
+                .fixedSize()
+                .help("The download goes on")
+            Button("Stop Download") { download.cancel() }
+                .buttonStyle(.graphite(.secondary))
+                .fixedSize()
+        case .done:
+            Button("Done") { download.close() }
+                .buttonStyle(.graphite(.primary))
+                .keyboardShortcut(.defaultAction)
+                .fixedSize()
+                .background {
+                    // Escape also closes the completed screen even when focus is outside the card.
+                    Button("Close") { download.close() }
+                        .keyboardShortcut(.cancelAction)
+                        .opacity(0)
+                        .frame(width: 0, height: 0)
+                        .focusable(false)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+        case .idle, .failed:
+            Button("Cancel") { download.close() }
+                .buttonStyle(.graphite(.secondary))
+                .keyboardShortcut(.cancelAction)
+                .fixedSize()
+            Button(download.phase == .idle ? "Agree and Download (\(download.sizeWords))" : "Try Again") { download.start() }
+                .buttonStyle(.graphite(.primary))
+                .keyboardShortcut(.defaultAction)
+                .fixedSize()
+                .help("Download the three models and install them for Argent only")
         }
     }
 }
