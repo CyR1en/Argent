@@ -159,7 +159,7 @@ public struct LUT3D: Sendable {
         for (index, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
-            let parts = line.split(separator: " ", omittingEmptySubsequences: true)
+            let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
             guard let first = parts.first else { continue }
             switch first {
             case "TITLE", "DOMAIN_MIN", "DOMAIN_MAX":
