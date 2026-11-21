@@ -83,6 +83,10 @@ extension RollModel {
 
     var latestCard: Card? { cards.last }
 
+    var initialImportCard: Card? {
+        cards.last { $0.rawCount != nil && !importedCards.contains($0.volume.canonicalPath) }
+    }
+
     /// macOS may have refused to let the app read a card (docs/research/camera.md, section 4).
     static func mayNotReadText(_ name: String) -> String {
         "Argent may not read \(name): drop it on the window, or allow removable volumes in Privacy & Security"

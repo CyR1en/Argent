@@ -70,7 +70,7 @@ struct ImportSourceSheet: View {
         .frame(width: 540)
         .graphiteCard(cornerRadius: 18)
         .onAppear {
-            chosen = (model.offeredCard ?? model.cards.last { $0.rawCount != nil })?.id
+            chosen = model.initialImportCard?.id
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Import a roll")
