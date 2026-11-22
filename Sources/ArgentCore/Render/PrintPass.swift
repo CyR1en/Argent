@@ -59,11 +59,11 @@ public struct GrainInputs {
 /// `LUTPass` there is no log encoding. With a sharpening kernel it sharpens the dye amounts
 /// first (`CaptureSharpening`), before grain goes in.
 public final class PrintPass {
-    private let pipeline: MTLComputePipelineState
-    private let sharpenedPipeline: MTLComputePipelineState
+    let pipeline: MTLComputePipelineState
+    let sharpenedPipeline: MTLComputePipelineState
     /// The same two with the tone step (`PrintTone`), which read each pixel's offset from the input's alpha.
-    private let tonedPipeline: MTLComputePipelineState
-    private let tonedSharpenedPipeline: MTLComputePipelineState
+    let tonedPipeline: MTLComputePipelineState
+    let tonedSharpenedPipeline: MTLComputePipelineState
     private let placeholder: MTLTexture
     private let device: MTLDevice
     private let curveLock = NSLock()

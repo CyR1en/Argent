@@ -10,11 +10,11 @@ import Testing
 ///     ARGENT_MEASURE=1 ARGENT_STOCKS=build/stocks swift test -c release --filter FilmRendererPrepareMeasureTests
 ///
 /// `prepare` times making a `FilmRenderer` for every stock in ARGENT_STOCKS (cold, then the median of 20 more on the same GPU, as
-/// after a develop). `digests` renders one synthetic frame with each stock under four settings and prints each result's SHA-256.
+/// after a develop). `digests` renders one synthetic frame with each stock under five settings and prints each result's SHA-256.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["ARGENT_MEASURE"] == "1"))
 struct FilmRendererPrepareMeasureTests {
-    private static func stocks() throws -> [Stock] {
-        guard let dir = ProcessInfo.processInfo.environment["ARGENT_STOCKS"] else { return (0..<6).map { _ in ToyStock.make(size: 33) } }
+    private static func stocks(defaultCount: Int = 6) throws -> [Stock] {
+        guard let dir = ProcessInfo.processInfo.environment["ARGENT_STOCKS"] else { return (0..<defaultCount).map { _ in ToyStock.make(size: 33) } }
         return try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil)
             .filter(\.hasDirectoryPath).sorted { $0.path < $1.path }.map { try Stock.load(from: $0) }
     }
@@ -64,8 +64,15 @@ struct FilmRendererPrepareMeasureTests {
         manual.manual = try ManualRenderSettings(adjustments: ManualAdjustments(exposureEV: 0.4, highlights: -40, shadows: 30), referenceStops: 0)
         var toned = full
         toned.tone = PrintTone(burn: 0.8, dodge: 0.4)
-        let variants = [("default", DevelopSettings()), ("halation+sharpen+grain", full), ("manual-tone-base", manual), ("print-tone", toned)]
-        for stock in try Self.stocks() {
+        let plainToned = DevelopSettings(tone: PrintTone(burn: 0.8, dodge: 0.4))
+        let variants = [
+            ("default", DevelopSettings()),
+            ("halation+sharpen+grain", full),
+            ("manual-tone-base", manual),
+            ("print-tone", toned),
+            ("print-tone-plain", plainToned),
+        ]
+        for stock in try Self.stocks(defaultCount: 1) {
             let renderer = try FilmRenderer(gpu: gpu, stock: stock)
             for (name, settings) in variants {
                 let rendered = try renderer.render(try frame(), settings: settings)

@@ -42,8 +42,8 @@ public final class HalationField {
     }
 
     private let gpu: GPU
-    private let source: MTLComputePipelineState
-    private let mix: MTLComputePipelineState
+    let source: MTLComputePipelineState
+    let mix: MTLComputePipelineState
     private let placeholders: ManualSceneInputs.Placeholders
 
     public init(gpu: GPU) throws {

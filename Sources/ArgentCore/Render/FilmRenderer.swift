@@ -101,10 +101,10 @@ struct ManualSceneInputs {
 public final class FilmRenderer {
     public let stock: Stock
     private let gpu: GPU
-    private let negativePass: LUTPass
-    private let printPass: PrintPass
-    private let halationField: HalationField
-    private let toneBaseField: ToneBaseField
+    let negativePass: LUTPass
+    let printPass: PrintPass
+    let halationField: HalationField
+    let toneBaseField: ToneBaseField
     var toneBaseBuildCount: Int { toneBaseField.buildCount }
     private let negativeTexture: MTLTexture
     private let printTexture: MTLTexture

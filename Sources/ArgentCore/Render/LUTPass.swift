@@ -6,12 +6,12 @@ import Metal
 /// Rated at. The M0 spike runs it alone with a display LUT.
 public final class LUTPass {
     private let gpu: GPU
-    private let pipeline: MTLComputePipelineState
+    let pipeline: MTLComputePipelineState
     /// The same with a halation field added to the light first.
-    private let halationPipeline: MTLComputePipelineState
+    let halationPipeline: MTLComputePipelineState
     /// The same two writing each pixel's local base to the output's alpha, for the tone step (`PrintTone`).
-    private let tonedPipeline: MTLComputePipelineState
-    private let tonedHalationPipeline: MTLComputePipelineState
+    let tonedPipeline: MTLComputePipelineState
+    let tonedHalationPipeline: MTLComputePipelineState
     /// Bound for the scene mapping's base field and tables when it reads neither.
     private let placeholders: ManualSceneInputs.Placeholders
 

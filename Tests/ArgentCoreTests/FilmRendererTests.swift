@@ -139,14 +139,109 @@ import Testing
     }
 
     @Test func renderersOnOneGPUShareItsFilmPipelines() throws {
+        func pipelines(of renderer: FilmRenderer) -> [MTLComputePipelineState] {
+            [
+                renderer.negativePass.pipeline, renderer.negativePass.halationPipeline,
+                renderer.negativePass.tonedPipeline, renderer.negativePass.tonedHalationPipeline,
+                renderer.printPass.pipeline, renderer.printPass.sharpenedPipeline,
+                renderer.printPass.tonedPipeline, renderer.printPass.tonedSharpenedPipeline,
+                renderer.halationField.source, renderer.halationField.mix,
+                renderer.toneBaseField.kernels.guide, renderer.toneBaseField.kernels.box, renderer.toneBaseField.map,
+            ]
+        }
+        func pipelines(of set: FilmPipelines) -> [MTLComputePipelineState] {
+            [
+                set.negative, set.negativeHalation, set.negativeToned, set.negativeTonedHalation,
+                set.print, set.printSharpened, set.printToned, set.printTonedSharpened,
+                set.halationSource, set.halationMix,
+                set.toneBase.guide, set.toneBase.box, set.toneBaseMap,
+            ]
+        }
+
         let gpu = try GPU()
-        _ = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
-        let first = try gpu.filmPipelines()
-        _ = try FilmRenderer(gpu: gpu, stock: ToyStock.make(size: 9))
-        let second = try gpu.filmPipelines()
-        #expect(first.negative === second.negative && first.print === second.print && first.halationSource === second.halationSource
-                && first.toneBase.box === second.toneBase.box && first.toneBaseMap === second.toneBaseMap)
-        #expect(try GPU().filmPipelines().negative !== first.negative)
+        #expect(!gpu.hasFilmPipelines)
+        let first = try FilmRenderer(gpu: gpu, stock: ToyStock.make())
+        #expect(gpu.hasFilmPipelines)
+        let second = try FilmRenderer(gpu: gpu, stock: ToyStock.make(size: 9))
+        let shared = pipelines(of: try gpu.filmPipelines())
+        let firstPipelines = pipelines(of: first)
+        let secondPipelines = pipelines(of: second)
+        for index in shared.indices {
+            #expect(firstPipelines[index] === shared[index])
+            #expect(secondPipelines[index] === shared[index])
+        }
+
+        let other = pipelines(of: try FilmRenderer(gpu: try GPU(), stock: ToyStock.make()))
+        for index in shared.indices { #expect(other[index] !== shared[index]) }
+
+        // Each pass populates and reads the GPU's shared set on its own.
+        let lutGPU = try GPU()
+        #expect(!lutGPU.hasFilmPipelines)
+        let lutPass = try LUTPass(gpu: lutGPU)
+        #expect(lutGPU.hasFilmPipelines)
+        let lutShared = try lutGPU.filmPipelines()
+        #expect(lutPass.pipeline === lutShared.negative && lutPass.halationPipeline === lutShared.negativeHalation
+                && lutPass.tonedPipeline === lutShared.negativeToned
+                && lutPass.tonedHalationPipeline === lutShared.negativeTonedHalation)
+
+        let printGPU = try GPU()
+        #expect(!printGPU.hasFilmPipelines)
+        let printPass = try PrintPass(gpu: printGPU)
+        #expect(printGPU.hasFilmPipelines)
+        let printShared = try printGPU.filmPipelines()
+        #expect(printPass.pipeline === printShared.print && printPass.sharpenedPipeline === printShared.printSharpened
+                && printPass.tonedPipeline === printShared.printToned
+                && printPass.tonedSharpenedPipeline === printShared.printTonedSharpened)
+
+        let halationGPU = try GPU()
+        #expect(!halationGPU.hasFilmPipelines)
+        let halation = try HalationField(gpu: halationGPU)
+        #expect(halationGPU.hasFilmPipelines)
+        let halationShared = try halationGPU.filmPipelines()
+        #expect(halation.source === halationShared.halationSource && halation.mix === halationShared.halationMix)
+
+        let toneBaseGPU = try GPU()
+        #expect(!toneBaseGPU.hasFilmPipelines)
+        let toneBase = try ToneBaseField(gpu: toneBaseGPU)
+        #expect(toneBaseGPU.hasFilmPipelines)
+        let toneBaseShared = try toneBaseGPU.filmPipelines()
+        #expect(toneBase.kernels.guide === toneBaseShared.toneBase.guide
+                && toneBase.kernels.box === toneBaseShared.toneBase.box
+                && toneBase.map === toneBaseShared.toneBaseMap)
+    }
+
+    @Test func concurrentShaderLibraryAndFilmRendererInitSharePipelines() throws {
+        final class State: @unchecked Sendable {
+            let gpu: GPU
+            let stock: Stock
+            let lock = NSLock()
+            var libraries: [MTLLibrary] = []
+            var renderers: [FilmRenderer] = []
+            var errors: [any Error] = []
+            init(gpu: GPU, stock: Stock) { self.gpu = gpu; self.stock = stock }
+        }
+        let state = State(gpu: try GPU(), stock: ToyStock.make(size: 9))
+        DispatchQueue.concurrentPerform(iterations: 8) { lane in
+            do {
+                if lane.isMultiple(of: 2) {
+                    let library = try state.gpu.shaderLibrary()
+                    state.lock.withLock { state.libraries.append(library) }
+                } else {
+                    let renderer = try FilmRenderer(gpu: state.gpu, stock: state.stock)
+                    state.lock.withLock { state.renderers.append(renderer) }
+                }
+            } catch {
+                state.lock.withLock { state.errors.append(error) }
+            }
+        }
+        #expect(state.errors.isEmpty)
+        let library = try state.gpu.shaderLibrary()
+        let shared = try state.gpu.filmPipelines()
+        #expect(state.libraries.count == 4 && state.libraries.allSatisfy { $0 === library })
+        #expect(state.renderers.count == 4 && state.renderers.allSatisfy {
+            $0.negativePass.pipeline === shared.negative && $0.printPass.pipeline === shared.print
+                && $0.halationField.source === shared.halationSource && $0.toneBaseField.map === shared.toneBaseMap
+        })
     }
 
     @Test func rendersRepeatedFramesWithoutGrowingThePool() throws {

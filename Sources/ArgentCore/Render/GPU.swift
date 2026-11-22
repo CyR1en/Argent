@@ -66,6 +66,7 @@ public final class GPU {
     /// Presence's analyses of decodes, shared by every renderer on this device, so a stock switch or a drag keeps them: one a decode,
     /// made the first time a render of it has Texture, Clarity or Dehaze set. Nothing of it is made until then.
     public let presenceAnalyses: PresenceAnalyses
+    private let libraryLock = NSLock()
     private var compiledLibrary: MTLLibrary?
     private let filmPipelineLock = NSLock()
     private var filmPipelineSet: FilmPipelines?
@@ -138,12 +139,14 @@ public final class GPU {
 
     /// The shader library, compiled from source on first use and shared by every pass.
     public func shaderLibrary() throws -> MTLLibrary {
-        if let compiledLibrary { return compiledLibrary }
-        // The local base field's functions first, so the Negative LUT's kernels can call them.
-        let library = try device.makeLibrary(source: [ShaderSource.toneBase, ShaderSource.lut3D, ShaderSource.printTone].joined(separator: "\n"),
-                                             options: nil)
-        compiledLibrary = library
-        return library
+        try libraryLock.withLock {
+            if let compiledLibrary { return compiledLibrary }
+            // The local base field's functions first, so the Negative LUT's kernels can call them.
+            let library = try device.makeLibrary(source: [ShaderSource.toneBase, ShaderSource.lut3D, ShaderSource.printTone].joined(separator: "\n"),
+                                                 options: nil)
+            compiledLibrary = library
+            return library
+        }
     }
 
     /// The film passes' pipelines from `shaderLibrary()`, made the first time a pass asks and shared by every pass on this GPU after.
@@ -155,6 +158,9 @@ public final class GPU {
             return made
         }
     }
+
+    /// Whether the shared film pipelines have been built on this GPU yet.
+    var hasFilmPipelines: Bool { filmPipelineLock.withLock { filmPipelineSet != nil } }
 
     /// The masked kernels' pipelines, compiled in a library of their own the first time a frame has masks (plan section 4, rule 4), so
     /// `shaderLibrary()`'s source does not change and a frame without masks compiles and binds nothing of them. Lanes may ask at once.

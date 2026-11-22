@@ -159,8 +159,8 @@ public final class ToneBaseField {
     }
 
     private let gpu: GPU
-    private let kernels: Kernels
-    private let map: MTLComputePipelineState
+    let kernels: Kernels
+    let map: MTLComputePipelineState
     private let timing = NSLock()
     private var gpuSeconds: Double = 0
     private let cacheLock = NSLock()
@@ -172,7 +172,7 @@ public final class ToneBaseField {
     /// The GPU time of the last field made, for measurements.
     var lastGPUSeconds: Double { timing.withLock { gpuSeconds } }
 
-    /// Takes the GPU's shared pipelines (`GPU.filmPipelines()`); call it on one thread, as the shader library is not thread-safe.
+    /// Takes the GPU's shared pipelines (`GPU.filmPipelines()`).
     public init(gpu: GPU) throws {
         let pipelines = try gpu.filmPipelines()
         self.gpu = gpu
