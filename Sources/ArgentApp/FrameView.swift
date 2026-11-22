@@ -113,8 +113,13 @@ struct FrameView: View {
                 .id(request)
                 .onChange(of: layout, initial: true) { publish(layout, room) }
                 .onChange(of: room) { publish(layout, room) }
-                // A view on its way out that is wanted again, the frame opened before it had gone, says them again.
-                .onChange(of: model.isFrameOpen) { publish(layout, room) }
+                // A view on its way out that is wanted again, the frame opened before it had gone, says them again, and
+                // takes back the keys the sheet had: it does not appear again. Here, where a view on its way out still
+                // hears of the change; the frame view's own body does not.
+                .onChange(of: model.isFrameOpen) {
+                    publish(layout, room)
+                    if model.isFrameOpen { focused = true }
+                }
         }
         .background {
             // Under a workspace sheet the trackpad is the sheet's: its licence texts scroll, and the photograph stays put.

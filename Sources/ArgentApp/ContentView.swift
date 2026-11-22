@@ -235,7 +235,8 @@ private struct RollWorkspace: View {
 
     /// The frame view's way in and out: from the selected frame's well where the sheet shows it now, and back to
     /// where the sheet will show it. The sheet that comes back is another, scrolled to the frame, in a workspace that
-    /// may have changed, so where the frame was opened from is not where it goes back to.
+    /// may have changed, so where the frame was opened from is not where it goes back to. A frame closed before the
+    /// sheet it was opened from has gone gets that one back, which goes to the frame as well (`ContactSheet`).
     private var hero: FrameHero {
         guard let selection = model.selection, let frame = model.selectedFrame else { return FrameHero(isPortrait: false) }
         let shown = model.shownFrames
@@ -360,6 +361,21 @@ struct FrameHero: Transition {
                     .offset(move?.offset ?? .zero)
                     .opacity(isOpen || move != nil ? 1 : 0)
             }
+            // On its way out it takes no clicks: they are for the sheet coming back under it.
+            .allowsHitTesting(phase != .didDisappear)
+            .modifier(LeftByItsCell(isLeaving: phase == .didDisappear))
+    }
+
+    /// A frame view on its way out is not drawn once the sheet has been scrolled: it goes to where its cell was as the
+    /// frame was closed and is there until it has left the window, and the cell has gone from under it. The cell shows
+    /// the frame.
+    private struct LeftByItsCell: ViewModifier {
+        @Environment(RollModel.self) private var model
+        let isLeaving: Bool
+
+        func body(content: Content) -> some View {
+            content.opacity(isLeaving && model.isSheetScrolledSinceClose ? 0 : 1)
+        }
     }
 
     /// The scale, about the frame view's top left, and the offset that put the fitted picture of a frame view `size`
