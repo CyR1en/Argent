@@ -106,17 +106,17 @@ import Testing
     /// The frame view's spring (`Graphite.Motion.hero`), in real seconds.
     private static let heroSpring = Spring(response: 0.46, dampingRatio: 0.86)
 
-    @Test func aRestingSpringEndsOnceItIsAtRestToTheEye() {
+    @Test func aRestingSpringEndsOnceItIsAtRestToTheEye() throws {
         let spring = Self.heroSpring, leg = SpringLeg<Double>()
-        // Still on its way as it lands, and at rest well inside a second: SwiftUI's own spring took 1.3 s.
+        // Still on its way as it lands, and at rest well inside a second: SwiftUI's own spring kept the frame view 1.3 s.
         #expect(!leg.state(at: 0, to: 1, spring: spring).isAtRest)
         #expect(!leg.state(at: 0.4, to: 1, spring: spring).isAtRest)
-        let rested = try? #require(stride(from: 0.0, through: 2, by: 1.0 / 120).first { leg.state(at: $0, to: 1, spring: spring).isAtRest })
-        #expect(rested.map { $0 > 0.5 && $0 < 0.8 } == true)
-        // A point in a thousand of the move from where it was going, and it stays at rest from then on.
-        let end = leg.state(at: rested ?? 2, to: 1, spring: spring)
+        let rested = try #require(stride(from: 0.0, through: 2, by: 1.0 / 120).first { leg.state(at: $0, to: 1, spring: spring).isAtRest })
+        #expect(rested > 0.5 && rested < 0.8)
+        // Within `restFraction` of the move of where it was going, and it stays at rest from then on.
+        let end = leg.state(at: rested, to: 1, spring: spring)
         #expect(abs(end.position - 1) <= SpringLeg<Double>.restFraction)
-        #expect(stride(from: rested ?? 2, through: 4, by: 1.0 / 120).allSatisfy { leg.state(at: $0, to: 1, spring: spring).isAtRest })
+        #expect(stride(from: rested, through: 4, by: 1.0 / 120).allSatisfy { leg.state(at: $0, to: 1, spring: spring).isAtRest })
         // A move of no length is at rest before it starts.
         #expect(leg.state(at: 0, to: 0, spring: spring).isAtRest)
     }
@@ -139,8 +139,8 @@ import Testing
         #expect(before.position > 0.5 && before.velocity > 0)
         #expect(abs(after.position - before.position) < 1e-12)
         #expect(abs(after.velocity - before.velocity) < 1e-12)
-        // It carries on a little the way it was going, then comes back, and is at rest within the second:
-        // SwiftUI's own two springs, merged, took 3.2 s.
+        // It carries on a little the way it was going, then comes back, and is at rest within the second: on SwiftUI's
+        // own spring a frame view with its picture in it, sent back so, stayed 3.2 s.
         #expect(back.state(at: turned + 0.02, to: 0, spring: spring).position > before.position)
         #expect(!back.state(at: turned + 0.3, to: 0, spring: spring).isAtRest)
         let end = back.state(at: turned + 0.8, to: 0, spring: spring)
@@ -159,10 +159,10 @@ import Testing
     }
 
     @Test func aRestingSpringMovesAPairOfValuesTogether() {
-        // A scale and an offset, as the frame view's way to its cell is: one spring, at rest for both at once.
+        // An offset across and down, as the frame view's way to its cell has one: one spring, at rest for both at once.
         typealias Pair = AnimatablePair<Double, Double>
         let spring = Self.heroSpring, leg = SpringLeg<Pair>()
-        let target = Pair(-0.72, 1053)
+        let target = Pair(1053, 312.5)
         let midway = leg.state(at: 0.2, to: target, spring: spring)
         #expect(abs(midway.position.first / target.first - midway.position.second / target.second) < 1e-9)
         #expect(!midway.isAtRest)

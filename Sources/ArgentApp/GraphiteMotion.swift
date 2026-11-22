@@ -474,11 +474,15 @@ struct SpringLeg<V: VectorArithmetic> {
     var target: V?
     /// The largest the move has been over all of its legs, as `energy` measures one: what "at rest" is measured
     /// against, so a leg that begins a hair from its target is at rest at once, and not held to a hair of a hair.
+    /// The values one animation moves are one length to it: a small one beside a large, a scale beside an offset in
+    /// points, is at rest when the two are, and sent on by itself is at rest at once.
     var reach = 0.0
 
-    /// How close to its target, and how slow, counts as at rest, as a part of the move's reach: a point in a thousand,
-    /// which the frame view's way to its cell ends within a point of.
-    static var restFraction: Double { 0.001 }
+    /// How close to its target, and how slow, counts as at rest, as a part of the move's reach: three parts in ten
+    /// thousand. The spring ends there and SwiftUI puts the value on its target, a last step of 0.15 pt in a move of a
+    /// thousand and under half a point in one of three thousand, at the end of the frame view's way in as of its way
+    /// out. A part in a thousand ends 0.08 s sooner on a step four times that.
+    static var restFraction: Double { 0.0003 }
 
     /// Where the leg is `time` into the animation on its way to `target`, how fast, and whether it has come to rest there.
     func state(at time: TimeInterval, to target: V, spring: Spring) -> (position: V, velocity: V, isAtRest: Bool) {
@@ -511,14 +515,20 @@ struct SpringLeg<V: VectorArithmetic> {
     }
 }
 
-/// A spring that ends once it is at rest to the eye (`SpringLeg.restFraction`), where SwiftUI's own runs on until it is
-/// at rest to the last bit of a floating-point number: 1.3 s for the frame view's, and 3.2 s for one sent back before
-/// it had settled, whose two springs are merged (measured in a hosted window). It moves as that spring does, and one
-/// sent somewhere else on its way goes on from where it is at the speed it has.
+/// A spring that ends once it is at rest to the eye (`SpringLeg.restFraction`): 0.75 s into the frame view's, whatever
+/// the length of the move. SwiftUI's own ends by a measure of its own, later the larger the values it moves: 0.53 s
+/// into a move of 1 and 1.0 s into one of 1000 (sampled on macOS 27). It kept the frame view, which moves about a
+/// thousand points, 1.3 s in the window, and one with its picture in it, sent back before it had settled, 3.2 s (both
+/// measured in a hosted window; what made the second so long was not found).
 ///
-/// For a move a view leaves on. A view leaving on a transition stays in the window, drawn and taking clicks, until its
-/// animation has ended: the frame view, shrunk onto its cell half a second after it was closed, stayed drawn there for
-/// seconds more, and a sheet scrolled in that time moved under a picture that did not (`Graphite.Motion.hero`).
+/// It moves by `Spring`'s arithmetic, and one sent somewhere else on its way goes on from where it is at the speed it
+/// has. SwiftUI's own animation of the same response and damping is not quite that curve: within 1.5% of the move of
+/// it on the way, overshooting 0.3% where this overshoots 0.5%.
+///
+/// For a long move a view leaves on; a fade, a move of 1, SwiftUI's own spring ends sooner. A view leaving on a
+/// transition stays in the window, drawn and taking clicks, until its animation has ended: the frame view, shrunk onto
+/// its cell half a second after it was closed, stayed drawn there until then, and a sheet scrolled in that time moved
+/// under a picture that did not (`Graphite.Motion.hero`).
 struct RestingSpring: CustomAnimation {
     var response: Double
     var dampingFraction: Double
@@ -547,7 +557,8 @@ struct RestingSpring: CustomAnimation {
     func shouldMerge<V: VectorArithmetic>(previous: Animation, value: V, time: TimeInterval, context: inout AnimationContext<V>) -> Bool {
         guard let previous = previous.base as? RestingSpring else { return false }
         let leg = context.state[LegKey<V>.self]
-        // One never asked for a value has not moved: this spring starts as it would by itself.
+        // One never asked for a value has shown nothing of its way: this spring goes from where that one began, as if
+        // sent here then, which is what a spring by itself shows of a first frame that comes late.
         if let target = leg.target {
             context.state[LegKey<V>.self] = leg.redirected(at: time, from: target, spring: previous.spring)
         }

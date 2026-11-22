@@ -117,11 +117,12 @@ struct ContactSheet: View {
             if width > 0, let selection = model.selection { grid.reveal(selection, centered: true) }
         }
         // And a sheet still on its way out when the frame is closed, which comes back as it is and where it was: on the
-        // frame too, since that is where the frame view shrinks to (`FrameHero`), as it glides there.
+        // frame too, since that is where the frame view shrinks to (`FrameHero`), as it glides there. It does not appear
+        // again, so it takes here the keys the frame view had.
         .onChange(of: model.isFrameOpen) {
-            if isRollSheet, !model.isFrameOpen, width > 0, let selection = model.selection {
-                grid.reveal(selection, centered: true, animated: true)
-            }
+            guard isRollSheet, !model.isFrameOpen else { return }
+            focused = true
+            if width > 0, let selection = model.selection { grid.reveal(selection, centered: true, animated: true) }
         }
         // Another size: on the selected frame still, the sheet scrolling there as its thumbnails glide to their size.
         .onChange(of: model.sizeStep) {

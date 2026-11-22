@@ -261,7 +261,8 @@ import SwiftUI
             .spring(response: response * slow, dampingFraction: damping)
         }
 
-        /// The same spring, ending once it is at rest to the eye: for a move a view leaves on (`RestingSpring`).
+        /// A spring of that response and damping by `Spring`'s arithmetic, ending once it is at rest to the eye: for
+        /// a long move a view leaves on (`RestingSpring`).
         static func restingSpring(_ response: Double, _ damping: Double) -> Animation {
             Animation(RestingSpring(response: response * slow, dampingFraction: damping))
         }

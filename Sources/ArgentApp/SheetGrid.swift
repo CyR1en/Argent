@@ -443,10 +443,21 @@ final class SheetGridLayout: NSCollectionViewLayout {
         scroller.horizontalScrollElasticity = .none
         self.scroller = scroller
         self.collection = collection
+        // A scroll of the user's, by wheel, trackpad or scroller.
+        for name in [NSScrollView.willStartLiveScrollNotification, NSScrollView.didLiveScrollNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: name, object: scroller)
+        }
         #if DEBUG
         SheetProbe.visibleFrames = { [weak self] in self?.visibleFrames ?? [] }
         #endif
         return scroller
+    }
+
+    /// The sheet was scrolled by hand, or by the keys to a frame out of its view. The roll's sheet tells the model, for
+    /// a frame view on its way to a cell that is then no longer where it is going (`RollModel.sheetScrolled`).
+    @objc private func scrolled() {
+        guard let model = content?.model, model.sheetGrid === self else { return }
+        model.sheetScrolled()
     }
 
     func update(_ new: Content) {
@@ -537,6 +548,8 @@ final class SheetGridLayout: NSCollectionViewLayout {
         let y = content.geometry.offset(revealing: index, count: content.frames.count, current: clip.bounds.minY,
                                         viewport: clip.bounds.height, centered: request.centered)
         guard abs(y - clip.bounds.minY) >= 0.5 else { return }
+        // To a frame the keys moved to; a sheet put on its frame, as one coming back from the frame view is, has not left it.
+        if !request.centered { scrolled() }
         let target = NSPoint(x: clip.bounds.minX, y: y)
         if let duration = request.duration, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             NSAnimationContext.runAnimationGroup { animation in

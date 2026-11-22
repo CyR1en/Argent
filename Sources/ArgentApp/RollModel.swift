@@ -365,12 +365,17 @@ final class RollModel {
                 if inspectorNavigation.destination != nil { inspectorNavigation.clearDestination() }
                 maskEditor.reset()
                 if remove.frame != nil { removeTabHidden() }
+                if isSheetScrolledSinceClose { isSheetScrolledSinceClose = false }
             }
         }
     }
     /// The roll's contact sheet, while it is up: the frame view grows from the selected frame's well there, and asks it
     /// where that is (`FrameHero`).
     @ObservationIgnored weak var sheetGrid: SheetGridController?
+    /// The sheet has been scrolled since the frame was closed, by hand or by the keys to a frame out of its view. The
+    /// frame view on its way out goes to where its cell was as the frame was closed, and is there until it has left the
+    /// window: over a sheet scrolled from under it, it is not drawn (`FrameHero`).
+    private(set) var isSheetScrolledSinceClose = false
     /// When the selection last moved in the frame view, for the picture's short fade to the next frame, which a held arrow
     /// key does without (`FramePicture`).
     @ObservationIgnored var lastFrameStep: CFTimeInterval = 0
@@ -1322,6 +1327,11 @@ final class RollModel {
         isFrameOpen = true
         // From the Develop page's grid the frame opens on the roll, where the frame view is.
         if requestedPage == .develop { requestedPage = .roll }
+    }
+
+    /// The roll's sheet was scrolled, by hand or by the keys, and not put on its frame (`SheetGridController`).
+    func sheetScrolled() {
+        if !isFrameOpen, !isSheetScrolledSinceClose { isSheetScrolledSinceClose = true }
     }
 
     /// Back to the contact sheet, on the frame that was open, or the nearest frame shown when the
