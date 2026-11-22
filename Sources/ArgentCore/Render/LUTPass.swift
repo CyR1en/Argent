@@ -6,31 +6,21 @@ import Metal
 /// Rated at. The M0 spike runs it alone with a display LUT.
 public final class LUTPass {
     private let gpu: GPU
-    private let pipeline: MTLComputePipelineState
+    let pipeline: MTLComputePipelineState
     /// The same with a halation field added to the light first.
-    private let halationPipeline: MTLComputePipelineState
+    let halationPipeline: MTLComputePipelineState
     /// The same two writing each pixel's local base to the output's alpha, for the tone step (`PrintTone`).
-    private let tonedPipeline: MTLComputePipelineState
-    private let tonedHalationPipeline: MTLComputePipelineState
+    let tonedPipeline: MTLComputePipelineState
+    let tonedHalationPipeline: MTLComputePipelineState
     /// Bound for the scene mapping's base field and tables when it reads neither.
     private let placeholders: ManualSceneInputs.Placeholders
 
     public init(gpu: GPU) throws {
-        let library = try gpu.shaderLibrary()
-        guard let function = library.makeFunction(name: "apply_lut3d") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d")
-        }
-        guard let withHalation = library.makeFunction(name: "apply_lut3d_halation") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d_halation")
-        }
-        self.pipeline = try gpu.device.makeComputePipelineState(function: function)
-        self.halationPipeline = try gpu.device.makeComputePipelineState(function: withHalation)
-        guard let toned = library.makeFunction(name: "apply_lut3d_toned"),
-              let tonedWithHalation = library.makeFunction(name: "apply_lut3d_halation_toned") else {
-            throw GPUError.shaderFunctionMissing("apply_lut3d_toned")
-        }
-        self.tonedPipeline = try gpu.device.makeComputePipelineState(function: toned)
-        self.tonedHalationPipeline = try gpu.device.makeComputePipelineState(function: tonedWithHalation)
+        let pipelines = try gpu.filmPipelines()
+        self.pipeline = pipelines.negative
+        self.halationPipeline = pipelines.negativeHalation
+        self.tonedPipeline = pipelines.negativeToned
+        self.tonedHalationPipeline = pipelines.negativeTonedHalation
         self.gpu = gpu
         placeholders = try ManualSceneInputs.Placeholders(gpu: gpu)
     }

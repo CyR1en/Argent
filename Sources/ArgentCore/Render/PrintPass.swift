@@ -59,11 +59,11 @@ public struct GrainInputs {
 /// `LUTPass` there is no log encoding. With a sharpening kernel it sharpens the dye amounts
 /// first (`CaptureSharpening`), before grain goes in.
 public final class PrintPass {
-    private let pipeline: MTLComputePipelineState
-    private let sharpenedPipeline: MTLComputePipelineState
+    let pipeline: MTLComputePipelineState
+    let sharpenedPipeline: MTLComputePipelineState
     /// The same two with the tone step (`PrintTone`), which read each pixel's offset from the input's alpha.
-    private let tonedPipeline: MTLComputePipelineState
-    private let tonedSharpenedPipeline: MTLComputePipelineState
+    let tonedPipeline: MTLComputePipelineState
+    let tonedSharpenedPipeline: MTLComputePipelineState
     private let placeholder: MTLTexture
     private let device: MTLDevice
     private let curveLock = NSLock()
@@ -81,15 +81,11 @@ public final class PrintPass {
     public init(gpu: GPU) throws {
         device = gpu.device
         placeholder = try gpu.makeTexture(width: 1, height: 1, usage: .shaderRead)
-        let library = try gpu.shaderLibrary()
-        func pipeline(_ name: String) throws -> MTLComputePipelineState {
-            guard let function = library.makeFunction(name: name) else { throw GPUError.shaderFunctionMissing(name) }
-            return try gpu.device.makeComputePipelineState(function: function)
-        }
-        self.pipeline = try pipeline("apply_print_lut")
-        self.sharpenedPipeline = try pipeline("apply_print_lut_sharpened")
-        self.tonedPipeline = try pipeline("apply_print_lut_toned")
-        self.tonedSharpenedPipeline = try pipeline("apply_print_lut_sharpened_toned")
+        let pipelines = try gpu.filmPipelines()
+        self.pipeline = pipelines.print
+        self.sharpenedPipeline = pipelines.printSharpened
+        self.tonedPipeline = pipelines.printToned
+        self.tonedSharpenedPipeline = pipelines.printTonedSharpened
         canSharpen = sharpenedPipeline.maxTotalThreadsPerThreadgroup >= Self.sharpenTile * Self.sharpenTile
         canSharpenToned = tonedSharpenedPipeline.maxTotalThreadsPerThreadgroup >= Self.sharpenTile * Self.sharpenTile
         if !canSharpen {
