@@ -360,6 +360,8 @@ struct FrameHero: Transition {
                     .offset(move?.offset ?? .zero)
                     .opacity(isOpen || move != nil ? 1 : 0)
             }
+            // On its way out it takes no clicks: they are for the sheet coming back under it.
+            .allowsHitTesting(phase != .didDisappear)
     }
 
     /// The scale, about the frame view's top left, and the offset that put the fitted picture of a frame view `size`

@@ -457,3 +457,100 @@ struct RollingText: View {
         return Double(changed) <= Double(a.count) * 0.4
     }
 }
+
+// MARK: - A spring that ends when it is at rest to the eye
+
+/// One leg of a spring's way: from where it was, at the speed it had, to where it was last sent. A spring sent somewhere
+/// else on its way starts another leg from where it is, at the speed it has, so the move goes on without a step.
+///
+/// Positions are measured from where the animation began, as SwiftUI gives a custom animation its values.
+struct SpringLeg<V: VectorArithmetic> {
+    /// When the leg began, in the animation's own seconds.
+    var start: TimeInterval = 0
+    /// Where it began, and how fast it was going there.
+    var from = V.zero
+    var velocity = V.zero
+    /// Where it was last sent; nothing until the animation has been asked for a value.
+    var target: V?
+    /// The largest the move has been over all of its legs, as `energy` measures one: what "at rest" is measured
+    /// against, so a leg that begins a hair from its target is at rest at once, and not held to a hair of a hair.
+    var reach = 0.0
+
+    /// How close to its target, and how slow, counts as at rest, as a part of the move's reach: a point in a thousand,
+    /// which the frame view's way to its cell ends within a point of.
+    static var restFraction: Double { 0.001 }
+
+    /// Where the leg is `time` into the animation on its way to `target`, how fast, and whether it has come to rest there.
+    func state(at time: TimeInterval, to target: V, spring: Spring) -> (position: V, velocity: V, isAtRest: Bool) {
+        let elapsed = max(0, time - start)
+        var distance = target
+        distance -= from
+        var position = spring.value(target: distance, initialVelocity: velocity, time: elapsed)
+        let speed = spring.velocity(target: distance, initialVelocity: velocity, time: elapsed)
+        var remaining = distance
+        remaining -= position
+        position += from
+        let reach = max(self.reach, Self.energy(distance, velocity, spring: spring))
+        return (position, speed, Self.energy(remaining, speed, spring: spring) <= Self.restFraction * Self.restFraction * reach)
+    }
+
+    /// The leg that goes on from this one at `time`, when a spring on its way to `target` is sent somewhere else.
+    func redirected(at time: TimeInterval, from target: V, spring: Spring) -> SpringLeg {
+        let now = state(at: time, to: target, spring: spring)
+        var distance = target
+        distance -= from
+        return SpringLeg(start: time, from: now.position, velocity: now.velocity,
+                         reach: max(reach, Self.energy(distance, velocity, spring: spring)))
+    }
+
+    /// A distance and a speed as one squared length: the speed counts as the distance the spring covers at it in one
+    /// radian of its swing, so a spring passing through its target at speed is not taken to be at rest there.
+    private static func energy(_ distance: V, _ speed: V, spring: Spring) -> Double {
+        let radian = spring.response / (2 * .pi)
+        return distance.magnitudeSquared + speed.magnitudeSquared * radian * radian
+    }
+}
+
+/// A spring that ends once it is at rest to the eye (`SpringLeg.restFraction`), where SwiftUI's own runs on until it is
+/// at rest to the last bit of a floating-point number: 1.3 s for the frame view's, and 3.2 s for one sent back before
+/// it had settled, whose two springs are merged (measured in a hosted window). It moves as that spring does, and one
+/// sent somewhere else on its way goes on from where it is at the speed it has.
+///
+/// For a move a view leaves on. A view leaving on a transition stays in the window, drawn and taking clicks, until its
+/// animation has ended: the frame view, shrunk onto its cell half a second after it was closed, stayed drawn there for
+/// seconds more, and a sheet scrolled in that time moved under a picture that did not (`Graphite.Motion.hero`).
+struct RestingSpring: CustomAnimation {
+    var response: Double
+    var dampingFraction: Double
+
+    private var spring: Spring { Spring(response: response, dampingRatio: dampingFraction) }
+
+    private struct LegKey<V: VectorArithmetic>: AnimationStateKey {
+        static var defaultValue: SpringLeg<V> { SpringLeg() }
+    }
+
+    func animate<V: VectorArithmetic>(value: V, time: TimeInterval, context: inout AnimationContext<V>) -> V? {
+        var leg = context.state[LegKey<V>.self]
+        // Kept for the leg that follows this one, which starts from where this one was on its way to.
+        leg.target = value
+        context.state[LegKey<V>.self] = leg
+        let now = leg.state(at: time, to: value, spring: spring)
+        return now.isAtRest ? nil : now.position
+    }
+
+    func velocity<V: VectorArithmetic>(value: V, time: TimeInterval, context: AnimationContext<V>) -> V? {
+        context.state[LegKey<V>.self].state(at: time, to: value, spring: spring).velocity
+    }
+
+    /// Takes over from a spring of this kind on its way, of whatever response: the context holds that one's leg, and
+    /// `time` goes on from its start. Any other animation runs on beside this one, as SwiftUI combines the two.
+    func shouldMerge<V: VectorArithmetic>(previous: Animation, value: V, time: TimeInterval, context: inout AnimationContext<V>) -> Bool {
+        guard let previous = previous.base as? RestingSpring else { return false }
+        let leg = context.state[LegKey<V>.self]
+        // One never asked for a value has not moved: this spring starts as it would by itself.
+        if let target = leg.target {
+            context.state[LegKey<V>.self] = leg.redirected(at: time, from: target, spring: previous.spring)
+        }
+        return true
+    }
+}

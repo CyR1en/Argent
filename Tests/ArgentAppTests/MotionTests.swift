@@ -101,6 +101,74 @@ import Testing
         }
     }
 
+    // MARK: The spring the frame view leaves on
+
+    /// The frame view's spring (`Graphite.Motion.hero`), in real seconds.
+    private static let heroSpring = Spring(response: 0.46, dampingRatio: 0.86)
+
+    @Test func aRestingSpringEndsOnceItIsAtRestToTheEye() {
+        let spring = Self.heroSpring, leg = SpringLeg<Double>()
+        // Still on its way as it lands, and at rest well inside a second: SwiftUI's own spring took 1.3 s.
+        #expect(!leg.state(at: 0, to: 1, spring: spring).isAtRest)
+        #expect(!leg.state(at: 0.4, to: 1, spring: spring).isAtRest)
+        let rested = try? #require(stride(from: 0.0, through: 2, by: 1.0 / 120).first { leg.state(at: $0, to: 1, spring: spring).isAtRest })
+        #expect(rested.map { $0 > 0.5 && $0 < 0.8 } == true)
+        // A point in a thousand of the move from where it was going, and it stays at rest from then on.
+        let end = leg.state(at: rested ?? 2, to: 1, spring: spring)
+        #expect(abs(end.position - 1) <= SpringLeg<Double>.restFraction)
+        #expect(stride(from: rested ?? 2, through: 4, by: 1.0 / 120).allSatisfy { leg.state(at: $0, to: 1, spring: spring).isAtRest })
+        // A move of no length is at rest before it starts.
+        #expect(leg.state(at: 0, to: 0, spring: spring).isAtRest)
+    }
+
+    @Test func aRestingSpringMovesAsTheSpringDoes() {
+        let spring = Self.heroSpring, leg = SpringLeg<Double>()
+        for time in stride(from: 0.0, through: 0.5, by: 0.05) {
+            let now = leg.state(at: time, to: 300, spring: spring)
+            #expect(abs(now.position - spring.value(target: 300.0, time: time)) < 1e-9)
+            #expect(abs(now.velocity - spring.velocity(target: 300.0, time: time)) < 1e-9)
+        }
+    }
+
+    @Test func aSpringSentBackGoesOnFromWhereItIsAtTheSpeedItHas() {
+        let spring = Self.heroSpring, out = SpringLeg<Double>()
+        // On its way to 1, the frame opening, and sent back to 0 before it has settled, the frame closed.
+        let turned = 0.2, before = out.state(at: turned, to: 1, spring: spring)
+        let back = out.redirected(at: turned, from: 1, spring: spring)
+        let after = back.state(at: turned, to: 0, spring: spring)
+        #expect(before.position > 0.5 && before.velocity > 0)
+        #expect(abs(after.position - before.position) < 1e-12)
+        #expect(abs(after.velocity - before.velocity) < 1e-12)
+        // It carries on a little the way it was going, then comes back, and is at rest within the second:
+        // SwiftUI's own two springs, merged, took 3.2 s.
+        #expect(back.state(at: turned + 0.02, to: 0, spring: spring).position > before.position)
+        #expect(!back.state(at: turned + 0.3, to: 0, spring: spring).isAtRest)
+        let end = back.state(at: turned + 0.8, to: 0, spring: spring)
+        #expect(end.isAtRest && abs(end.position) <= SpringLeg<Double>.restFraction)
+    }
+
+    @Test func aSpringSentAHairFurtherAtRestIsAtRestAtOnce() {
+        let spring = Self.heroSpring, first = SpringLeg<Double>()
+        // At rest after a move of 1000, then sent a millionth of a point on: at rest as measured against the whole
+        // move, and not held until it is within a thousandth of that millionth.
+        let nudged = first.redirected(at: 2, from: 1000, spring: spring)
+        #expect(nudged.state(at: 2, to: 1000.000001, spring: spring).isAtRest)
+        // Sent somewhere it can be seen to go, it goes.
+        #expect(!nudged.state(at: 2, to: 1010, spring: spring).isAtRest)
+        #expect(nudged.state(at: 2.8, to: 1010, spring: spring).isAtRest)
+    }
+
+    @Test func aRestingSpringMovesAPairOfValuesTogether() {
+        // A scale and an offset, as the frame view's way to its cell is: one spring, at rest for both at once.
+        typealias Pair = AnimatablePair<Double, Double>
+        let spring = Self.heroSpring, leg = SpringLeg<Pair>()
+        let target = Pair(-0.72, 1053)
+        let midway = leg.state(at: 0.2, to: target, spring: spring)
+        #expect(abs(midway.position.first / target.first - midway.position.second / target.second) < 1e-9)
+        #expect(!midway.isAtRest)
+        #expect(leg.state(at: 0.8, to: target, spring: spring).isAtRest)
+    }
+
     // MARK: A run of changes
 
     @Test func aChangeSoonAfterTheLastIsOneOfARun() {

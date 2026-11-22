@@ -243,8 +243,9 @@ import SwiftUI
         static let bud = spring(0.52, 0.74)
         /// A panel or a column coming in beside or over the workspace, which makes room with it.
         static let surface = spring(0.43, 0.87)
-        /// Between the contact sheet and the frame view: the thumbnail grows into the frame.
-        static let hero = spring(0.46, 0.86)
+        /// Between the contact sheet and the frame view: the thumbnail grows into the frame. A spring that ends at
+        /// rest to the eye, so the frame view shrunk back onto its cell leaves the window then (`RestingSpring`).
+        static let hero = restingSpring(0.46, 0.86)
         /// A zoom coming to rest, and the split comparison's divider coming in.
         static let settle = spring(0.4, 0.85)
         static let wipe = spring(0.5, 0.86)
@@ -258,6 +259,11 @@ import SwiftUI
 
         static func spring(_ response: Double, _ damping: Double) -> Animation {
             .spring(response: response * slow, dampingFraction: damping)
+        }
+
+        /// The same spring, ending once it is at rest to the eye: for a move a view leaves on (`RestingSpring`).
+        static func restingSpring(_ response: Double, _ damping: Double) -> Animation {
+            Animation(RestingSpring(response: response * slow, dampingFraction: damping))
         }
 
         /// An ease out over `duration` seconds.
