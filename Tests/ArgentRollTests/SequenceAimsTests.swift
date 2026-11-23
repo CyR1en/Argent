@@ -177,7 +177,15 @@ import Testing
     // MARK: Candidate B
 
     /// Through Portra 400 the same region in two frames whose own levels are 0.3 stop apart, about
-    /// 6 L*, ends within 1 L*, each frame moving about as far as the other.
+    /// 6 L*, ends within 1 L*, each frame moving about as far as the other. How far apart their moves
+    /// may end is the search's own resolution: coordinate descent on a grid of `searchStep` stops
+    /// ends where no one level's step lowers the cost, which along the matched-lightness valley can be
+    /// anywhere |(earlier − 0.1) + (later − 0.4)| ≤ (1 + matchWeight × (L′ / lightnessScale)²) ×
+    /// `searchStep`, with L′ the response's slope: on Portra 400, −20.8 L* a stop, 5.3 steps. Measured
+    /// 2026-11-23: on the current bake 6.19 L* apart, solved at 0.2357 and 0.2672 (0.65 L*), 3 steps
+    /// off symmetry, where each level's own step raises the cost and both together lower it; on the
+    /// 2026-11-11 bake 0.2338 and 0.2662, 0 steps, the same solve stopping elsewhere in that band (5.2
+    /// steps there). Held within 6 steps: a solve that favoured one frame is many times further off.
     @Test(.enabled(if: RollControlsTests.bakedStock != nil))
     func renderPrintsALinkedRegionAlike() throws {
         let stock = try Self.studio400()
@@ -192,7 +200,7 @@ import Testing
         #expect(before > 5)
         #expect(after < 1)
         #expect(residual == [after, after])
-        #expect(earlier > 0.1 && later < 0.4 && abs((earlier - 0.1) + (later - 0.4)) < 2 * SequenceAims.searchStep)
+        #expect(earlier > 0.1 && later < 0.4 && abs((earlier - 0.1) + (later - 0.4)) < 6 * SequenceAims.searchStep)
     }
 
     /// A level moves no further than `maximumMove` from its own, nor past ±1.5, however strongly
