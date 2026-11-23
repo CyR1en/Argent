@@ -333,48 +333,76 @@ import Testing
         }
 
         for url in files {
-            var opt1024 = Self.options(.learned, tile: 1024)
-            opt1024.lensCorrection = false
-            var opt2048 = Self.options(.learned, tile: 2048)
-            opt2048.lensCorrection = false
+            func comparePixels(_ a: [Float16], _ b: [Float16], width w: Int, height h: Int)
+                -> (differing: Int, total: Int, largest: Double, stops: Double, steps: Double, near: Int, elsewhere: Int, worst: (x: Int, y: Int)) {
+                var differing = 0, largest = 0.0, largestStops = 0.0, largestSteps = 0.0, near1024Seam = 0, elsewhere = 0
+                var worstPoint = (x: w / 2, y: h / 2)
+                for idx in stride(from: 0, to: a.count, by: 4) {
+                    let pixel = idx / 4
+                    let px = pixel % w, py = h - 1 - pixel / w
+                    let dx = min(px % 1024, 1024 - 1 - px % 1024), dy = min(py % 1024, 1024 - 1 - py % 1024)
+                    let near = min(dx, dy) < 8
+                    for c in 0..<3 {
+                        let va = a[idx + c], vb = b[idx + c]
+                        guard va != vb else { continue }
+                        differing += 1
+                        if near { near1024Seam += 1 } else { elsewhere += 1 }
+                        let da = Double(va), db = Double(vb)
+                        largest = max(largest, abs(da - db))
+                        if da > 0.01, db > 0.01 {
+                            let stops = abs(log2(db / da))
+                            if stops > largestStops {
+                                largestStops = stops
+                                worstPoint = (px, py)
+                            }
+                        }
+                        largestSteps = max(largestSteps, halfSteps(va, vb))
+                    }
+                }
+                return (differing, w * h * 3, largest, largestStops, largestSteps, near1024Seam, elsewhere, worstPoint)
+            }
+
+            // Production path (lensCorrection = false, matching RollDeveloper and FilmPreviews since LC5).
+            var opt1024 = Self.options(.learned, tile: 1024); opt1024.lensCorrection = false
+            var opt2048 = Self.options(.learned, tile: 2048); opt2048.lensCorrection = false
+            var optWhole = Self.options(.learned, tile: nil); optWhole.lensCorrection = false
             let d1024 = try decoder.decode(url, options: opt1024)
             let d2048 = try decoder.decode(url, options: opt2048)
+            let dWhole = try decoder.decode(url, options: optWhole)
+            try #require(d1024.pins?.tileSize == 1024 && d2048.pins?.tileSize == 2048 && dWhole.pins?.tileSize == nil)
+            try #require(d1024.decoderVersion == "9" && d2048.decoderVersion == "9" && dWhole.decoderVersion == "9")
             let p1024 = ExposureAnalyzer.pixels(of: d1024.texture)
             let p2048 = ExposureAnalyzer.pixels(of: d2048.texture)
-            try #require(p1024.count == p2048.count && d1024.width == d2048.width && d1024.height == d2048.height)
-
+            let pWhole = ExposureAnalyzer.pixels(of: dWhole.texture)
             let w = d1024.width, h = d1024.height
-            var differing = 0, largest = 0.0, largestStops = 0.0, largestSteps = 0.0, near1024Seam = 0, elsewhere = 0
-            var worstPoint = (x: w / 2, y: h / 2)
-            for idx in stride(from: 0, to: p1024.count, by: 4) {
-                let pixel = idx / 4
-                let px = pixel % w, py = h - 1 - pixel / w
-                let dx = min(px % 1024, 1024 - 1 - px % 1024), dy = min(py % 1024, 1024 - 1 - py % 1024)
-                let near = min(dx, dy) < 8
-                for c in 0..<3 {
-                    let a = p1024[idx + c], b = p2048[idx + c]
-                    guard a != b else { continue }
-                    differing += 1
-                    if near { near1024Seam += 1 } else { elsewhere += 1 }
-                    let da = Double(a), db = Double(b)
-                    largest = max(largest, abs(da - db))
-                    if da > 0.01, db > 0.01 {
-                        let stops = abs(log2(db / da))
-                        if stops > largestStops {
-                            largestStops = stops
-                            worstPoint = (px, py)
-                        }
-                    }
-                    largestSteps = max(largestSteps, halfSteps(a, b))
-                }
+            let c1024vs2048 = comparePixels(p1024, p2048, width: w, height: h)
+            let c1024vsWhole = comparePixels(p1024, pWhole, width: w, height: h)
+            let c2048vsWhole = comparePixels(p2048, pWhole, width: w, height: h)
+            print(String(format: "MEASURE tiles-1024-vs-2048 %@ (lensCorrection=false, %dx%d, pins %d vs %d): %d of %d samples differ (%.4f%%), largest %.5f (%.4f stops above 0.01 at %d,%d, %.2f half-float steps); near 1024 seam (<8px) %d, elsewhere %d",
+                         url.lastPathComponent, w, h, d1024.pins?.tileSize ?? 0, d2048.pins?.tileSize ?? 0,
+                         c1024vs2048.differing, c1024vs2048.total, 100 * Double(c1024vs2048.differing) / Double(c1024vs2048.total),
+                         c1024vs2048.largest, c1024vs2048.stops, c1024vs2048.worst.x, c1024vs2048.worst.y, c1024vs2048.steps,
+                         c1024vs2048.near, c1024vs2048.elsewhere))
+            print(String(format: "MEASURE tiles-vs-whole %@ (lensCorrection=false): 1024 vs whole %d/%d (%.4f%%, %.4f stops); 2048 vs whole %d/%d (%.4f%%, %.4f stops)",
+                         url.lastPathComponent,
+                         c1024vsWhole.differing, c1024vsWhole.total, 100 * Double(c1024vsWhole.differing) / Double(c1024vsWhole.total), c1024vsWhole.stops,
+                         c2048vsWhole.differing, c2048vsWhole.total, 100 * Double(c2048vsWhole.differing) / Double(c2048vsWhole.total), c2048vsWhole.stops))
+
+            // Also check with decoder lensCorrection = true (matching Raw9MeasureTests/tiles).
+            try autoreleasepool {
+                let lc1024 = try decoder.decode(url, options: Self.options(.learned, tile: 1024))
+                let lc2048 = try decoder.decode(url, options: Self.options(.learned, tile: 2048))
+                let cLC = comparePixels(ExposureAnalyzer.pixels(of: lc1024.texture), ExposureAnalyzer.pixels(of: lc2048.texture),
+                                        width: lc1024.width, height: lc1024.height)
+                print(String(format: "MEASURE tiles-1024-vs-2048 %@ (lensCorrection=true, %dx%d, pins %d vs %d): %d of %d samples differ (%.4f%%), largest %.5f (%.4f stops above 0.01 at %d,%d, %.2f half-float steps); near 1024 seam (<8px) %d, elsewhere %d",
+                             url.lastPathComponent, lc1024.width, lc1024.height, lc1024.pins?.tileSize ?? 0, lc2048.pins?.tileSize ?? 0,
+                             cLC.differing, cLC.total, 100 * Double(cLC.differing) / Double(cLC.total),
+                             cLC.largest, cLC.stops, cLC.worst.x, cLC.worst.y, cLC.steps, cLC.near, cLC.elsewhere))
             }
-            let totalSamples = w * h * 3
-            print(String(format: "MEASURE tiles-1024-vs-2048 %@ (%dx%d): %d of %d samples differ (%.4f%%), largest %.5f (%.4f stops above 0.01 at %d,%d, %.2f half-float steps); near 1024 seam (<8px) %d, elsewhere %d",
-                         url.lastPathComponent, w, h, differing, totalSamples, 100 * Double(differing) / Double(totalSamples),
-                         largest, largestStops, worstPoint.x, worstPoint.y, largestSteps, near1024Seam, elsewhere))
 
             // Removal seam check: two 640x640 crops straddling tile boundaries plus one centered so the
             // feather edge passes through the pixel with the largest 1024-vs-2048 stop difference.
+            let worstPoint = c1024vs2048.worst
             let worstX = min(max(worstPoint.x - 320 + 100, 0), w - 640)
             let worstY = min(max(worstPoint.y - 320, 0), h - 640)
             let boxes = [
