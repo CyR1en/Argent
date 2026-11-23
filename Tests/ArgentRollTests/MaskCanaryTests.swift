@@ -155,9 +155,14 @@ enum MaskCanary {
     /// The macOS build the pins were taken on.
     static let pinnedBuild = "26B123"
     /// What each frame came to on `pinnedBuild` (2026-11-07, task F; again in task H, after DA3's square mirrored one patch past the
-    /// picture's edge; the new Subject's fields 2026-11-09, task B1), as `Entry.line` prints it.
+    /// picture's edge; the new Subject's fields 2026-11-09, task B1), as `Entry.line` prints it. The CC0 frame's entry was recorded
+    /// again on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123, the same in three processes), since its picture is
+    /// made live by the app's route: the lens stage (2026-11-13) and scene gamut compression (2026-11-19) changed that picture,
+    /// and with both taken out of the sources again it gave its old entry back, every field; with either alone, it did not.
+    /// The nine others read fixed prints, which neither change reaches, and keep their entries; those prints were not on this
+    /// Mac on 2026-11-23, so the nine were not run then.
     static let pins: [String: Entry] = Dictionary(uniqueKeysWithValues: [
-        "ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed picture 0be88d15ddcae45d gate 0.0003 below da3 75cc16ef3069a94c eomt - veto no removed 0.00 soft 0.00 sky ff2135187ffd6f81 subject none person none s3od 8f7231643c650a6c argmax 1 selected 1.08 selection kept subjectgate 0.0084 rule out clicked 8e8cb4181db09386 alpha 20abb58216d6767b",
+        "ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed picture 71623c2ec8b1f1da gate 0.0003 below da3 ca870cf41a40a582 eomt - veto no removed 0.00 soft 0.00 sky 465e29f4cd304dc8 subject none person none s3od 1a741b56df8370df argmax 1 selected 0.79 selection kept subjectgate 0.0067 rule out clicked 0e36fe42a169eeba alpha 5c18619c0a11e472",
         "Y-JG-A7-IV-FE-24-105-4908 picture c5656a3bc97ff758 gate 0.5205 pass da3 483cef3d84159fd6 eomt 5a7bce65164b2926 veto fired removed 29.29 soft 27.06 sky none subject none person none s3od bcc71875db31d55f argmax 1 selected 2.39 selection kept subjectgate 0.0371 rule na clicked 374f42831bd8394e alpha b1fc8434fe7f8463",
         "a1017-kme_427 picture b003d24f1f43171e gate 0.0886 pass da3 0627d8c9919a26c9 eomt 0fc49be13093a7d1 veto fired removed 7.25 soft 9.53 sky none subject none person none s3od 8102d3dbe0d1bdd2 argmax 1 selected 0.05 selection gate subjectgate 1.0000 rule na clicked none alpha -",
         "DSC04073 picture 3be16021ef43c6fc gate 0.1328 pass da3 db1c31bcdd70a031 eomt da7e6098c3f4523a veto fired removed 1.07 soft 1.08 sky 96f5282b3d2bbf6c subject none person none s3od 8ee1e649595c0053 argmax 1 selected 0.30 selection kept subjectgate 0.1507 rule na clicked 9e8abd7053a69ae9 alpha 74155041c2f1751b",

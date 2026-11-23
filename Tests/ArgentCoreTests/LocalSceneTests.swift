@@ -116,9 +116,11 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
     }
 
     /// Golden tables: every float of the buffer, by stock fingerprint. A change here changes every
-    /// print with a mask, so it needs a new compiler id (plan section 4, rule 6).
+    /// print with a mask, so it needs a new compiler id (plan section 4, rule 6). The toy stock must have a recorded
+    /// digest, and when `build/stocks` is present so must every baked stock: one without fails and is named, as in
+    /// `LightCompilerBaselineTests`, so a bake change cannot quietly leave the baked stocks unchecked.
     @Test func theTablesAreTheOnesFrozen() throws {
-        var checked = 0
+        var unrecorded: [String] = []
         for stock in try sceneStocks() {
             let fingerprint = LightCompilerBaselineTests.fingerprint(stock)
             var hash = SHA256()
@@ -127,22 +129,42 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
                 scene.tables.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
             }
             let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
-            guard let expected = Self.recorded[fingerprint] else { continue }
+            guard let expected = Self.recorded[fingerprint] else {
+                unrecorded.append("\(stock.id) (\(fingerprint))")
+                continue
+            }
             #expect(digest == expected, "\(stock.id)")
-            checked += 1
         }
-        #expect(checked >= 1)
+        #expect(unrecorded.isEmpty, """
+                Stocks have no recorded scene table digest: \(unrecorded.joined(separator: ", ")). \
+                Record them in LocalSceneTableTests.recorded after an intended change of the bake, \
+                or re-bake build/stocks if this checkout's bake is out of date.
+                """)
     }
 
-    /// Digests by stock fingerprint, taken when `LightroomLocalToneTargets` was first generated.
+    /// Digests by stock fingerprint (`LightCompilerBaselineTests.fingerprint`). The toy stock's was taken when
+    /// `LightroomLocalToneTargets` was first generated and is unchanged. The 14 baked stocks' were recorded on `main` at
+    /// `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), with `build/stocks` as baked then. The bake had changed every
+    /// stock: no fingerprint of the six stocks recorded first is among today's 14, so those entries were dropped. Scene gamut
+    /// compression (2026-11-19) acts in the shader and leaves these tables alone, which the toy stock's unchanged digest
+    /// shows. Two pairs of stocks, told apart by other numbers, make the same tables and so the same digest:
+    /// kodak-colorplus-200 and kodak-gold-200, and kodak-portra-160 and kodak-portra-160-natural.
     static let recorded: [String: String] = [
         "c57831f42cf2fff7": "88c964539876921ffdf8fc6ff5a7b0a4ac83199bb923c86fba138180d7117cf7", // light-toy
-        "283c7d2116353dcc": "a8925d76cb47f3e8904d6b015c2f7d7db312edf45b653d2ab0172f1139f8e6bf", // kodak-ektar-100
-        "97b86033aaefe487": "a0f6531ba57ee290b9f63e3acdb51c9db645d8395787d1ac9895d8178dcb61d5", // kodak-gold-200
-        "04984bdf6c444942": "d72d0aefa54ec9ff78e83d16bcff3b279becc36ead09f87ccba841bd08eebbba", // kodak-portra-160
-        "d32896bc5189e32c": "5e3b6b8f43d7e21fb254ef159e744cc86a504b9cdaec7aab62fc73420507d762", // kodak-portra-400
-        "af8472bc46ac6b41": "8814e2e12d79fb4f723dfbf79c3e17f20c5d7d7d3d522c37b36c11ee30f7c2c4", // kodak-portra-800
-        "11ba69882c255851": "e3a01d69fdd2bc7a7bd2e2763cafb6d2a7ca84654dc06dd9e5fe4cc025eff74c", // kodak-ultramax-400
+        "949d6164d3351a62": "36c343aca7463ec021e0078d4544a59ea4fd77b3f3c00cbc6c2a07c218afe207", // cinestill-800t
+        "a6da1896b2b4f9b5": "e2e6f1564b26c256f9f2de8b4526858a3359061e8d511b7198057d604200e34a", // fujifilm-c200
+        "ab3fc45ad153d406": "79edcdc3a5106511cbdf075cf223aee9c1cb66fd370e09c5df246490e6484996", // fujifilm-pro-400h
+        "034d966e7021564d": "b65faf6e6ff10d4c78aa157c0cde9a985bb8a5609dda12935481ad588eb3b236", // fujifilm-superia-400
+        "99e292f723e67e6c": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-colorplus-200
+        "41dd35cf8baec974": "8abd8c7693b6fc450b01f96694c2dac58226d46bc10d3946b2f2708067163a12", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-gold-200
+        "ef2f5ccafa11838d": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160
+        "e92abdcb666a21d9": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "2aeab8c2152ab37002f09c8af19d21c1ba2104ddd93d842cbe5f040866f5879c", // kodak-portra-400
+        "fdfd3cce8c35fb37": "f0e7a3e268aa7fd7e778ba84e2b90e834e549a5e03409e68d1ba40f711e243f1", // kodak-portra-800
+        "46b68f5377170d20": "70a4d3401f1048850a71ddeb9bf18ffa7f7ad038e96c05f298c18db227046dee", // kodak-ultramax-400
+        "d0334068916dcff7": "20a648f61712db4ec0f247b5928f563afa3d8085daec4226e55bbb21c958212f", // kodak-vision3-500t
+        "712fa666980b0174": "44c5d5e0f8fb45f9b21052314dfff2a1595749ee2af41162d635daf102521dce", // kodak-vision3-500t-cinema
     ]
 }
 
