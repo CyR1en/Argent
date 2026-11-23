@@ -37,7 +37,11 @@ import Testing
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
             characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
         if key == .escape {
-            // The dock intercepts Escape in a window-scoped application event monitor.
+            // The dock intercepts Escape in a window-scoped application event monitor, so the key goes through the application,
+            // which hands what its monitors pass on to its key window and not to the window the event names. Suites running beside
+            // this one make their own windows key, so this one is made key here, in the same turn as the press: as a hand's
+            // press, it goes to the window in front of the hand.
+            window.makeKey()
             NSApp.sendEvent(event)
         } else {
             window.sendEvent(event)
