@@ -20,7 +20,7 @@ struct AdjustmentParts: OptionSet, Hashable, Sendable {
 
     static let lens = AdjustmentParts(rawValue: 1 << 5)
 
-    /// The frame's own stock and grain.
+    /// The frame's own stock, grain and halation.
     static let film = AdjustmentParts(rawValue: 1 << 6)
 
     static let all: AdjustmentParts = [.light, .presence, .curve, .masks, .lens, .frameControls, .film]
@@ -52,7 +52,7 @@ struct AdjustmentParts: OptionSet, Hashable, Sendable {
         case .masks: "Masks"
         case .lens: "Lens"
         case .frameControls: "Rated At and Lab Balance"
-        case .film: "Film Stock and Grain"
+        case .film: "Film Stock, Grain and Halation"
         default: "Adjustments"
         }
     }
@@ -85,7 +85,7 @@ struct AdjustmentsClipboard: Equatable {
     var adjustments: ManualAdjustments
     /// The masks' names.
     var maskNotes: MaskNotes
-    /// The source's own stock, Rated at, Lab balance and grain; empty when it followed its roll.
+    /// The source's own stock, Rated at, Lab balance, grain and halation; empty when it followed its roll.
     var frameControls: FrameControls
 
     /// The parts it holds something in, which a paste can carry.
@@ -94,7 +94,7 @@ struct AdjustmentsClipboard: Equatable {
         if origin == .original { parts.insert(.light) }
         if !adjustments.masks.isEmpty { parts.insert(.masks) }
         if frameControls.ratedAt != nil || frameControls.labBalance != nil { parts.insert(.frameControls) }
-        if frameControls.stock != nil || frameControls.grain != nil { parts.insert(.film) }
+        if frameControls.stock != nil || frameControls.grain != nil || frameControls.halation != nil { parts.insert(.film) }
         return parts
     }
 
@@ -509,8 +509,8 @@ extension RollModel {
                 notes = given.notes
             }
         } catch { return .failure(PasteRefusal(why: error.localizedDescription)) }
-        // Each part of the frame's own controls carries its two alone: Rated At and Lab Balance leaves the frame's stock and
-        // grain as they are, and Film Stock and Grain its Rated at and Lab balance.
+        // Each part of the frame's own controls carries its own alone: Rated At and Lab Balance leaves the frame's stock,
+        // grain and halation as they are, and Film Stock, Grain and Halation its Rated at and Lab balance.
         var own = frameControls(frame)
         if carried.contains(.frameControls) {
             own.ratedAt = clipboard.frameControls.ratedAt
@@ -519,6 +519,7 @@ extension RollModel {
         if carried.contains(.film) {
             own.stock = clipboard.frameControls.stock
             own.grain = clipboard.frameControls.grain
+            own.halation = clipboard.frameControls.halation
         }
         let isEdit = !(values.isIdentity && origin == .auto)
         return .success(PastePlan(values: values, origin: origin, notes: notes, own: own, isEdit: isEdit, pins: isEdit && pins))

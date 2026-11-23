@@ -55,7 +55,8 @@ struct DevelopedFrame: Equatable {
     var destination: URL
     var stockIndex: Int
     var controls: RollControls
-    /// The output choices, with the frame's own grain where it has one, as its develop recorded them (`RollDeveloper.output`).
+    /// The output choices, with the frame's own grain and halation where it has them, as its develop recorded them
+    /// (`RollDeveloper.output`).
     var output: OutputSettings
     var autoRevision: String?
     var own: FrameControls?
@@ -66,7 +67,7 @@ struct DevelopedFrame: Equatable {
         self.destination = destination
         stockIndex = inputs.stockIndex
         controls = inputs.controls
-        output = inputs.output.grain(inputs.overrides[raw]?.grain)
+        output = inputs.output.with(inputs.overrides[raw])
         autoRevision = inputs.autoRevision
         own = inputs.overrides[raw]
         edit = inputs.manualEdits[raw]
@@ -79,6 +80,13 @@ extension OutputSettings {
     func grain(_ own: Grain?) -> OutputSettings {
         var settings = self
         settings.grain = own ?? grain
+        return settings
+    }
+
+    /// These choices with a frame's own grain and halation, `own`'s, in place of the roll's; as they are without them.
+    func with(_ own: FrameControls?) -> OutputSettings {
+        var settings = grain(own?.grain)
+        settings.halation = own?.halation ?? halation
         return settings
     }
 }
@@ -355,7 +363,7 @@ extension RollModel {
                         let recipe = try Recipe.make(
                             frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: digest,
                             roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock, analysis: analyses[frame.url],
-                            aim: aims[frame.url], grain: output.grain, sharpen: true,
+                            aim: aims[frame.url], grain: output.grain, halation: output.halation, sharpen: true,
                             previous: recipes[frame.url] ?? RecipeStore.checked(for: frame, library: library, check: .knownOnly)?.recipe,
                             manual: edits[frame.url], editRevision: revision, editLineage: recipes[frame.url]?.editLineage ?? lineages[frame.url] ?? lineage)
                         return RollDeveloper.Job(frame: frame, recipe: recipe, measuredFrom: sources[frame.url],
@@ -481,7 +489,7 @@ extension RollModel {
 
     /// The Develop page's mark on each frame, by file. A check on a frame a develop of this session has a file
     /// for, while a develop would still find that file and skip the frame: in the folder a develop goes to now,
-    /// and from the stock, roll controls, output choices (with the frame's own grain) and settled Auto it was made
+    /// and from the stock, roll controls, output choices (with the frame's own grain and halation) and settled Auto it was made
     /// from, with the frame's own controls, edit and raw unchanged. So another format or folder takes every check, an edit to one frame
     /// takes that frame's, and undoing either gives them back. The frames of a develop under way start with none
     /// and take theirs as each ends; a frame the last develop could not write is marked until the next one.
@@ -491,7 +499,7 @@ extension RollModel {
             let revision = isBalanced ? autoDecision?.revision : nil
             for (raw, made) in developedFrames
             where made.destination == folder && made.stockIndex == stockIndex && made.controls == controls
-                && made.output == output.grain(overrides[raw]?.grain) && made.autoRevision == revision && made.own == overrides[raw]
+                && made.output == output.with(overrides[raw]) && made.autoRevision == revision && made.own == overrides[raw]
                 && made.edit == manualEdits[raw] && made.source == sourceVersions[raw] {
                 marks[raw] = .developed
             }

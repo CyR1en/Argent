@@ -601,6 +601,49 @@ final class RollModel {
         overrides[frame.url] = own.isEmpty ? nil : own
     }
 
+    /// The Halation `frame` develops with, 0 to 200: its own, or the roll's (`OutputSettings.halation`).
+    func halation(for frame: Frame) -> Int { overrides[frame.url]?.halation ?? output.halation }
+
+    /// Gives `frame` its own Halation; `nil` or the roll's makes it follow the roll.
+    func setHalation(_ halation: Int?, for frame: Frame) {
+        var own = frameControls(frame)
+        own.setHalation(halation, roll: output.halation)
+        overrides[frame.url] = own.isEmpty ? nil : own
+    }
+
+    // MARK: The Halation row's gesture
+
+    /// Halation as its row's gesture has moved it, the roll's (`frame` nil) or a frame's own, until the gesture ends. A write to
+    /// the roll's or to a frame's saves every frame's choices (`settingsChanged`), so a drag's steps are kept here and written
+    /// once (`endHalationAdjusting`), as a Light row's are (`printedLight`). The frame view's print follows its frame's meanwhile
+    /// (`printSettings`); the sheet, the strip and the stock panel take the value as the gesture ends.
+    struct PrintedHalation: Equatable {
+        let frame: URL?
+        var value: Int
+    }
+
+    private(set) var printedHalation: PrintedHalation?
+
+    /// A step of the Halation row's gesture: `frame`'s own, or for `nil` the roll's.
+    func moveHalation(_ value: Int, for frame: Frame?) {
+        let range = OutputSettings.halationRange
+        let moved = PrintedHalation(frame: frame?.url, value: min(max(value, range.lowerBound), range.upperBound))
+        if printedHalation != moved { printedHalation = moved }
+    }
+
+    /// The Halation row's gesture ended: the frame or the roll takes what it moved to, in one write, and none where it moved
+    /// nothing.
+    func endHalationAdjusting() {
+        guard let moved = printedHalation else { return }
+        printedHalation = nil
+        if let url = moved.frame {
+            guard let frame = roll?.frames.first(where: { $0.url == url }), halation(for: frame) != moved.value else { return }
+            setHalation(moved.value, for: frame)
+        } else if output.halation != moved.value {
+            output.halation = moved.value
+        }
+    }
+
     /// What `frame` develops with: the roll's controls with the frame's own on top.
     func controls(for frame: Frame) -> RollControls { overrides[frame.url]?.applied(to: controls) ?? controls }
 
@@ -627,7 +670,7 @@ final class RollModel {
 
     func setRestoredFrameControls(_ own: FrameControls, url: URL) { overrides[url] = own.isEmpty ? nil : own }
 
-    /// Makes `frame` follow the roll in every control: stock, Rated at, Lab balance and grain.
+    /// Makes `frame` follow the roll in every control: stock, Rated at, Lab balance, grain and halation.
     func clearOverrides(for frame: Frame) {
         overrides[frame.url] = nil
     }
@@ -640,8 +683,13 @@ final class RollModel {
     /// What the frame view prints `frame` with: its settings, with a moving gradient's shape as the press last
     /// flushed it, and a moving mask row's values, in place of the edit's (`printedEdit`), so the print follows a
     /// drag the edit takes only on its release. Everywhere else, the sheet, the strip and the stock panel included, the edit's.
+    /// So too the Halation its row's gesture has moved the frame's to (`printedHalation`), on a stock that has halation.
     func printSettings(for frame: Frame, stock: Int) -> DevelopSettings {
-        settings(for: frame, stock: stock, manual: printedEdit(for: frame))
+        var settings = settings(for: frame, stock: stock, manual: printedEdit(for: frame))
+        if let moved = printedHalation, moved.frame == frame.url, settings.halation {
+            settings.halationAmount = OutputSettings.halationAmount(moved.value)
+        }
+        return settings
     }
 
     /// The frame's edit as the frame view prints it: with `printedLight` in place while a Light row moves, `MaskEditor.printed`
@@ -757,7 +805,8 @@ final class RollModel {
         do {
             return try DevelopmentResolver.resolve(stock: selectedStock, stockDigest: stockDigests[stock],
                 controls: controls(for: frame), aim: printAim(for: frame), manual: Self.printable(manual),
-                grain: grain(for: frame).amount, grainSeed: frame.grainSeed, sharpen: true)
+                grain: grain(for: frame).amount, halation: OutputSettings.halationAmount(halation(for: frame)),
+                grainSeed: frame.grainSeed, sharpen: true)
         } catch {
             // Keep the last recorded rendering available while the inspector asks for an
             // explicit baseline update. Export rejects this unresolved recipe.
@@ -767,6 +816,7 @@ final class RollModel {
         settings.grain = grain(for: frame).amount
         settings.grainSeed = frame.grainSeed
         settings.halation = true
+        settings.halationAmount = OutputSettings.halationAmount(halation(for: frame))
         settings.sharpen = true
         return settings
     }

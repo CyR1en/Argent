@@ -278,8 +278,11 @@ public final class FilmRenderer {
 
         // Halation from the frame's own light, at the field's low resolution, added before the
         // Negative LUT; the field is made from the frame whatever its size, so preview and file agree.
+        // The Halation control scales the stock's strength: at 1 the stock's own, to the bit, and at 0
+        // no field is made, so the render is the one without halation.
         var halation: PooledTexture?
-        if settings.halation, let stockHalation = stock.halation {
+        if settings.halation, settings.halationAmount > 0, var stockHalation = stock.halation {
+            stockHalation.strength *= settings.halationAmount
             halation = try halationField.field(for: frame, exposureStops: negativeParams.exposureStops,
                                               halation: stockHalation, scene: scene)
         }

@@ -310,12 +310,14 @@ public final class RollDeveloper: @unchecked Sendable {
         return SourceStamp.of(file).map(recorded.isSameVersion(atSamePathAs:)) == true
     }
 
-    /// The output `job` develops with: `output` with the frame's own grain (`FrameControls.grain`), which its render has, in place
-    /// of the roll's. Its receipt records that, and the next develop compares it, so a change to the roll's grain does not make
-    /// again a frame whose own grain it does not reach. A frame that follows the roll develops with `output` as it is.
+    /// The output `job` develops with: `output` with the frame's own grain and halation (`FrameControls.grain`, `.halation`),
+    /// which its render has, in place of the roll's. Its receipt records that, and the next develop compares it, so a change to the
+    /// roll's grain or halation does not make again a frame whose own it does not reach. A frame that follows the roll develops with
+    /// `output` as it is.
     static func output(_ output: OutputSettings, for job: Job) -> OutputSettings {
         var own = output
         if let grain = job.recipe.frame.grain { own.grain = grain }
+        if let halation = job.recipe.frame.halation { own.halation = halation }
         return own
     }
 

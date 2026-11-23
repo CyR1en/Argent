@@ -1137,6 +1137,7 @@ public final class FilmPreviews: @unchecked Sendable {
         probe.grain = 0
         probe.grainSeed = 0
         probe.halation = false
+        probe.halationAmount = 1
         probe.sharpen = false
         let manual = settings.manual
         if !manual.adjustments.masks.isEmpty || !manual.adjustments.lens.isDefault {

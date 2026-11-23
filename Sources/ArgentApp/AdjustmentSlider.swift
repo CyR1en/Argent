@@ -113,6 +113,12 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     static let maskAmount = AdjustmentSliderSpec(title: "Amount", range: 0...200, step: 1, defaultValue: 100, polarity: .unipolar,
                                                  arrowStep: 1, smallKeyStep: 5, largeKeyStep: 20, group: .mask, order: -1)
 
+    /// Film settings' Halation, 0 to 200 with 100 the stock's own (`OutputSettings.halation`), as a mask's Amount reads. In no
+    /// group: it stands alone in its popover, and takes the arrows.
+    static let halation = AdjustmentSliderSpec(title: "Halation", range: Float(OutputSettings.halationRange.lowerBound)...Float(OutputSettings.halationRange.upperBound),
+                                               step: 1, defaultValue: Float(OutputSettings.defaultHalation), polarity: .unipolar,
+                                               arrowStep: 1, smallKeyStep: 5, largeKeyStep: 20)
+
     static func lensAmount(_ control: LensSettings.Control) -> AdjustmentSliderSpec {
         AdjustmentSliderSpec(title: control.title, range: control.range, step: 1, defaultValue: control.defaultValue,
                              polarity: control == .vignette ? .bipolar : .unipolar,

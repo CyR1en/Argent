@@ -15,11 +15,14 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
     public var grain: Float
     /// Which grain the frame gets; the same seed gives the same grain.
     public var grainSeed: UInt32
-    /// The stock's halation; it is part of the stock, not a control, and off only where a
-    /// render leaves it out on purpose.
+    /// The stock's halation; off where the stock has none, and where a render leaves it out on
+    /// purpose.
     public var halation: Bool
-    /// Capture sharpening (`CaptureSharpening`); like halation it is part of every render in
-    /// the app, not a control, and off only where a render leaves it out on purpose.
+    /// Halation, as a multiple of the stock's own strength: 1 is the stock's, 0 none, 2 twice as
+    /// much. The Halation control's value over 100; read only while `halation` is on.
+    public var halationAmount: Float
+    /// Capture sharpening (`CaptureSharpening`); it is part of every render in the app, not a
+    /// control, and off only where a render leaves it out on purpose.
     public var sharpen: Bool
     /// Scene/print refinements around a frame's fixed automatic reference. Identity takes
     /// the original render path, including the original grain and halation behavior.
@@ -28,9 +31,10 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
     public var tone: PrintTone
 
     public init(ratedAt: Float? = nil, labBalance: SIMD3<Float> = .zero, printExposure: Float = 0,
-                grain: Float = 0, grainSeed: UInt32 = 0, halation: Bool = false, sharpen: Bool = false,
-                manual: ManualRenderSettings = .identity, tone: PrintTone = .identity) {
+                grain: Float = 0, grainSeed: UInt32 = 0, halation: Bool = false, halationAmount: Float = 1,
+                sharpen: Bool = false, manual: ManualRenderSettings = .identity, tone: PrintTone = .identity) {
         self.halation = halation
+        self.halationAmount = halationAmount
         self.sharpen = sharpen
         self.ratedAt = ratedAt
         self.labBalance = labBalance

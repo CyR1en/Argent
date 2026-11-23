@@ -100,7 +100,7 @@ struct WorkspaceDock: View {
                     .foregroundStyle(settingsShown ? Graphite.dockAccent : Graphite.secondaryText)
             }
             .buttonStyle(.graphite(.quiet, size: .small, isOn: settingsShown))
-            .help("Film settings: Rated at, Lab balance and Grain.")
+            .help("Film settings: Rated at, Lab balance, Grain and Halation.")
             .accessibilityLabel("Film settings")
             .accessibilityValue(settingsShown ? "Expanded" : "Collapsed")
         }

@@ -518,7 +518,7 @@ extension RollModel {
     }
 
     /// Whether saving the roll's choices saves the frame: its recipe was read, and it has an edit, a held one, its own controls
-    /// (stock, Rated at, Lab balance or grain), or a recipe, read or on its way from a save this session began. So a frame given
+    /// (stock, Rated at, Lab balance, grain or halation), or a recipe, read or on its way from a save this session began. So a frame given
     /// only its own stock has its first recipe saved, and one that follows the roll again before that save lands is saved again.
     private func savesWithChoices(_ url: URL) -> Bool {
         manualLoaded.contains(url) && (manualEdits[url] != nil || heldManualEdits[url] != nil || manualRecipes[url] != nil
@@ -548,7 +548,7 @@ extension RollModel {
                 do {
                     recipe = try Recipe.make(frame: frame, byteCount: RecipeStore.byteCount(of: frame.url),
                         stock: stock, stockDigest: digest, roll: rollControls, own: own, rollStock: rollStock, analysis: analysis, aim: aim,
-                        grain: output.grain, sharpen: true, previous: previous, manual: manual,
+                        grain: output.grain, halation: output.halation, sharpen: true, previous: previous, manual: manual,
                         editRevision: revision, editLineage: lineage, heldManual: held)
                 } catch {
                     // Preserve undo intent for an unavailable baseline without pretending it
@@ -564,7 +564,7 @@ extension RollModel {
                     recipe = Recipe(frame: frame, byteCount: RecipeStore.byteCount(of: frame.url),
                         stock: stock, stockDigest: digest, roll: rollControls, own: own, rollStock: rollStock, analysis: analysis,
                         aim: manual.baseline.aim,
-                        grain: output.grain, sharpen: true, previous: previous, manual: manual,
+                        grain: output.grain, halation: output.halation, sharpen: true, previous: previous, manual: manual,
                         editRevision: revision, editLineage: lineage, heldManual: held, resolved: recorded)
                 }
                 if let manual, manual.baseline.sourceSHA256 != verified.sha256 { throw ManualSaveError.sourceChanged }

@@ -63,7 +63,11 @@ public struct AutomaticBaseline: Sendable, Equatable, Codable {
         self.aim = aim
         self.analysisVersion = analysisVersion
         self.resolverVersion = resolverVersion
-        self.baseRender = baseRender
+        // Halation stays live under a pin, as grain does (`DevelopmentResolver.resolve`), so the pin keeps none of the
+        // control: a frame pinned at another amount needs no newer recipe once the control is back at the stock's own.
+        var render = baseRender
+        render.halationAmount = nil
+        self.baseRender = render
         self.origin = origin
     }
 
@@ -178,10 +182,11 @@ public enum DevelopmentResolver {
         }
     }
 
-    /// Preview, comparison, and export use this same conversion. Grain and stock choices stay live;
-    /// unchanged automatic choices retain their recorded resolved render across analysis updates.
+    /// Preview, comparison, and export use this same conversion. Grain, halation and stock choices stay live;
+    /// unchanged automatic choices retain their recorded resolved render across analysis updates. `halation` is
+    /// the multiple of the stock's own (`OutputSettings.halationAmount`).
     public static func resolve(stock: Stock, stockDigest: String, controls: RollControls, aim: PrintAim,
-                               manual: ManualEdit?, grain: Float, grainSeed: UInt32,
+                               manual: ManualEdit?, grain: Float, halation: Float = 1, grainSeed: UInt32,
                                sharpen: Bool = true) throws -> DevelopSettings {
         var settings: DevelopSettings
         if let edit = manual {
@@ -216,6 +221,8 @@ public enum DevelopmentResolver {
         settings.grain = grain
         settings.grainSeed = grainSeed
         settings.halation = stock.halation != nil
+        // A stock without halation takes none of the control, so its settings do not move with it.
+        settings.halationAmount = settings.halation ? halation : 1
         settings.sharpen = sharpen
         return settings
     }
