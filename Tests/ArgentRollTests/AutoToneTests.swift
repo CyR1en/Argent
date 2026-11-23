@@ -142,4 +142,38 @@ import Testing
         #expect(PrintAim().tone == .identity)
         #expect(RollControls().settings(for: Self.stock, aim: PrintAim()).tone == .identity)
     }
+
+    /// A frame saved on the tone step's first version keeps it: its recipe writes and reads it, its develop's render version
+    /// names it, and its pin keeps it even when a new rating solves the table again. A new frame, and a new pin, take the
+    /// current version (`PrintTone.WhiteHold`).
+    @Test func aFrameSavedOnTheFirstToneVersionKeepsIt() throws {
+        let controls = RollControls()
+        let aim = PrintAim(level: -0.1, burn: 0.4, dodge: 0.15)
+        #expect(aim.tone.version == PrintTone.currentVersion && PrintTone.currentVersion != "2026-11-05-2", "a new frame takes the current table")
+        var first = controls.settings(for: Self.stock, aim: aim)
+        first.tone.version = "2026-11-05-2"
+        let render = Recipe.Render(settings: first, grain: .off)
+        let text = String(decoding: try JSONEncoder().encode(render), as: UTF8.self)
+        #expect(text.contains(#""version":"2026-11-05-2""#))
+        let decoded = try JSONDecoder().decode(Recipe.Render.self, from: Data(text.utf8))
+        #expect(decoded == render && decoded.settings.tone.version == "2026-11-05-2")
+        #expect(RenderGraph.version(for: decoded.settings) == RenderGraph.version + "+tone-2026-11-05-2", "its develop is not made again")
+        var current = render
+        current.tone?.version = PrintTone.currentVersion
+        #expect(current != render && RenderGraph.version(for: current.settings) != RenderGraph.version(for: render.settings))
+
+        let baseline = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: Self.stock.id, stockDigest: Self.stock.digest,
+                                         controls: controls, aim: aim, analysisVersion: ExposureAnalysis.currentVersion, baseRender: render)
+        let edit = ManualEdit(adjustments: try ManualAdjustments(shadows: 20), baseline: baseline)
+        func resolve(_ controls: RollControls, _ manual: ManualEdit?) throws -> DevelopSettings {
+            try DevelopmentResolver.resolve(stock: Self.stock, stockDigest: Self.stock.digest, controls: controls, aim: aim, manual: manual,
+                                            grain: 0, grainSeed: 0)
+        }
+        #expect(try resolve(controls, edit).tone == first.tone, "the pin prints its recorded render")
+        let rated = RollControls(ratedAt: .oneStopOver)
+        let again = try resolve(rated, edit)
+        #expect(again.ratedAt != first.ratedAt && again.tone.version == "2026-11-05-2", "a new rating keeps the pin's table version")
+        #expect(again.tone.burn == aim.burn && again.tone.dodge == aim.dodge && again.tone.referenceStops == aim.level)
+        #expect(try resolve(rated, nil).tone.version == PrintTone.currentVersion, "a new pin takes the current version")
+    }
 }

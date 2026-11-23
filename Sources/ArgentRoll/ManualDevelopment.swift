@@ -203,6 +203,9 @@ public enum DevelopmentResolver {
                 case currentVersion: settings = controls.settings(for: stock, aim: baseline.aim)
                 default: throw Failure.unsupportedResolver(baseline.resolverVersion)
                 }
+                // The pin's tone step keeps the version it recorded, as the edit keeps its Light compiler: a new stock or
+                // rating solves its table again, and by the rules the frame was saved on (`PrintTone.versions`).
+                if let recorded = baseline.baseRender.tone, settings.tone.isActive { settings.tone.version = recorded.version }
             }
             settings.manual = try ManualRenderSettings(adjustments: edit.adjustments,
                                                        referenceStops: baseline.aim.level, version: edit.curveVersion)
