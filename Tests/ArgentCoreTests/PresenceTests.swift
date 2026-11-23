@@ -51,6 +51,23 @@ import Testing
         #expect(decoded == values && decoded.presence.version == Presence.currentVersion)
     }
 
+    /// A saved `2026-11-11-1` Presence keeps its version across slider steps and Paste Only, normalizes to the current version when
+    /// cleared to identity, and adopts the current version on `updatingVersion()`.
+    @Test func recordedConstantsVersionSurvivesStepsAndUpdatesOnNewPin() throws {
+        #expect(Presence.currentVersion == "2026-11-23-1")
+        #expect(Presence.supports(version: "2026-11-11-1") && Presence.supports(version: "2026-11-23-1"))
+        let recorded = try ManualAdjustments(presence: Presence([.vibrance: 35], version: "2026-11-11-1"))
+        let stepped = try recorded.setting(.presence(.clarity), to: 15)
+        #expect(stepped.presence.version == "2026-11-11-1" && stepped.presence.vibrance == 35 && stepped.presence.clarity == 15)
+        let incoming = try ManualAdjustments(presence: Presence([.vibrance: -20]))
+        let kept = try incoming.keepingVersions(.presence, of: recorded)
+        #expect(kept.presence.version == "2026-11-11-1" && kept.presence.vibrance == -20)
+        let updated = try recorded.updatingVersions()
+        #expect(updated.presence.version == Presence.currentVersion && updated.presence.vibrance == 35)
+        let cleared = try recorded.setting(.presence(.vibrance), to: 0)
+        #expect(cleared.presence.isIdentity && cleared.presence.version == Presence.currentVersion)
+    }
+
     @Test func thePartsAreOneDecisionForTheLaneThePasteAndTheResets() throws {
         let source = try ManualAdjustments(shadows: 20, presence: Presence([.clarity: 30]))
         let destination = try ManualAdjustments(exposureEV: 1, curves: ToneCurves(tone: ToneCurves.Preset.softContrast.curve))

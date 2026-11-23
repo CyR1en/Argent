@@ -7,8 +7,9 @@ import Foundation
 /// `PresencePrintParameters`, each filled from here per render.
 ///
 /// A frame records the version it was made with (`Presence.version`), as the Light compilers' versions are recorded, so measuring
-/// again means a new version beside the old once a frame may have saved one. Until Presence first lands, the validators' refreshes
-/// rewrite this version's inputs in place: no recipe holds it yet.
+/// again means a new version beside the old once a frame may have saved one. `2026-11-11-1` holds V3's original six stocks' Vibrance
+/// strengths (leaving newer stocks at the default 1 and 1) and stays intact so recipes saved on it render the same. `2026-11-23-1`
+/// adds measured Vibrance strengths for the eight newer stocks from V3's chroma-ratio rule while keeping the original six unchanged.
 public struct PresenceConstants: Sendable, Equatable {
     public let version: String
     /// The inputs it was written from, for `docs/provenance.md`.
@@ -23,7 +24,7 @@ public struct PresenceConstants: Sendable, Equatable {
     public let detailLimitStops: Float
 
     /// Every version this build renders, oldest first. `Presence.supports(version:)` reads it.
-    public static let all: [PresenceConstants] = [.v2026_11_11_1]
+    public static let all: [PresenceConstants] = [.v2026_11_11_1, .v2026_11_23_1]
 
     public static func named(_ version: String) -> PresenceConstants? { all.first { $0.version == version } }
 

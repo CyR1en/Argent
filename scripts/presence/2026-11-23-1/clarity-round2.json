@@ -1,0 +1,930 @@
+{
+"script": "scripts/lightroom-probe/fit_clarity_round2.py",
+"recommendation": {
+"clarity": "clarity-guided (F1), constants unchanged",
+"texture": "texture-guided-band (F1), constants unchanged",
+"source": "/Users/cyr1en/Documents/ArgentResearch/presence-20261111.noindex/fit/texture-clarity/constants.json",
+"clarity-guided": {
+"positive": {
+"detail": "guided",
+"params": {
+"field": 1024,
+"radius": 0.08,
+"epsilon": 1.0
+},
+"weight": [
+2.292,
+2.2472,
+1.9924,
+1.61,
+1.3175,
+0.9646,
+1.0876,
+0.7816,
+0.2608,
+0.0256,
+-0.0594
+],
+"law": [
+0.1744,
+0.3739,
+0.5141,
+0.7077
+],
+"perValue": {
+"10": 0.0539,
+"25": 0.1334,
+"50": 0.37,
+"75": 0.394,
+"100": 0.7077
+},
+"perFrame": {
+"p-photo-iso kodak-ektar-100 +50": 0.3937,
+"p-photo-iso kodak-ektar-100 +100": 0.7189,
+"p-photo-iso kodak-portra-400 +50": 0.4121,
+"p-photo-iso kodak-portra-400 +100": 0.7075,
+"p-photo-sky kodak-ektar-100 +50": 0.3978,
+"p-photo-sky kodak-ektar-100 +100": 0.7352,
+"p-photo-sky kodak-portra-400 +50": 0.4551,
+"p-photo-sky kodak-portra-400 +100": 0.8413,
+"p-photo-texture kodak-ektar-100 +50": 0.4243,
+"p-photo-texture kodak-ektar-100 +100": 0.8328,
+"p-photo-texture kodak-portra-400 +50": 0.4472,
+"p-photo-texture kodak-portra-400 +100": 0.8672,
+"p-raw kodak-ektar-100 +10": 0.0495,
+"p-raw kodak-ektar-100 +25": 0.1229,
+"p-raw kodak-ektar-100 +50": 0.2499,
+"p-raw kodak-ektar-100 +75": 0.3658,
+"p-raw kodak-ektar-100 +100": 0.5075,
+"p-raw kodak-portra-400 +10": 0.0595,
+"p-raw kodak-portra-400 +25": 0.1469,
+"p-raw kodak-portra-400 +50": 0.2941,
+"p-raw kodak-portra-400 +75": 0.4288,
+"p-raw kodak-portra-400 +100": 0.5855
+}
+},
+"negative": {
+"detail": "guided",
+"params": {
+"field": 1024,
+"radius": 0.02,
+"epsilon": 1.0
+},
+"weight": [
+0.4029,
+0.3624,
+0.3361,
+0.4219,
+0.6145,
+0.8682,
+1.1223,
+1.3095,
+1.5987,
+1.5471,
+1.5098
+],
+"law": [
+-0.2233,
+-0.3987,
+-0.561,
+-0.6857
+],
+"perValue": {
+"-100": -0.6857,
+"-75": -0.5893,
+"-50": -0.4025,
+"-25": -0.2348,
+"-10": -0.0991
+},
+"perFrame": {
+"p-photo-iso kodak-ektar-100 -100": -0.6813,
+"p-photo-iso kodak-ektar-100 -50": -0.3912,
+"p-photo-iso kodak-portra-400 -100": -0.7603,
+"p-photo-iso kodak-portra-400 -50": -0.4398,
+"p-photo-sky kodak-ektar-100 -100": -0.628,
+"p-photo-sky kodak-ektar-100 -50": -0.361,
+"p-photo-sky kodak-portra-400 -100": -0.7131,
+"p-photo-sky kodak-portra-400 -50": -0.4101,
+"p-photo-texture kodak-ektar-100 -100": -0.5982,
+"p-photo-texture kodak-ektar-100 -50": -0.3528,
+"p-photo-texture kodak-portra-400 -100": -0.7113,
+"p-photo-texture kodak-portra-400 -50": -0.4157,
+"p-raw kodak-ektar-100 -100": -0.6761,
+"p-raw kodak-ektar-100 -75": -0.5544,
+"p-raw kodak-ektar-100 -50": -0.4067,
+"p-raw kodak-ektar-100 -25": -0.2218,
+"p-raw kodak-ektar-100 -10": -0.0937,
+"p-raw kodak-portra-400 -100": -0.779,
+"p-raw kodak-portra-400 -75": -0.6358,
+"p-raw kodak-portra-400 -50": -0.4641,
+"p-raw kodak-portra-400 -25": -0.2519,
+"p-raw kodak-portra-400 -10": -0.1061
+}
+}
+},
+"texture-guided-band": {
+"positive": {
+"detail": "band",
+"params": {
+"field_scale": 0.5,
+"radius_px": 20,
+"epsilon": 0.25
+},
+"weight": [
+3.35,
+1.9899,
+0.9658,
+0.8895,
+0.828,
+0.8848,
+0.9219,
+0.9708,
+1.1098,
+1.3066,
+1.4966
+],
+"law": [
+0.2517,
+0.4461,
+0.5913,
+0.7046
+],
+"perValue": {
+"10": 0.1019,
+"25": 0.2361,
+"50": 0.4457,
+"75": 0.5549,
+"100": 0.7046
+},
+"perFrame": {
+"p-photo-iso kodak-ektar-100 +50": 0.4222,
+"p-photo-iso kodak-ektar-100 +100": 0.6721,
+"p-photo-iso kodak-portra-400 +50": 0.5243,
+"p-photo-iso kodak-portra-400 +100": 0.8313,
+"p-photo-sky kodak-ektar-100 +50": 0.4548,
+"p-photo-sky kodak-ektar-100 +100": 0.7167,
+"p-photo-sky kodak-portra-400 +50": 0.519,
+"p-photo-sky kodak-portra-400 +100": 0.8178,
+"p-photo-texture kodak-ektar-100 +50": 0.4002,
+"p-photo-texture kodak-ektar-100 +100": 0.6313,
+"p-photo-texture kodak-portra-400 +50": 0.4745,
+"p-photo-texture kodak-portra-400 +100": 0.7488,
+"p-raw kodak-ektar-100 +10": 0.0949,
+"p-raw kodak-ektar-100 +25": 0.22,
+"p-raw kodak-ektar-100 +50": 0.3894,
+"p-raw kodak-ektar-100 +75": 0.5177,
+"p-raw kodak-ektar-100 +100": 0.6175,
+"p-raw kodak-portra-400 +10": 0.1118,
+"p-raw kodak-portra-400 +25": 0.2587,
+"p-raw kodak-portra-400 +50": 0.4567,
+"p-raw kodak-portra-400 +75": 0.6063,
+"p-raw kodak-portra-400 +100": 0.722
+}
+},
+"negative": {
+"detail": "band",
+"params": {
+"field_scale": 0.5,
+"radius_px": 20,
+"epsilon": 0.25
+},
+"weight": [
+3.1235,
+1.757,
+0.9443,
+0.8913,
+0.8303,
+0.9315,
+0.9599,
+0.9623,
+1.0897,
+1.2835,
+1.4985
+],
+"law": [
+-0.2006,
+-0.3603,
+-0.4909,
+-0.5937
+],
+"perValue": {
+"-100": -0.5937,
+"-75": -0.4547,
+"-50": -0.3603,
+"-25": -0.186,
+"-10": -0.0794
+},
+"perFrame": {
+"p-photo-iso kodak-ektar-100 -100": -0.5852,
+"p-photo-iso kodak-ektar-100 -50": -0.3499,
+"p-photo-iso kodak-portra-400 -100": -0.719,
+"p-photo-iso kodak-portra-400 -50": -0.4333,
+"p-photo-sky kodak-ektar-100 -100": -0.6055,
+"p-photo-sky kodak-ektar-100 -50": -0.3673,
+"p-photo-sky kodak-portra-400 -100": -0.6888,
+"p-photo-sky kodak-portra-400 -50": -0.4179,
+"p-photo-texture kodak-ektar-100 -100": -0.5342,
+"p-photo-texture kodak-ektar-100 -50": -0.3244,
+"p-photo-texture kodak-portra-400 -100": -0.6317,
+"p-photo-texture kodak-portra-400 -50": -0.3835,
+"p-raw kodak-ektar-100 -100": -0.5112,
+"p-raw kodak-ektar-100 -75": -0.4232,
+"p-raw kodak-ektar-100 -50": -0.3117,
+"p-raw kodak-ektar-100 -25": -0.1733,
+"p-raw kodak-ektar-100 -10": -0.074,
+"p-raw kodak-portra-400 -100": -0.6046,
+"p-raw kodak-portra-400 -75": -0.4992,
+"p-raw kodak-portra-400 -50": -0.3671,
+"p-raw kodak-portra-400 -25": -0.2036,
+"p-raw kodak-portra-400 -10": -0.0869
+}
+}
+}
+},
+"split": {
+"fit": [
+"p-raw",
+"p-photo-sky",
+"p-photo-texture",
+"p-photo-iso"
+],
+"held_round1": [
+"p-photo-hazy",
+"p-photo-skin",
+"p-photo-saturated",
+"p-photo-foliage",
+"p-photo-night",
+"p-photo-flat",
+"p-photo-contrast"
+],
+"held_round2": [
+"q-photo-horizon",
+"q-photo-mirror-lights",
+"q-photo-magenta-night",
+"q-photo-hall",
+"q-photo-fog-woods",
+"q-photo-dog-snow",
+"q-photo-gull-flight",
+"q-photo-disco",
+"q-photo-flower",
+"q-photo-birches",
+"q-photo-dog-woods",
+"q-photo-chickadee",
+"q-photo-tower",
+"q-photo-concrete",
+"q-photo-gulls",
+"q-photo-wave",
+"q-photo-chandeliers",
+"q-photo-holly",
+"q-photo-wave-shore",
+"q-photo-bird-branches"
+],
+"step5": {
+"fit": [
+"p-raw",
+"p-photo-sky",
+"p-photo-texture",
+"p-photo-iso",
+"p-photo-hazy",
+"p-photo-skin",
+"p-photo-saturated",
+"p-photo-foliage",
+"p-photo-night",
+"p-photo-flat",
+"p-photo-contrast"
+],
+"held": [
+"q-photo-horizon",
+"q-photo-mirror-lights",
+"q-photo-magenta-night",
+"q-photo-hall",
+"q-photo-fog-woods",
+"q-photo-dog-snow",
+"q-photo-gull-flight",
+"q-photo-disco",
+"q-photo-flower",
+"q-photo-birches",
+"q-photo-dog-woods",
+"q-photo-chickadee",
+"q-photo-tower",
+"q-photo-concrete",
+"q-photo-gulls",
+"q-photo-wave",
+"q-photo-chandeliers",
+"q-photo-holly",
+"q-photo-wave-shore",
+"q-photo-bird-branches"
+]
+}
+},
+"rule": {
+"r2_bar": 0.75,
+"film_improvement_bar": 0.1,
+"verdict": "no structure meets part 1, so none can replace F1's guided fields: keep F1's guided fields"
+},
+"pass_bars_held_out": {
+"clarity-guided -100": {
+"metric": "rmse",
+"held_out": 2.153,
+"bar": 2.26,
+"runs": 54,
+"r2": 0.592,
+"floor": 1.028
+},
+"clarity-guided -50": {
+"metric": "rmse",
+"held_out": 1.289,
+"bar": 1.35,
+"runs": 54,
+"r2": 0.584,
+"floor": 0.627
+},
+"clarity-guided +50": {
+"metric": "rmse",
+"held_out": 2.857,
+"bar": 3.0,
+"runs": 54,
+"r2": 0.043,
+"floor": 1.281
+},
+"clarity-guided +100": {
+"metric": "rmse",
+"held_out": 5.521,
+"bar": 5.8,
+"runs": 54,
+"r2": 0.064,
+"floor": 2.283
+},
+"texture-guided-band -100": {
+"metric": "crop_rmse",
+"held_out": 0.656,
+"bar": 0.69,
+"runs": 54,
+"r2": 0.696,
+"floor": 0.524
+},
+"texture-guided-band -50": {
+"metric": "crop_rmse",
+"held_out": 0.361,
+"bar": 0.38,
+"runs": 14,
+"r2": 0.881,
+"floor": 0.188
+},
+"texture-guided-band +50": {
+"metric": "crop_rmse",
+"held_out": 0.467,
+"bar": 0.49,
+"runs": 14,
+"r2": 0.841,
+"floor": 0.221
+},
+"texture-guided-band +100": {
+"metric": "crop_rmse",
+"held_out": 0.863,
+"bar": 0.91,
+"runs": 54,
+"r2": 0.608,
+"floor": 0.521
+}
+},
+"pass_bar_margin": 1.05,
+"llf": {
+"made_by": "llf_grating_fit, llf-gratings.json",
+"families": {
+"gauss": [
+0.1,
+0.15,
+0.25,
+0.4,
+0.7
+],
+"cauchy": [
+0.05,
+0.1,
+0.2,
+0.35,
+0.6
+]
+},
+"levels": 10,
+"grid_step": "0.75 sigma",
+"gauss positive strengths [width][level]": [
+[
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+1.9539,
+1.8628
+],
+[
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+1.0719,
+0.0,
+0.0
+],
+[
+0.0,
+0.0,
+0.0073,
+1.2886,
+0.7874,
+1.2148,
+1.0807,
+0.3589,
+0.4383,
+0.0
+],
+[
+0.0,
+0.0,
+0.706,
+0.0,
+0.3351,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+],
+[
+1.3744,
+1.2933,
+0.2608,
+0.0,
+0.0,
+0.0,
+0.0,
+0.127,
+0.0,
+0.0
+]
+],
+"cauchy positive strengths [width][level]": [
+[
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.5936,
+2.8583,
+3.5918
+],
+[
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+1.3312,
+0.0
+],
+[
+0.0,
+0.0,
+0.0,
+1.6335,
+0.5467,
+1.5551,
+1.3349,
+1.599,
+0.0,
+0.0
+],
+[
+0.0,
+0.0,
+0.5469,
+0.0,
+0.753,
+0.0058,
+0.0,
+0.0,
+0.0,
+0.0
+],
+[
+1.559,
+1.4333,
+0.5443,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0,
+0.0
+]
+],
+"gauss grating rms": 0.2001,
+"cauchy grating rms": 0.2033
+},
+"signal": {
+"made_by": "run_signal_chart, signal-chart.json",
+"best": {
+"space": "scene",
+"signal": "mean of Rec. 2020 RGB",
+"slope": -1.344,
+"rms_log2_weight": 0.091,
+"share_explained": 0.943
+},
+"law": "Clarity +100's weight per hue ~ (S / Y) ** slope, S the best signal"
+},
+"adaptation": {
+"made_by": "run_adaptation, adaptation.json",
+"rows": [
+{
+"value": "clarity+50",
+"statistic": "median",
+"common": 0.06608030722584946,
+"predicted": -0.05816852337076021,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.5609022556390978,
+"scale_fit": [
+1.1971059282013192,
+0.07968127045009557
+],
+"offset_fit": [
+-0.1632046657734209,
+-0.07863124432563053
+]
+},
+{
+"value": "clarity+50",
+"statistic": "mean",
+"common": 0.06608030722584946,
+"predicted": 0.08818952809920697,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.5624060150375939,
+"scale_fit": [
+0.8833224533839409,
+-0.05704948164457035
+],
+"offset_fit": [
+-0.05474597312437399,
+-0.022134491475848176
+]
+},
+{
+"value": "clarity+50",
+"statistic": "p10",
+"common": 0.06608030722584946,
+"predicted": -0.01522527496503479,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.6075187969924812,
+"scale_fit": [
+0.620747946866993,
+-0.07758216423770077
+],
+"offset_fit": [
+0.06051766189104445,
+0.011096280115118626
+]
+},
+{
+"value": "clarity+50",
+"statistic": "p90",
+"common": 0.06608030722584946,
+"predicted": -0.08351473305980872,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.34586466165413526,
+"scale_fit": [
+0.9850270908301773,
+-0.05239899389474169
+],
+"offset_fit": [
+0.03781685407468223,
+0.04200878348692333
+]
+},
+{
+"value": "clarity+50",
+"statistic": "spread",
+"common": 0.06608030722584946,
+"predicted": 0.062238655397283585,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": 0.4796992481203006,
+"scale_fit": [
+0.622128735682839,
+0.09222535206615602
+],
+"offset_fit": [
+0.04354974630420701,
+-0.009395473198059919
+]
+},
+{
+"value": "clarity+50",
+"statistic": "log linear mean",
+"common": 0.06608030722584946,
+"predicted": 0.06427600885175314,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.5082706766917292,
+"scale_fit": [
+1.0438505552813362,
+0.007706143144871578
+],
+"offset_fit": [
+-0.04695084506711671,
+-0.02660488001684131
+]
+},
+{
+"value": "clarity+50",
+"statistic": "detail rms",
+"common": 0.06608030722584946,
+"predicted": 0.014251914571205981,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": -0.3759398496240601,
+"scale_fit": [
+1.5548842273621253,
+-1.3282370294037043
+],
+"offset_fit": [
+-0.21192444798256216,
+0.5410764950738564
+]
+},
+{
+"value": "clarity+50",
+"statistic": "coarse rms",
+"common": 0.06608030722584946,
+"predicted": -0.16718974922143132,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": 0.5383458646616541,
+"scale_fit": [
+0.7259462069261032,
+0.24619494379634693
+],
+"offset_fit": [
+0.16796895404388332,
+-0.1345097087715953
+]
+},
+{
+"value": "clarity+50",
+"statistic": "fine rms",
+"common": 0.06608030722584946,
+"predicted": 0.018213574510835995,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": 0.5488721804511278,
+"scale_fit": [
+1.0054428977020968,
+0.07257960297504536
+],
+"offset_fit": [
+0.020592404302772063,
+-0.055619886004900254
+]
+},
+{
+"value": "clarity+50",
+"statistic": "dark share",
+"common": 0.06608030722584946,
+"predicted": -0.03540736166538064,
+"oracle": 0.5036016155010135,
+"rank_corr_round2": 0.09624060150375939,
+"scale_fit": [
+0.8799155471811373,
+0.9342195845768939
+],
+"offset_fit": [
+0.07144519826670076,
+-0.4330437869600899
+]
+},
+{
+"value": "clarity+100",
+"statistic": "median",
+"common": 0.05703281433778264,
+"predicted": -0.03697418123129377,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.47368421052631576,
+"scale_fit": [
+1.19826137549388,
+0.07911499576958052
+],
+"offset_fit": [
+-0.3234328180690619,
+-0.15597830424986706
+]
+},
+{
+"value": "clarity+100",
+"statistic": "mean",
+"common": 0.05703281433778264,
+"predicted": 0.07485533541310509,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.4616541353383458,
+"scale_fit": [
+0.7784587497534389,
+-0.09884407716064095
+],
+"offset_fit": [
+-0.10979554938653711,
+-0.044495680966699855
+]
+},
+{
+"value": "clarity+100",
+"statistic": "p10",
+"common": 0.05703281433778264,
+"predicted": -0.044169255713767765,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.5218045112781955,
+"scale_fit": [
+0.5024392907042038,
+-0.10047350789675347
+],
+"offset_fit": [
+0.12184518571670377,
+0.0222934859488888
+]
+},
+{
+"value": "clarity+100",
+"statistic": "p90",
+"common": 0.05703281433778264,
+"predicted": -0.16601056702986722,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.26616541353383455,
+"scale_fit": [
+0.9274805726408121,
+-0.12270805985064395
+],
+"offset_fit": [
+0.07183167862862191,
+0.07922799587760795
+]
+},
+{
+"value": "clarity+100",
+"statistic": "spread",
+"common": 0.05703281433778264,
+"predicted": 0.036879737048341424,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": 0.4330827067669173,
+"scale_fit": [
+0.5308781029000564,
+0.11340624319553756
+],
+"offset_fit": [
+0.09026791845647361,
+-0.019445073373056093
+]
+},
+{
+"value": "clarity+100",
+"statistic": "log linear mean",
+"common": 0.05703281433778264,
+"predicted": 0.042705697534680696,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.4120300751879699,
+"scale_fit": [
+0.9613553554226191,
+-0.03837461816562097
+],
+"offset_fit": [
+-0.09572993162843221,
+-0.05435370556238596
+]
+},
+{
+"value": "clarity+100",
+"statistic": "detail rms",
+"common": 0.05703281433778264,
+"predicted": 0.007313473476681309,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": -0.4060150375939849,
+"scale_fit": [
+1.624641376431373,
+-1.4987150430637846
+],
+"offset_fit": [
+-0.40863228576364286,
+1.044374398723278
+]
+},
+{
+"value": "clarity+100",
+"statistic": "coarse rms",
+"common": 0.05703281433778264,
+"predicted": -0.164465571768317,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": 0.4541353383458646,
+"scale_fit": [
+0.6388227130921964,
+0.31871917846798153
+],
+"offset_fit": [
+0.3223724209192526,
+-0.25779784719350873
+]
+},
+{
+"value": "clarity+100",
+"statistic": "fine rms",
+"common": 0.05703281433778264,
+"predicted": 0.013743662566145709,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": 0.4601503759398496,
+"scale_fit": [
+1.0097378036931801,
+0.06673754811057245
+],
+"offset_fit": [
+0.032617920335442384,
+-0.08473435923218064
+]
+},
+{
+"value": "clarity+100",
+"statistic": "dark share",
+"common": 0.05703281433778264,
+"predicted": -0.03182382253057233,
+"oracle": 0.48192872904098316,
+"rank_corr_round2": 0.07669172932330826,
+"scale_fit": [
+0.8391182630841583,
+1.2033719724279548
+],
+"offset_fit": [
+0.1383423595760249,
+-0.8359801673957072
+]
+}
+]
+},
+"ceiling": {
+"made_by": "run_ceiling and run_both_rounds",
+"files": [
+"ceiling.json",
+"ceiling-global.json",
+"ceiling-signal.json",
+"ceiling-both-rounds.json"
+],
+"ridge_lambdas": [
+1e-06,
+1e-05,
+0.0001,
+0.001,
+0.01,
+0.1,
+1.0
+],
+"samples_per_frame": 150000,
+"levels": 9,
+"tone_knots": [
+-10.0,
+-8.0,
+-6.0,
+-4.5,
+-3.0,
+-1.5,
+0.0
+],
+"amplitude_knots": [
+0.0,
+0.05,
+0.1,
+0.2,
+0.4,
+0.8,
+1.6
+],
+"relative_curve_knots": [
+-7.0,
+-5.0,
+-4.0,
+-3.0,
+-2.0,
+-1.0,
+0.0,
+1.0,
+2.0
+],
+"coarse_sigmas_blocks": [
+16,
+48,
+128,
+320
+]
+}
+}

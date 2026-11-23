@@ -44,7 +44,7 @@ public struct Presence: Sendable, Equatable, Hashable {
     public enum Placement: Sendable { case scene, print }
 
     /// The constants' version a frame with Presence records. A version with no `PresenceConstants` cannot render.
-    public static let currentVersion = "2026-11-11-1"
+    public static let currentVersion = "2026-11-23-1"
     public static let identity = Presence()
 
     public private(set) var texture: Float = 0
@@ -67,9 +67,8 @@ public struct Presence: Sendable, Equatable, Hashable {
     }
 
     /// The same without the version check, so a recipe made by a build with other constants still opens. The render checks the
-    /// version and refuses such a frame. No adjustment issue is raised, so Update Automatic Baseline is not offered, because
-    /// `ManualRenderSettings.init` checks neither this version nor the curves'. With one constants version, no recipe can hold
-    /// another yet.
+    /// version and refuses a frame whose version is not in `PresenceConstants.all`. No adjustment issue is raised, so Update
+    /// Automatic Baseline is not offered, because `ManualRenderSettings.init` checks neither this version nor the curves'.
     private init(recorded values: [Control: Float], version: String) throws {
         var result = Presence()
         for (control, value) in values { result.store(try Self.validated(value, for: control), at: control) }

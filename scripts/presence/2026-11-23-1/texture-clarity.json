@@ -1,0 +1,709 @@
+{
+ "candidates": {
+  "clarity-guided": {
+   "name": "clarity-guided",
+   "slider": "clarity",
+   "positive": {
+    "detail": "guided",
+    "params": {
+     "field": 1024,
+     "radius": 0.08,
+     "epsilon": 1.0
+    },
+    "weight": [
+     2.292,
+     2.2472,
+     1.9924,
+     1.61,
+     1.3175,
+     0.9646,
+     1.0876,
+     0.7816,
+     0.2608,
+     0.0256,
+     -0.0594
+    ],
+    "law": [
+     0.1744,
+     0.3739,
+     0.5141,
+     0.7077
+    ],
+    "perValue": {
+     "10": 0.0539,
+     "25": 0.1334,
+     "50": 0.37,
+     "75": 0.394,
+     "100": 0.7077
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 +50": 0.3937,
+     "p-photo-iso kodak-ektar-100 +100": 0.7189,
+     "p-photo-iso kodak-portra-400 +50": 0.4121,
+     "p-photo-iso kodak-portra-400 +100": 0.7075,
+     "p-photo-sky kodak-ektar-100 +50": 0.3978,
+     "p-photo-sky kodak-ektar-100 +100": 0.7352,
+     "p-photo-sky kodak-portra-400 +50": 0.4551,
+     "p-photo-sky kodak-portra-400 +100": 0.8413,
+     "p-photo-texture kodak-ektar-100 +50": 0.4243,
+     "p-photo-texture kodak-ektar-100 +100": 0.8328,
+     "p-photo-texture kodak-portra-400 +50": 0.4472,
+     "p-photo-texture kodak-portra-400 +100": 0.8672,
+     "p-raw kodak-ektar-100 +10": 0.0495,
+     "p-raw kodak-ektar-100 +25": 0.1229,
+     "p-raw kodak-ektar-100 +50": 0.2499,
+     "p-raw kodak-ektar-100 +75": 0.3658,
+     "p-raw kodak-ektar-100 +100": 0.5075,
+     "p-raw kodak-portra-400 +10": 0.0595,
+     "p-raw kodak-portra-400 +25": 0.1469,
+     "p-raw kodak-portra-400 +50": 0.2941,
+     "p-raw kodak-portra-400 +75": 0.4288,
+     "p-raw kodak-portra-400 +100": 0.5855
+    }
+   },
+   "negative": {
+    "detail": "guided",
+    "params": {
+     "field": 1024,
+     "radius": 0.02,
+     "epsilon": 1.0
+    },
+    "weight": [
+     0.4029,
+     0.3624,
+     0.3361,
+     0.4219,
+     0.6145,
+     0.8682,
+     1.1223,
+     1.3095,
+     1.5987,
+     1.5471,
+     1.5098
+    ],
+    "law": [
+     -0.2233,
+     -0.3987,
+     -0.561,
+     -0.6857
+    ],
+    "perValue": {
+     "-100": -0.6857,
+     "-75": -0.5893,
+     "-50": -0.4025,
+     "-25": -0.2348,
+     "-10": -0.0991
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 -100": -0.6813,
+     "p-photo-iso kodak-ektar-100 -50": -0.3912,
+     "p-photo-iso kodak-portra-400 -100": -0.7603,
+     "p-photo-iso kodak-portra-400 -50": -0.4398,
+     "p-photo-sky kodak-ektar-100 -100": -0.628,
+     "p-photo-sky kodak-ektar-100 -50": -0.361,
+     "p-photo-sky kodak-portra-400 -100": -0.7131,
+     "p-photo-sky kodak-portra-400 -50": -0.4101,
+     "p-photo-texture kodak-ektar-100 -100": -0.5982,
+     "p-photo-texture kodak-ektar-100 -50": -0.3528,
+     "p-photo-texture kodak-portra-400 -100": -0.7113,
+     "p-photo-texture kodak-portra-400 -50": -0.4157,
+     "p-raw kodak-ektar-100 -100": -0.6761,
+     "p-raw kodak-ektar-100 -75": -0.5544,
+     "p-raw kodak-ektar-100 -50": -0.4067,
+     "p-raw kodak-ektar-100 -25": -0.2218,
+     "p-raw kodak-ektar-100 -10": -0.0937,
+     "p-raw kodak-portra-400 -100": -0.779,
+     "p-raw kodak-portra-400 -75": -0.6358,
+     "p-raw kodak-portra-400 -50": -0.4641,
+     "p-raw kodak-portra-400 -25": -0.2519,
+     "p-raw kodak-portra-400 -10": -0.1061
+    }
+   },
+   "note": "Recommended. Two guided-filter bases on 1024-pixel fields of linear luminance (ToneBaseField's math), one per sign.",
+   "fittedOn": {
+    "jobs": [
+     "p-raw",
+     "p-photo-sky",
+     "p-photo-texture",
+     "p-photo-iso"
+    ],
+    "stocks": [
+     "kodak-portra-400",
+     "kodak-ektar-100"
+    ],
+    "flags": [
+     "--auto",
+     "--tiff",
+     "--no-lens",
+     "--long-edge",
+     "1752"
+    ]
+   }
+  },
+  "clarity-shared-field": {
+   "name": "clarity-shared-field",
+   "slider": "clarity",
+   "positive": {
+    "detail": "guided",
+    "params": {
+     "field": 1024,
+     "radius": 0.015,
+     "epsilon": 0.7
+    },
+    "weight": [
+     1.7933,
+     1.7771,
+     1.6952,
+     1.3496,
+     1.0729,
+     0.8758,
+     0.9331,
+     1.0478,
+     0.8286,
+     0.4146,
+     0.1741
+    ],
+    "law": [
+     0.2197,
+     0.454,
+     0.6382,
+     0.8552
+    ],
+    "perValue": {
+     "10": 0.0718,
+     "25": 0.1775,
+     "50": 0.4505,
+     "75": 0.5162,
+     "100": 0.8552
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 +50": 0.402,
+     "p-photo-iso kodak-ektar-100 +100": 0.7524,
+     "p-photo-iso kodak-portra-400 +50": 0.486,
+     "p-photo-iso kodak-portra-400 +100": 0.8617,
+     "p-photo-sky kodak-ektar-100 +50": 0.5413,
+     "p-photo-sky kodak-ektar-100 +100": 1.0087,
+     "p-photo-sky kodak-portra-400 +50": 0.6133,
+     "p-photo-sky kodak-portra-400 +100": 1.1427,
+     "p-photo-texture kodak-ektar-100 +50": 0.4532,
+     "p-photo-texture kodak-ektar-100 +100": 0.8627,
+     "p-photo-texture kodak-portra-400 +50": 0.5349,
+     "p-photo-texture kodak-portra-400 +100": 1.014,
+     "p-raw kodak-ektar-100 +10": 0.0657,
+     "p-raw kodak-ektar-100 +25": 0.1625,
+     "p-raw kodak-ektar-100 +50": 0.3232,
+     "p-raw kodak-ektar-100 +75": 0.4742,
+     "p-raw kodak-ektar-100 +100": 0.6372,
+     "p-raw kodak-portra-400 +10": 0.0801,
+     "p-raw kodak-portra-400 +25": 0.1976,
+     "p-raw kodak-portra-400 +50": 0.3908,
+     "p-raw kodak-portra-400 +75": 0.5713,
+     "p-raw kodak-portra-400 +100": 0.7634
+    }
+   },
+   "negative": {
+    "detail": "guided",
+    "params": {
+     "field": 1024,
+     "radius": 0.015,
+     "epsilon": 0.7
+    },
+    "weight": [
+     0.3606,
+     0.3336,
+     0.3261,
+     0.4239,
+     0.6057,
+     0.8324,
+     1.0712,
+     1.2692,
+     1.6297,
+     1.7379,
+     1.7906
+    ],
+    "law": [
+     -0.2595,
+     -0.4618,
+     -0.6511,
+     -0.7945
+    ],
+    "perValue": {
+     "-100": -0.7945,
+     "-75": -0.6811,
+     "-50": -0.4663,
+     "-25": -0.2718,
+     "-10": -0.1147
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 -100": -0.8071,
+     "p-photo-iso kodak-ektar-100 -50": -0.4627,
+     "p-photo-iso kodak-portra-400 -100": -0.9009,
+     "p-photo-iso kodak-portra-400 -50": -0.5212,
+     "p-photo-sky kodak-ektar-100 -100": -0.7184,
+     "p-photo-sky kodak-ektar-100 -50": -0.4121,
+     "p-photo-sky kodak-portra-400 -100": -0.8141,
+     "p-photo-sky kodak-portra-400 -50": -0.4663,
+     "p-photo-texture kodak-ektar-100 -100": -0.6899,
+     "p-photo-texture kodak-ektar-100 -50": -0.4056,
+     "p-photo-texture kodak-portra-400 -100": -0.8323,
+     "p-photo-texture kodak-portra-400 -50": -0.4859,
+     "p-raw kodak-ektar-100 -100": -0.7789,
+     "p-raw kodak-ektar-100 -75": -0.6404,
+     "p-raw kodak-ektar-100 -50": -0.471,
+     "p-raw kodak-ektar-100 -25": -0.2566,
+     "p-raw kodak-ektar-100 -10": -0.1084,
+     "p-raw kodak-portra-400 -100": -0.9009,
+     "p-raw kodak-portra-400 -75": -0.7359,
+     "p-raw kodak-portra-400 -50": -0.5374,
+     "p-raw kodak-portra-400 -25": -0.2917,
+     "p-raw kodak-portra-400 -10": -0.1228
+    }
+   },
+   "note": "Both signs read the existing Highlights and Shadows field (0.015, 0.7 stops squared).",
+   "fittedOn": {
+    "jobs": [
+     "p-raw",
+     "p-photo-sky",
+     "p-photo-texture",
+     "p-photo-iso"
+    ],
+    "stocks": [
+     "kodak-portra-400",
+     "kodak-ektar-100"
+    ],
+    "flags": [
+     "--auto",
+     "--tiff",
+     "--no-lens",
+     "--long-edge",
+     "1752"
+    ]
+   }
+  },
+  "clarity-gaussian": {
+   "name": "clarity-gaussian",
+   "slider": "clarity",
+   "positive": {
+    "detail": "gaussian",
+    "params": {
+     "sigma": 0.03
+    },
+    "weight": [
+     0.3536,
+     -0.0274,
+     0.163,
+     0.8836,
+     0.8533,
+     1.6329,
+     1.2808,
+     0.4289,
+     0.305,
+     0.2622,
+     0.3688
+    ],
+    "law": [
+     0.0798,
+     0.1647,
+     0.2363,
+     0.3132
+    ],
+    "perValue": {
+     "10": 0.0327,
+     "25": 0.0812,
+     "50": 0.1634,
+     "75": 0.2405,
+     "100": 0.3132
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 +50": 0.1005,
+     "p-photo-iso kodak-ektar-100 +100": 0.1807,
+     "p-photo-iso kodak-portra-400 +50": 0.093,
+     "p-photo-iso kodak-portra-400 +100": 0.1595,
+     "p-photo-sky kodak-ektar-100 +50": 0.2165,
+     "p-photo-sky kodak-ektar-100 +100": 0.4026,
+     "p-photo-sky kodak-portra-400 +50": 0.2371,
+     "p-photo-sky kodak-portra-400 +100": 0.4418,
+     "p-photo-texture kodak-ektar-100 +50": 0.1827,
+     "p-photo-texture kodak-ektar-100 +100": 0.3572,
+     "p-photo-texture kodak-portra-400 +50": 0.183,
+     "p-photo-texture kodak-portra-400 +100": 0.3552,
+     "p-raw kodak-ektar-100 +10": 0.0318,
+     "p-raw kodak-ektar-100 +25": 0.079,
+     "p-raw kodak-ektar-100 +50": 0.157,
+     "p-raw kodak-ektar-100 +75": 0.2344,
+     "p-raw kodak-ektar-100 +100": 0.3111,
+     "p-raw kodak-portra-400 +10": 0.0338,
+     "p-raw kodak-portra-400 +25": 0.0839,
+     "p-raw kodak-portra-400 +50": 0.1664,
+     "p-raw kodak-portra-400 +75": 0.2479,
+     "p-raw kodak-portra-400 +100": 0.3281
+    }
+   },
+   "negative": {
+    "detail": "gaussian",
+    "params": {
+     "sigma": 0.014
+    },
+    "weight": [
+     0.8111,
+     0.7151,
+     0.6631,
+     0.7241,
+     0.782,
+     0.874,
+     1.0491,
+     1.2033,
+     1.3646,
+     1.4717,
+     1.6047
+    ],
+    "law": [
+     -0.1281,
+     -0.2355,
+     -0.3246,
+     -0.3992
+    ],
+    "perValue": {
+     "-100": -0.3992,
+     "-75": -0.3672,
+     "-50": -0.2362,
+     "-25": -0.145,
+     "-10": -0.061
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 -100": -0.3436,
+     "p-photo-iso kodak-ektar-100 -50": -0.199,
+     "p-photo-iso kodak-portra-400 -100": -0.3868,
+     "p-photo-iso kodak-portra-400 -50": -0.2239,
+     "p-photo-sky kodak-ektar-100 -100": -0.4038,
+     "p-photo-sky kodak-ektar-100 -50": -0.2364,
+     "p-photo-sky kodak-portra-400 -100": -0.4638,
+     "p-photo-sky kodak-portra-400 -50": -0.2733,
+     "p-photo-texture kodak-ektar-100 -100": -0.3412,
+     "p-photo-texture kodak-ektar-100 -50": -0.2065,
+     "p-photo-texture kodak-portra-400 -100": -0.3966,
+     "p-photo-texture kodak-portra-400 -50": -0.2363,
+     "p-raw kodak-ektar-100 -100": -0.4195,
+     "p-raw kodak-ektar-100 -75": -0.3416,
+     "p-raw kodak-ektar-100 -50": -0.2495,
+     "p-raw kodak-ektar-100 -25": -0.1354,
+     "p-raw kodak-ektar-100 -10": -0.0571,
+     "p-raw kodak-portra-400 -100": -0.4948,
+     "p-raw kodak-portra-400 -75": -0.4017,
+     "p-raw kodak-portra-400 -50": -0.2923,
+     "p-raw kodak-portra-400 -25": -0.1579,
+     "p-raw kodak-portra-400 -10": -0.0663
+    }
+   },
+   "note": "Runner-up. A Gaussian high-pass of log2 luminance per sign, not edge-aware.",
+   "fittedOn": {
+    "jobs": [
+     "p-raw",
+     "p-photo-sky",
+     "p-photo-texture",
+     "p-photo-iso"
+    ],
+    "stocks": [
+     "kodak-portra-400",
+     "kodak-ektar-100"
+    ],
+    "flags": [
+     "--auto",
+     "--tiff",
+     "--no-lens",
+     "--long-edge",
+     "1752"
+    ]
+   }
+  },
+  "texture-guided-band": {
+   "name": "texture-guided-band",
+   "slider": "texture",
+   "positive": {
+    "detail": "band",
+    "params": {
+     "field_scale": 0.5,
+     "radius_px": 20,
+     "epsilon": 0.25
+    },
+    "weight": [
+     3.35,
+     1.9899,
+     0.9658,
+     0.8895,
+     0.828,
+     0.8848,
+     0.9219,
+     0.9708,
+     1.1098,
+     1.3066,
+     1.4966
+    ],
+    "law": [
+     0.2517,
+     0.4461,
+     0.5913,
+     0.7046
+    ],
+    "perValue": {
+     "10": 0.1019,
+     "25": 0.2361,
+     "50": 0.4457,
+     "75": 0.5549,
+     "100": 0.7046
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 +50": 0.4222,
+     "p-photo-iso kodak-ektar-100 +100": 0.6721,
+     "p-photo-iso kodak-portra-400 +50": 0.5243,
+     "p-photo-iso kodak-portra-400 +100": 0.8313,
+     "p-photo-sky kodak-ektar-100 +50": 0.4548,
+     "p-photo-sky kodak-ektar-100 +100": 0.7167,
+     "p-photo-sky kodak-portra-400 +50": 0.519,
+     "p-photo-sky kodak-portra-400 +100": 0.8178,
+     "p-photo-texture kodak-ektar-100 +50": 0.4002,
+     "p-photo-texture kodak-ektar-100 +100": 0.6313,
+     "p-photo-texture kodak-portra-400 +50": 0.4745,
+     "p-photo-texture kodak-portra-400 +100": 0.7488,
+     "p-raw kodak-ektar-100 +10": 0.0949,
+     "p-raw kodak-ektar-100 +25": 0.22,
+     "p-raw kodak-ektar-100 +50": 0.3894,
+     "p-raw kodak-ektar-100 +75": 0.5177,
+     "p-raw kodak-ektar-100 +100": 0.6175,
+     "p-raw kodak-portra-400 +10": 0.1118,
+     "p-raw kodak-portra-400 +25": 0.2587,
+     "p-raw kodak-portra-400 +50": 0.4567,
+     "p-raw kodak-portra-400 +75": 0.6063,
+     "p-raw kodak-portra-400 +100": 0.722
+    }
+   },
+   "negative": {
+    "detail": "band",
+    "params": {
+     "field_scale": 0.5,
+     "radius_px": 20,
+     "epsilon": 0.25
+    },
+    "weight": [
+     3.1235,
+     1.757,
+     0.9443,
+     0.8913,
+     0.8303,
+     0.9315,
+     0.9599,
+     0.9623,
+     1.0897,
+     1.2835,
+     1.4985
+    ],
+    "law": [
+     -0.2006,
+     -0.3603,
+     -0.4909,
+     -0.5937
+    ],
+    "perValue": {
+     "-100": -0.5937,
+     "-75": -0.4547,
+     "-50": -0.3603,
+     "-25": -0.186,
+     "-10": -0.0794
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 -100": -0.5852,
+     "p-photo-iso kodak-ektar-100 -50": -0.3499,
+     "p-photo-iso kodak-portra-400 -100": -0.719,
+     "p-photo-iso kodak-portra-400 -50": -0.4333,
+     "p-photo-sky kodak-ektar-100 -100": -0.6055,
+     "p-photo-sky kodak-ektar-100 -50": -0.3673,
+     "p-photo-sky kodak-portra-400 -100": -0.6888,
+     "p-photo-sky kodak-portra-400 -50": -0.4179,
+     "p-photo-texture kodak-ektar-100 -100": -0.5342,
+     "p-photo-texture kodak-ektar-100 -50": -0.3244,
+     "p-photo-texture kodak-portra-400 -100": -0.6317,
+     "p-photo-texture kodak-portra-400 -50": -0.3835,
+     "p-raw kodak-ektar-100 -100": -0.5112,
+     "p-raw kodak-ektar-100 -75": -0.4232,
+     "p-raw kodak-ektar-100 -50": -0.3117,
+     "p-raw kodak-ektar-100 -25": -0.1733,
+     "p-raw kodak-ektar-100 -10": -0.074,
+     "p-raw kodak-portra-400 -100": -0.6046,
+     "p-raw kodak-portra-400 -75": -0.4992,
+     "p-raw kodak-portra-400 -50": -0.3671,
+     "p-raw kodak-portra-400 -25": -0.2036,
+     "p-raw kodak-portra-400 -10": -0.0869
+    }
+   },
+   "note": "Recommended. A guided filter of log2 luminance, coefficients on a field at half the frame's resolution, radius 20 frame pixels; the same D for both signs.",
+   "fittedOn": {
+    "jobs": [
+     "p-raw",
+     "p-photo-sky",
+     "p-photo-texture",
+     "p-photo-iso"
+    ],
+    "stocks": [
+     "kodak-portra-400",
+     "kodak-ektar-100"
+    ],
+    "flags": [
+     "--auto",
+     "--tiff",
+     "--no-lens",
+     "--long-edge",
+     "1752"
+    ]
+   }
+  },
+  "texture-gaussian": {
+   "name": "texture-gaussian",
+   "slider": "texture",
+   "positive": {
+    "detail": "gaussian_px",
+    "params": {
+     "sigma_px": 10
+    },
+    "weight": [
+     1.4054,
+     0.8999,
+     0.7725,
+     0.92,
+     0.9094,
+     0.9492,
+     1.0951,
+     1.2078,
+     1.1436,
+     0.9799,
+     0.7547
+    ],
+    "law": [
+     0.0931,
+     0.1652,
+     0.2195,
+     0.262
+    ],
+    "perValue": {
+     "10": 0.0384,
+     "25": 0.089,
+     "50": 0.1644,
+     "75": 0.2101,
+     "100": 0.262
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 +50": 0.106,
+     "p-photo-iso kodak-ektar-100 +100": 0.1739,
+     "p-photo-iso kodak-portra-400 +50": 0.1185,
+     "p-photo-iso kodak-portra-400 +100": 0.1909,
+     "p-photo-sky kodak-ektar-100 +50": 0.2131,
+     "p-photo-sky kodak-ektar-100 +100": 0.336,
+     "p-photo-sky kodak-portra-400 +50": 0.243,
+     "p-photo-sky kodak-portra-400 +100": 0.3845,
+     "p-photo-texture kodak-ektar-100 +50": 0.1539,
+     "p-photo-texture kodak-ektar-100 +100": 0.2438,
+     "p-photo-texture kodak-portra-400 +50": 0.1793,
+     "p-photo-texture kodak-portra-400 +100": 0.2834,
+     "p-raw kodak-ektar-100 +10": 0.0361,
+     "p-raw kodak-ektar-100 +25": 0.0838,
+     "p-raw kodak-ektar-100 +50": 0.1486,
+     "p-raw kodak-ektar-100 +75": 0.198,
+     "p-raw kodak-ektar-100 +100": 0.2364,
+     "p-raw kodak-portra-400 +10": 0.0414,
+     "p-raw kodak-portra-400 +25": 0.0959,
+     "p-raw kodak-portra-400 +50": 0.1697,
+     "p-raw kodak-portra-400 +75": 0.2258,
+     "p-raw kodak-portra-400 +100": 0.2692
+    }
+   },
+   "negative": {
+    "detail": "gaussian_px",
+    "params": {
+     "sigma_px": 10
+    },
+    "weight": [
+     1.4051,
+     0.9284,
+     0.7724,
+     0.9142,
+     0.9042,
+     0.9515,
+     1.0775,
+     1.2104,
+     1.18,
+     1.0708,
+     0.902
+    ],
+    "law": [
+     -0.0741,
+     -0.1326,
+     -0.1807,
+     -0.2185
+    ],
+    "perValue": {
+     "-100": -0.2185,
+     "-75": -0.1729,
+     "-50": -0.1328,
+     "-25": -0.0709,
+     "-10": -0.0303
+    },
+    "perFrame": {
+     "p-photo-iso kodak-ektar-100 -100": -0.1358,
+     "p-photo-iso kodak-ektar-100 -50": -0.0817,
+     "p-photo-iso kodak-portra-400 -100": -0.1558,
+     "p-photo-iso kodak-portra-400 -50": -0.0942,
+     "p-photo-sky kodak-ektar-100 -100": -0.2933,
+     "p-photo-sky kodak-ektar-100 -50": -0.1777,
+     "p-photo-sky kodak-portra-400 -100": -0.334,
+     "p-photo-sky kodak-portra-400 -50": -0.2027,
+     "p-photo-texture kodak-ektar-100 -100": -0.2053,
+     "p-photo-texture kodak-ektar-100 -50": -0.125,
+     "p-photo-texture kodak-portra-400 -100": -0.2426,
+     "p-photo-texture kodak-portra-400 -50": -0.1474,
+     "p-raw kodak-ektar-100 -100": -0.1963,
+     "p-raw kodak-ektar-100 -75": -0.1624,
+     "p-raw kodak-ektar-100 -50": -0.1198,
+     "p-raw kodak-ektar-100 -25": -0.0667,
+     "p-raw kodak-ektar-100 -10": -0.0285,
+     "p-raw kodak-portra-400 -100": -0.2259,
+     "p-raw kodak-portra-400 -75": -0.1868,
+     "p-raw kodak-portra-400 -50": -0.1377,
+     "p-raw kodak-portra-400 -25": -0.0765,
+     "p-raw kodak-portra-400 -10": -0.0327
+    }
+   },
+   "note": "Runner-up. A Gaussian high-pass of log2 luminance, sigma 10 frame pixels, not edge-aware.",
+   "fittedOn": {
+    "jobs": [
+     "p-raw",
+     "p-photo-sky",
+     "p-photo-texture",
+     "p-photo-iso"
+    ],
+    "stocks": [
+     "kodak-portra-400",
+     "kodak-ektar-100"
+    ],
+    "flags": [
+     "--auto",
+     "--tiff",
+     "--no-lens",
+     "--long-edge",
+     "1752"
+    ]
+   }
+  }
+ },
+ "provenance": {
+  "script": "scripts/lightroom-probe/fit_texture_clarity.py (run_fit: weight and law; CANDIDATES: spatial constants)",
+  "spatialConstants": {
+   "clarity-guided": "chosen in Lightroom's terms: block R2 of k*D on 11 photographs (report 2.5); radius and epsilon from the grid rho 0.01-0.16, eps 0.03-3",
+   "clarity negative Gaussian sigma 0.014": "p-grating-0 cells at -100, rms 0.015 in gain (report 2.1)",
+   "texture-guided-band": "p-grating-0 and p-grating-0-half, every cell at +-100, rms 0.051 in gain; grid radius 12-36 px, eps 0.1-0.4 (report 5)"
+  },
+  "weightAndLaw": "fit_side through each frame's film transfer, pooled over SCORE_JOBS on kodak-portra-400 and kodak-ektar-100 at every Lightroom value of the side (p-raw: ten values, photographs: +-50, +-100); Texture on the central 2048 crop at full size",
+  "weightKnots": "print L* of the pixel's base level 0, 10, ..., 100; m scaled to mean 1 over the fitted samples",
+  "law": "k at |value| 25, 50, 75, 100; straight between and to 0 at 0",
+  "stage": "delta stops = k(v) * m(L*_base) * D, scene RGB times 2**delta before the stock",
+  "lightroomData": "references/lightroom-probe/exports-p-* (E/probe/manifest.json)"
+ }
+}
