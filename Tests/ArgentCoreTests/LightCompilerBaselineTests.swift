@@ -69,8 +69,9 @@ import Testing
         ]
     }
 
-    /// The tone step the digests with one use: Auto's burn and dodge at a reference of its own.
-    static let toneStep = PrintTone(burn: 0.6, dodge: 0.4, referenceStops: -0.3)
+    /// The tone step the digests with one use: Auto's burn and dodge at a reference of its own, on the version they were
+    /// recorded on, which a frame saved before 2026-11-23 holds and must go on rendering.
+    static let toneStep = PrintTone(burn: 0.6, dodge: 0.4, referenceStops: -0.3, version: "2026-11-05-2")
 
     /// Each stock the checkout has baked. `build/stocks` is resolved first, since listing a symbolic
     /// link to a folder fails (ENOTDIR) and a worktree's is one: without that, this is silently empty.
