@@ -782,8 +782,9 @@ enum Refine {
     }
 }
 
-/// A frame whose masks are gradients renders as Phase 1 did, byte for byte: the bake, the kernels and the keys of gradients are
-/// unchanged. The digests are Phase 1's own, taken at `bceb32a` with this same test.
+/// A frame whose masks are gradients renders through the gradient path without waking the refiner: the bake, the kernels and the
+/// keys of gradients are unchanged. Originally taken at `bceb32a`; re-recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2
+/// build 26B123), after scene gamut compression, `RenderGraph.version` 2026-11-19-1.
 @Suite struct MaskRefinerPhaseOneTests {
     @Test func aFrameWithoutSmartMasksRendersAsPhaseOne() throws {
         let gpu = try GPU()
@@ -806,8 +807,10 @@ enum Refine {
         #expect(!gpu.maskRefiner.hasPipelines)
     }
 
-    static let phaseOne = ["ec26063e1c55c8986014265959c85dfc7548b015daf2e6fbfb1f89666b060db7",
-                           "ecd84f181a9df68d7f2435af2149e31f10bf2b0a15053ae7ad3587682f85053a"]
+    /// Recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut compression,
+    /// `RenderGraph.version` 2026-11-19-1.
+    static let phaseOne = ["1d5b34b9679812f6f60def0a42bd94bcd972dd82af64f14b47563b1b53ad6812",
+                           "52541320f80b2e26abf53a56fcd2827f6bcf0e4aee70f50b8dc5999dafee6fd3"]
 }
 
 extension MaskRefinerCacheTests {

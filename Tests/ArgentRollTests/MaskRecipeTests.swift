@@ -11,6 +11,10 @@ private struct Scene {
     /// The Light compiler the golden recipes were written under. It stays supported, so naming it keeps their bytes when a
     /// newer compiler becomes current.
     static let recordedLight = "2026-10-29-1"
+    /// The render graph the golden recipes' receipts were written under (`main` 3f67969, before scene gamut compression moved
+    /// `RenderGraph.version` to `2026-11-19-1`). Fixing the leading base version keeps the v5 fixture's bytes independent of
+    /// later render changes while still checking any suffixes `RenderGraph.version(for:)` appends.
+    static let recordedRenderGraph = "2026-10-09-1"
 
     let root: URL
     let library: URL
@@ -52,15 +56,23 @@ private struct Scene {
     }
 
     func recipe(_ manual: ManualEdit?, held: ManualEdit? = nil, aim override: PrintAim? = nil, receipts: Int = 0,
-                revision: UInt64 = 12, previous: Recipe? = nil) throws -> Recipe {
+                revision: UInt64 = 12, previous: Recipe? = nil, renderGraph: String? = nil) throws -> Recipe {
         var recipe = try Recipe.make(frame: frame, byteCount: 4096, stock: stock, stockDigest: stock.digest, roll: controls, own: FrameControls(),
                                      analysis: ExposureAnalysis(meanStops: -0.3, validWeight: 1), aim: override ?? aim, grain: .off, previous: previous,
                                      manual: manual, editRevision: revision, editLineage: "golden-lineage", heldManual: held)
         recipe.raw.sha256 = sha
+        let fullVersion = RenderGraph.version(for: recipe.render.settings)
+        let renderVersion: String
+        if let renderGraph {
+            try #require(fullVersion.hasPrefix(RenderGraph.version))
+            renderVersion = renderGraph + fullVersion.dropFirst(RenderGraph.version.count)
+        } else {
+            renderVersion = fullVersion
+        }
         for i in 0..<receipts {
             recipe.develops.append(Recipe.Develop(date: Date(timeIntervalSince1970: 3000 + Double(i)), software: "Argent test", output: OutputSettings(),
                 file: "/tmp/out/frame\(i).jpg", width: 40, height: 20, render: recipe.render, decode: nil, readback: nil,
-                stockDigest: stock.digest, renderVersion: RenderGraph.version(for: recipe.render.settings)))
+                stockDigest: stock.digest, renderVersion: renderVersion))
         }
         return recipe
     }
@@ -118,7 +130,9 @@ private func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { Stri
             ("curves", try scene.recipe(edit(curves)), 3, 6123, "d8c9eeb07a5245e1c3b98b47c5e932334c3aa784739797c8dba40f89caf9833b"),
             ("identity Original", try scene.recipe(edit(.identity, origin: .original)), 4, 1949, "a948c984ea4660f2524a062d3d1babfdc257a58fc77c9491b29b08753cde68cb"),
             ("tone step", try scene.recipe(nil, aim: toneAim), 5, 1174, "2b09c6407d9977574204d590359d08252894972946e3bfa22bd2ad9ad2871e0d"),
-            ("Light, held edit, 20 receipts", try scene.recipe(edit(light), held: edit(curves), receipts: 20), 3, 25021, "d002fac6f9f804358958d03c114e2ccc98f9a87c02f645a4c655a0210ae8919d"),
+            ("Light, held edit, 20 receipts",
+             try scene.recipe(edit(light), held: edit(curves), receipts: 20, renderGraph: Scene.recordedRenderGraph),
+             3, 25021, "d002fac6f9f804358958d03c114e2ccc98f9a87c02f645a4c655a0210ae8919d"),
         ]
         for item in golden {
             let bytes = try item.recipe.encoded()
