@@ -334,16 +334,20 @@ private enum Make {
         #expect(got == Pinned.digests)
     }
 
-    /// Taken on 2026-11-07 from this suite's print (`NeutralPrintFixture`), in five groups: the print, its bush, signs and
-    /// barrier crops; each the picture's digest, Subject's raster, Person's raster, the matte's maximum when nobody is found,
-    /// and the water score's bits.
+    /// Taken from this suite's print (`NeutralPrintFixture`), in five groups: the print, its bush, signs and barrier crops;
+    /// each the picture's digest, Subject's raster, Person's raster, the matte's maximum when nobody is found, and the water
+    /// score's bits. Recorded again on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), the same in three
+    /// processes. The first pins, of 2026-11-07 on the same build, were of a print made before two changes to it: the lens
+    /// stage, which corrects the decode in place of RAW 9 (2026-11-13), and scene gamut compression in the shader's
+    /// `encode_log` (2026-11-19). With both taken out of the sources again, this process gave those pins back, every
+    /// value; with either alone, it did not. Vision itself had not moved.
     enum Pinned {
         static let operatingSystem = "Version 27.2 (Build 26B123)"
         static let digests = [
-            "7de12660788c03c7070d65a7dc6e54e04be1e486178fa774c1cbe4bf32e67958", "none", "none", "61", "399837f0",
-            "7666649721163b1be9fe98e2526d07541fc2f57ba79e854f2b28f9b067e2a2e5", "07327b3cd3974374e11f14a3096294d36ad3651ab213e0d4d949ca05970920d0", "none", "7", "3ac387f1",
-            "4091be7abd7b2b06a2b25ab0bdfd848c21205fd042c474a0279276da904be5eb", "098a8ae662f0e77d903a45a568012b7beb2687c4d939fd395f8323a65399a9b3", "none", "8", "399837f0",
-            "14217e5d22d84e9f2c7e9761759e75206f2f20c1ae995eab21c325db611e9389", "8f77bed5f6e87f6ed0e8e9e7171fbe72c42db05cb4175b2f5b17de2c85f75895", "0b5161e81884ee2f1f491a21b7db8966bfe114ba9d7132511e82774c3713cd47", "-", "3b1179a2",
+            "37adb0470708fb46845385b54ff8b5c281b63298e73ef550434064013d090fbb", "none", "none", "51", "399837f0",
+            "d6908aea023d4c02f3d6be135315f3d57ebfe81882fd95dd55bfdfb5e1c260fb", "855d11787541d5c1aed1fc2b8df06cd3e3acedae0f0a5a6031541a056632263c", "none", "6", "3ac965f4",
+            "9ea7ec8b929e6e8d8a791912c4537e30851a0808196968b2c937c44c5c3bf4ed", "28a782b90249ae64d996c3bf03a17fd2926b830fec6520ea99e53e85ba5743db", "none", "7", "399837f0",
+            "42b89d6165368c982f3f510ea833637c7e8eba046525785afef065f14adcf9ca", "944418c155be98d2d6c72c2374208c74dc2765ea5a083263c168981ab38e9541", "50d368f1aecf4c1bb22dd4500cd5a38cf8f0d73209fbda130023e5253ee2ff78", "-", "3b1088e5",
         ]
     }
 }
