@@ -953,6 +953,7 @@ struct GraphiteSegmented<Value: Hashable>: View {
         .background(alignment: .topLeading) {
             if let thumbed, let frame = frames[thumbed] {
                 thumb(on: thumbed, at: frame)
+                    .opacity(isEnabled ? 1 : 0.42)
             }
         }
         .background(track.fill(Graphite.ink(isOnGlass ? 0.05 : 0)))

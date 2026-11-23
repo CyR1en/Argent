@@ -225,6 +225,8 @@ extension RollModel {
         }
         message = nil
         chosenDevelopFolder = folder
+        // Resolved as the develop starts, Resume included; a change made while it runs applies to the next one.
+        let memoryTarget = developMemory.resolvedTarget()
         if developer == nil {
             do {
                 // The sheet's decoder choices, so each frame develops from the decoder its previews came from,
@@ -368,7 +370,7 @@ extension RollModel {
             }
             let developed = jobs.map(\.frame.url)
             for frame in frames { if let reason = unavailable[frame.url] { frameDeveloped(frame.url, .failed(reason)) } }
-            let made = await developer.develop(jobs, to: destination, output: output) { index, outcome in
+            let made = await developer.develop(jobs, to: destination, output: output, memoryTarget: memoryTarget) { index, outcome in
                 Task { @MainActor in self.frameDeveloped(developed.indices.contains(index) ? developed[index] : nil, outcome) }
             }
             let byFrame = Dictionary(zip(developed, made), uniquingKeysWith: { first, _ in first })

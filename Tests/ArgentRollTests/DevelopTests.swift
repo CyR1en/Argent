@@ -959,6 +959,114 @@ private final class InFlight: @unchecked Sendable {
         #expect(DevelopBudget.target(physicalMemory: 8 << 30) == 1024 << 20)
     }
 
+    @Test func choicesFollowAQuarterOfPhysicalMemory() {
+        #expect(DevelopBudget.Choice.default.bytes == nil)
+        #expect(DevelopBudget.Choice.gb3.bytes == 3000 << 20)
+        #expect(DevelopBudget.Choice.gb4.bytes == 4000 << 20)
+        #expect(DevelopBudget.Choice.gb6.bytes == 6000 << 20)
+        #expect(DevelopBudget.choices(physicalMemory: 8 << 30) == [.default])
+        #expect(DevelopBudget.choices(physicalMemory: 12 << 30) == [.default, .gb3])
+        #expect(DevelopBudget.choices(physicalMemory: 16 << 30) == [.default, .gb3, .gb4])
+        #expect(DevelopBudget.choices(physicalMemory: 24 << 30) == [.default, .gb3, .gb4, .gb6])
+        #expect(DevelopBudget.choices(physicalMemory: 64 << 30) == [.default, .gb3, .gb4, .gb6])
+    }
+
+    @Test func budgetPrecedencePrefersOverridesThenChoiceThenDefaultRule() {
+        let ram24: UInt64 = 24 << 30
+        // Environment override beats UserDefaults override, user choice and default rule.
+        #expect(DevelopBudget.resolve(choice: .gb6, environmentOverride: "3500", defaultsOverride: 5000, physicalMemory: ram24)
+                == 3500 << 20)
+        // UserDefaults override beats user choice and default rule.
+        #expect(DevelopBudget.resolve(choice: .gb6, environmentOverride: nil, defaultsOverride: 5000, physicalMemory: ram24)
+                == 5000 << 20)
+        // Invalid or non-positive overrides fall through to the next source.
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: "0", defaultsOverride: 3200, physicalMemory: ram24)
+                == 3200 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: "not-a-number", defaultsOverride: -1, physicalMemory: ram24)
+                == 4000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: nil, defaultsOverride: true, physicalMemory: ram24)
+                == 4000 << 20)
+        // User choice beats default rule when offered.
+        #expect(DevelopBudget.resolve(choice: .gb3, physicalMemory: 12 << 30) == 3000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, physicalMemory: 16 << 30) == 4000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: ram24) == 6000 << 20)
+        // Default rule when nothing else is chosen.
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 8 << 30) == 1024 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 12 << 30) == 1536 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 16 << 30) == 2000 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 64 << 30) == 2000 << 20)
+
+        // End-to-end key lookup through `target(choice:physicalMemory:environment:defaults:)`.
+        let defaults = MemoryDefaults()
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 4000 << 20)
+        defaults.set(3500, forKey: DevelopBudget.overrideDefaultsKey)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 3500 << 20)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24,
+                                     environment: [DevelopBudget.overrideEnvironmentKey: "2500"], defaults: defaults) == 2500 << 20)
+        defaults.set(true, forKey: DevelopBudget.overrideDefaultsKey)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 4000 << 20)
+    }
+
+    @Test func aSavedChoiceNoLongerOfferedFallsBackToDefault() {
+        #expect(DevelopBudget.effectiveChoice(.gb6, physicalMemory: 16 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: 16 << 30) == 2000 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb4, physicalMemory: 12 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb4, physicalMemory: 12 << 30) == 1536 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb3, physicalMemory: 8 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb3, physicalMemory: 8 << 30) == 1024 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb6, physicalMemory: 8 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: 8 << 30) == 1024 << 20)
+    }
+
+    @Test func aPerDevelopMemoryTargetReachesTheGate() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("argent-per-develop-budget-\(UUID().uuidString)")
+        let rollDir = root.appendingPathComponent("roll"), outDir = root.appendingPathComponent("out")
+        let library = root.appendingPathComponent("library")
+        try FileManager.default.createDirectory(at: rollDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let rawURL = rollDir.appendingPathComponent("DSC00601.ARW")
+        try Data("not a real raw".utf8).write(to: rawURL)
+        let stock = try toyStock()
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let defaultTarget = 2000 << 20
+        let developer = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: defaultTarget, recipeWriter: writer)
+        let item = frame("DSC00601.ARW", in: rollDir)
+        let recipe = Recipe(frame: item, byteCount: RecipeStore.byteCount(of: rawURL), stock: stock,
+                            stockDigest: stock.digest, roll: RollControls(), own: FrameControls(),
+                            editRevision: 1, editLineage: "budget-test")
+        let job = RollDeveloper.Job(frame: item, recipe: recipe)
+
+        // Passing an explicit budget uses it for the gate without mutating the developer's default.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(developer.memoryTarget == defaultTarget)
+        #expect(developer.lastMemoryTarget == 4000 << 20)
+        #expect(developer.lastGateCeiling == (4000 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions?.admitted == 1)
+
+        // A tight per-develop budget on the same developer actually makes the gate wait before admitting.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 1 << 20)
+        #expect(developer.lastMemoryTarget == 1 << 20)
+        #expect(developer.lastGateCeiling == (1 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions.map { $0.admitted == 1 && $0.waited == 1 } == true)
+
+        // A generous per-develop budget on the same developer admits immediately without waiting.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 6000 << 20)
+        #expect(developer.lastMemoryTarget == 6000 << 20)
+        #expect(developer.lastGateCeiling == (6000 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions.map { $0.admitted == 1 && $0.waited == 0 } == true)
+
+        // Omitting `memoryTarget` falls back to the developer's own target.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings())
+        #expect(developer.lastMemoryTarget == defaultTarget)
+        #expect(developer.lastGateCeiling == defaultTarget - DevelopBudget.margin)
+    }
+
     @Test func aDecodeAddsItsFrameAndItsDecodersWorkingMemory() {
         let mb = 1 << 20, pixels = 7008 * 4672
         #expect(DevelopBudget.decodeCost(width: 7008, height: 4672, decoder: .apple, tile: 768) == pixels * 8 + 212 * mb)
@@ -1263,4 +1371,13 @@ private final class ProgressLog: @unchecked Sendable {
     private var entries: [(Int, RollDeveloper.Outcome)] = []
     func add(_ index: Int, _ outcome: RollDeveloper.Outcome) { lock.withLock { entries.append((index, outcome)) } }
     var count: Int { lock.withLock { entries.count } }
+}
+
+private final class MemoryDefaults: UserDefaults {
+    private let lock = NSLock()
+    private var values: [String: Any] = [:]
+    init() { super.init(suiteName: "argent-roll-tests-memory")! }
+    override func object(forKey key: String) -> Any? { lock.withLock { values[key] } }
+    override func set(_ value: Any?, forKey key: String) { lock.withLock { values[key] = value } }
+    override func removeObject(forKey key: String) { lock.withLock { values[key] = nil } }
 }

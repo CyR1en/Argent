@@ -256,7 +256,7 @@ final class PeakBox: @unchecked Sendable {
         }
         if let timeline { print("MEASURE timeline: \(timeline.stop())") }
         if let (admitted, waited, _) = developer.lastAdmissions {
-            print("MEASURE budget: target \(developer.memoryTarget >> 20) MB, \(admitted) frames let in, \(waited) after waiting")
+            print("MEASURE budget: target \((developer.lastMemoryTarget ?? developer.memoryTarget) >> 20) MB, \(admitted) frames let in, \(waited) after waiting")
         }
         developer.trim()
         if ProcessInfo.processInfo.environment["ARGENT_DECAY"] != nil {

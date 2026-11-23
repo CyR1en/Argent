@@ -120,7 +120,7 @@ public final class RollDeveloper: @unchecked Sendable {
     /// LUTs on the GPU, 12 MB, so a develop of one stock does not carry the five others'.
     private var renderers: [String: FilmRenderer] = [:]
     private let renderersLock = NSLock()
-    /// The footprint the develop keeps the app under; see `DevelopBudget`.
+    /// The default footprint a develop keeps the app under when `develop(...)` is not given one; see `DevelopBudget`.
     public let memoryTarget: Int
     /// The turns its frames take with the previews' decodes, the previews' own (`DecodeTurns`).
     private let decodeTurns: DecodeTurns
@@ -129,10 +129,20 @@ public final class RollDeveloper: @unchecked Sendable {
     /// A frame's stages as they begin and end, by its index in the develop, for measuring memory.
     public enum Stage: String, Sendable { case admit, decode, waitPicture, render, encode }
     public var observeStage: (@Sendable (Int, Stage, Bool) -> Void)?
+    private let reportLock = NSLock()
+    /// Under `reportLock`: the last develop's frames let in, its floor, its budget and its gate's ceiling.
+    private var _lastAdmissions: (admitted: Int, waited: Int, alone: Int)?
+    private var _lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)?
+    private var _lastMemoryTarget: Int?
+    private var _lastGateCeiling: Int?
     /// The last develop's frames let in, and how many waited first, for measuring.
-    private(set) var lastAdmissions: (admitted: Int, waited: Int, alone: Int)?
+    var lastAdmissions: (admitted: Int, waited: Int, alone: Int)? { reportLock.withLock { _lastAdmissions } }
     /// The last develop's floor, when it was read and the largest excess, for measuring.
-    private(set) var lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)?
+    var lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)? { reportLock.withLock { _lastFloor } }
+    /// The memory target the last develop ran with, in bytes; `nil` before any develop starts.
+    public var lastMemoryTarget: Int? { reportLock.withLock { _lastMemoryTarget } }
+    /// The ceiling the last develop's memory gate enforced, in bytes, for tests.
+    var lastGateCeiling: Int? { reportLock.withLock { _lastGateCeiling } }
     /// The film passes and the picture, one frame at a time.
     private let renderLock = NSLock()
 
@@ -212,7 +222,8 @@ public final class RollDeveloper: @unchecked Sendable {
     /// the largest excess it weighed a frame against, and the frames it let in and how many waited,
     /// for the drive hook's memory measurements.
     public var lastGateReport: String? {
-        guard let floor = lastFloor, let admissions = lastAdmissions else { return nil }
+        let (floor, admissions) = reportLock.withLock { (_lastFloor, _lastAdmissions) }
+        guard let floor, let admissions else { return nil }
         let read = floor.readAfter.map { String(format: "%.3f s", $0) } ?? "never"
         return "gate floor \(floor.floor.map { "\($0 >> 20) MB" } ?? "none") read after \(read)"
             + (floor.quiet ? " quiet" : " not quiet") + ", largest excess \(floor.largestExcess >> 20) MB,"
@@ -299,10 +310,19 @@ public final class RollDeveloper: @unchecked Sendable {
     }
 
     /// Develops `jobs` into `destination` in order and returns what came of each, calling
-    /// `progress` as each frame finishes. Cancelling the task stops the develop at frame
+    /// `progress` as each frame finishes. `memoryTarget`, when given, sets the budget for this
+    /// develop in place of the developer's default. Cancelling the task stops the develop at frame
     /// boundaries.
     public func develop(_ jobs: [Job], to destination: URL, output: OutputSettings,
+                        memoryTarget: Int? = nil,
                         progress: @escaping @Sendable (Int, Outcome) -> Void = { _, _ in }) async -> [Outcome] {
+        let target = memoryTarget ?? self.memoryTarget
+        reportLock.withLock {
+            _lastMemoryTarget = target
+            _lastGateCeiling = nil
+            _lastAdmissions = nil
+            _lastFloor = nil
+        }
         do {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         } catch {
@@ -372,7 +392,8 @@ public final class RollDeveloper: @unchecked Sendable {
         let plan = DevelopBudget.plan(for: output.format, lanes: laneCount, pictures: slots,
                                       allInHouse: jobs.allSatisfy { decoderChoices.choice(for: $0.frame.url) == .inHouse })
         decoder.keepsInHouseBuffers = plan.keepsInHouseBuffers
-        let gate = MemoryGate(ceiling: memoryTarget - DevelopBudget.margin, maxInFlight: plan.framesInFlight, turns: decodeTurns)
+        let gate = MemoryGate(ceiling: target - DevelopBudget.margin, maxInFlight: plan.framesInFlight, turns: decodeTurns)
+        reportLock.withLock { _lastGateCeiling = gate.ceiling }
         let operations: [Operation] = jobs.indices.compactMap { index in
             guard case .ready(_, let source) = checks[index] else {
                 let outcome = checks[index].outcome ?? .stopped
@@ -411,8 +432,10 @@ public final class RollDeveloper: @unchecked Sendable {
         } onCancel: {
             for operation in operations { operation.cancel() }
         }
-        lastAdmissions = (gate.counts.admitted, gate.counts.waited, gate.loneCount)
-        lastFloor = gate.floorReport
+        reportLock.withLock {
+            _lastAdmissions = (gate.counts.admitted, gate.counts.waited, gate.loneCount)
+            _lastFloor = gate.floorReport
+        }
         return results.all
     }
 
