@@ -2908,13 +2908,15 @@ enum Automation {
         let report = model.lastDevelop
         let written = report?.written ?? 0, failures = report?.failures.count ?? 0
         let mb = { (bytes: Int) in "\(bytes >> 20) MB" }
+        let target = model.developer?.lastMemoryTarget ?? model.developMemory.resolvedTarget()
+        let tileNote = model.developer.map { " | tile \($0.lastLearnedDecodeTile.map(String.init) ?? "whole")" } ?? ""
         return "\(written) of \(roll.frames.count) written \(output.format.rawValue) \(output.space.rawValue) grain \(output.grain.rawValue), "
             + "\(edited) with Light/Curve, "
             + String(format: "%.2f s, %.2f frames/s", seconds, Double(written) / max(seconds, 0.001))
-            + ", peak \(mb(peak)) from \(mb(start)), target \(mb(DevelopBudget.target())), failures \(failures)"
+            + ", peak \(mb(peak)) from \(mb(start)), target \(mb(target)), failures \(failures)"
             + (report?.failures.first.map { " (\($0.fileName): \($0.reason))" } ?? "")
             + String(format: " | started %.3f", wall) + " | before: \(before) | after: \(napState(window))"
-            + (refined.isEmpty ? "" : " | " + refined) + (model.developer?.lastGateReport.map { " | " + $0 } ?? "") + traced
+            + (refined.isEmpty ? "" : " | " + refined) + (model.developer?.lastGateReport.map { " | " + $0 } ?? "") + tileNote + traced
     }
 
     /// The frame view's zoom: its scale, offset and rendered scale, the pixels that asks for against the

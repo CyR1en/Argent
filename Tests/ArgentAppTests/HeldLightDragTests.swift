@@ -143,22 +143,31 @@ import Testing
     /// Presses `control` at `press`, runs `held` while the button stays down, then lets go where the pointer is, with no move of its
     /// own. The press is sent from the run loop, as an event is, so the main actor's work runs inside the control's loop as it does
     /// in the app: `held`, the slider's own timed write, and the inspector's updates.
+    ///
+    /// From the run loop's own turn, and not from one that a suite running beside this one has begun inside its main-actor work, as
+    /// `ContextMenuTests.settle` does: the main actor is that work's until its turn ends, so nothing of the main actor's ran inside
+    /// the control's loop, `held` did not move the pointer, and the press was let go when the loop gave up thirty seconds later.
     private func hold(_ control: NSView, at press: @escaping @MainActor (EventWindow) -> NSPoint,
                       _ held: @escaping @MainActor (Hand) async throws -> Void) async throws {
         let window = try #require(control.window as? EventWindow)
-        let handed = Unchecked((control, window, press, held))
+        let handed = Unchecked((control, window, press, held)), nesting = RunLoopNesting()
+        defer { nesting.invalidate() }
         await withCheckedContinuation { (released: CheckedContinuation<Void, Never>) in
-            RunLoop.main.add(Timer(timeInterval: 0, repeats: false) { _ in
-                MainActor.assumeIsolated {
-                    let (control, window, press, held) = handed.value
-                    Task { @MainActor in
-                        do { try await held(Hand(window: window)) } catch { Issue.record(error) }
-                        window.queue(.leftMouseUp) { $0.location }
+            @Sendable func arm(after interval: TimeInterval) {
+                RunLoop.main.add(Timer(timeInterval: interval, repeats: false) { _ in
+                    guard nesting.depth <= 0 else { return arm(after: 0.005) }
+                    MainActor.assumeIsolated {
+                        let (control, window, press, held) = handed.value
+                        Task { @MainActor in
+                            do { try await held(Hand(window: window)) } catch { Issue.record(error) }
+                            window.queue(.leftMouseUp) { $0.location }
+                        }
+                        control.mouseDown(with: window.event(.leftMouseDown, at: press(window)))
                     }
-                    control.mouseDown(with: window.event(.leftMouseDown, at: press(window)))
-                }
-                released.resume()
-            }, forMode: .default)
+                    released.resume()
+                }, forMode: .default)
+            }
+            arm(after: 0)
         }
         try #require(!window.timedOut, "the release came")
         await endTurn()
@@ -550,6 +559,26 @@ final class EventWindow: NSWindow {
         }
         timedOut = true
         return event(.leftMouseUp, at: location)
+    }
+}
+
+/// How many turns of the main run loop have begun since this was made and not ended: none in the turn it was made in. One begun
+/// inside main-actor work, by a test that turns the run loop itself, holds the main actor until it ends.
+private final class RunLoopNesting: @unchecked Sendable {
+    private(set) var depth = 0
+    private var observer: CFRunLoopObserver?
+
+    init() {
+        let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity([.entry, .exit]).rawValue, true, 0) { [unowned self] _, activity in
+            depth += activity == .entry ? 1 : -1
+        }
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+        self.observer = observer
+    }
+
+    func invalidate() {
+        observer.map(CFRunLoopObserverInvalidate)
+        observer = nil
     }
 }
 

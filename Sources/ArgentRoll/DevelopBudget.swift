@@ -19,20 +19,109 @@ import Foundation
 /// that too. The costs are measured on the M4 for 33 MP frames and scale with the pixels
 /// (`DevelopBudgetMeasureTests`); they depend on sizes and code, not on what a picture shows.
 public enum DevelopBudget {
+    /// The environment variable and the user default that replace the develop memory target for
+    /// measuring, in megabytes. The Settings choice uses a separate key of its own in the app and
+    /// sits below both of these.
+    public static let overrideEnvironmentKey = "ARGENT_DEVELOP_MEMORY_MB"
+    public static let overrideDefaultsKey = "ArgentDevelopMemoryMB"
+
+    /// A choice offered in Settings for how much memory a develop may hold: the default rule, or a
+    /// higher target in the footprint's megabytes (`N * 1000 << 20`, matching `specTarget`'s 2000 MiB "2 GB").
+    public enum Choice: String, CaseIterable, Sendable, Equatable, Hashable {
+        case `default`
+        case gb3 = "3gb"
+        case gb4 = "4gb"
+        case gb6 = "6gb"
+
+        /// The target in bytes for an explicit choice, or `nil` for the default rule.
+        public var bytes: Int? {
+            switch self {
+            case .default: nil
+            case .gb3: 3000 << 20
+            case .gb4: 4000 << 20
+            case .gb6: 6000 << 20
+            }
+        }
+
+        /// The label shown in Settings.
+        public var title: String {
+            switch self {
+            case .default: "Default"
+            case .gb3: "3 GB"
+            case .gb4: "4 GB"
+            case .gb6: "6 GB"
+            }
+        }
+    }
+
+    /// The choices offered on a Mac with `physicalMemory` bytes of RAM: `.default` always, and each
+    /// larger choice that is at most a quarter of physical memory (12 GB offers 3 GB; 16 GB offers 3
+    /// and 4 GB; 24 GB and above offer 3, 4 and 6 GB; 8 GB offers only the default).
+    public static func choices(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> [Choice] {
+        let quarter = physicalMemory / 4
+        return Choice.allCases.filter { choice in
+            guard let bytes = choice.bytes else { return true }
+            return UInt64(bytes) <= quarter
+        }
+    }
+
+    /// `choice` when a Mac with `physicalMemory` bytes of RAM offers it, else `.default`.
+    public static func effectiveChoice(_ choice: Choice,
+                                       physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Choice {
+        choices(physicalMemory: physicalMemory).contains(choice) ? choice : .default
+    }
+
+    /// Resolves the measuring overrides, the user's `choice` and the default rule into a budget in
+    /// bytes, in order: `ARGENT_DEVELOP_MEMORY_MB`, `ArgentDevelopMemoryMB`, `choice` if a Mac with
+    /// `physicalMemory` bytes offers it, and the default rule (`min(specTarget, physicalMemory / 8)`).
+    public static func resolve(choice: Choice = .default,
+                               environmentOverride: String? = nil,
+                               defaultsOverride: Any? = nil,
+                               physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Int {
+        if let mb = environmentOverride.flatMap(Int.init), mb > 0, mb <= Int.max >> 20 { return mb << 20 }
+        if let mb = positiveOverrideMB(defaultsOverride) { return mb << 20 }
+        if let bytes = effectiveChoice(choice, physicalMemory: physicalMemory).bytes { return bytes }
+        return min(specTarget, Int(min(UInt64(Int.max), physicalMemory / 8)))
+    }
+
     /// The footprint a develop keeps the whole app under: the spec's 2 GB, or an eighth of the memory
     /// on a Mac with less than 16 GB, the spec's proportion ("runs beside Lightroom on 16 GB").
     /// `ARGENT_DEVELOP_MEMORY_MB` or the user default `ArgentDevelopMemoryMB` replaces it, for
-    /// measuring.
-    public static func target(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Int {
-        if let given = ProcessInfo.processInfo.environment["ARGENT_DEVELOP_MEMORY_MB"].flatMap(Int.init)
-            ?? (UserDefaults.standard.object(forKey: "ArgentDevelopMemoryMB") as? Int), given > 0 {
-            return given << 20
-        }
-        return min(specTarget, Int(physicalMemory / 8))
+    /// measuring; a user `choice` sits between those overrides and the default rule.
+    public static func target(choice: Choice = .default,
+                              physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory,
+                              environment: [String: String] = ProcessInfo.processInfo.environment,
+                              defaults: UserDefaults = .standard) -> Int {
+        resolve(choice: choice,
+                environmentOverride: environment[overrideEnvironmentKey],
+                defaultsOverride: defaults.object(forKey: overrideDefaultsKey),
+                physicalMemory: physicalMemory)
+    }
+
+    private static func positiveOverrideMB(_ value: Any?) -> Int? {
+        if value is Bool { return nil }
+        if let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+        guard let mb = value as? Int, mb > 0, mb <= Int.max >> 20 else { return nil }
+        return mb
     }
 
     /// The spec's "under 2 GB by default", in the footprint's megabytes.
     public static let specTarget = 2000 << 20
+    /// The memory target at and above which RAW 9 develops in `largeLearnedDecodeTile`-pixel tiles
+    /// instead of 1024-pixel tiles (owner's decision, 2026-11-23).
+    public static let largeLearnedTileTarget = 3000 << 20
+    /// RAW 9's develop tile size at `largeLearnedTileTarget` and above: 2048 pixels. On 60 lossless L
+    /// frames on the M5 Pro (2026-11-22), 2048-pixel tiles raised throughput at 3000 MiB from
+    /// 0.76 / 0.70 / 0.70 to 0.85 / 0.80 / 0.80 frames a second (JPEG / HEIC / 16-bit TIFF) and at
+    /// 4000 MiB from 0.76 / 0.69 / 0.69 to 0.86 / 0.77 / 0.77, while losing 5 to 10 percent on HEIC
+    /// and 16-bit TIFF at the 2000 MiB default.
+    public static let largeLearnedDecodeTile = 2048
+
+    /// RAW 9's develop tile size for a develop whose memory target is `bytes`: 1024 pixels below
+    /// 3000 MiB, 2048 pixels at 3000 MiB or more. RAW 8 keeps `RollDeveloper.decodeTile` (768).
+    public static func learnedDecodeTile(forMemoryTarget bytes: Int) -> Int {
+        bytes >= largeLearnedTileTarget ? largeLearnedDecodeTile : (RollDeveloper.learnedDecodeTile ?? 1024)
+    }
     /// Kept below the target when a frame is let in, for what the frames already in flight add after:
     /// their film passes' second frame and their pictures. A lower ceiling, 1750 MB, did not lower the
     /// peaks of HEIC develops and cost speed (measured, docs/M2-shell.md section 10).

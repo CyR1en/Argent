@@ -208,6 +208,15 @@ public final class FilmPreviews: @unchecked Sendable {
     private var refines = true
     private var refinementPaused = false
     private var refinementsStarted = 0, refinementsInstalled = 0, refinementsDropped = 0
+    /// Under `lock`: RAW 9's decode tile size for refinements and removal inputs, kept in step with
+    /// the next develop's memory target (`DevelopBudget.learnedDecodeTile(forMemoryTarget:)`), and a
+    /// generation bumped whenever it changes so in-flight RAW 9 refinements and renders from another
+    /// tile are dropped.
+    private var _learnedDecodeTile: Int?
+    private var learnedTileGeneration: UInt64 = 0
+    /// Under `lock`: the decode tile size recorded on the last `removalInput` decode, for tests.
+    private var _lastRemovalInputTile: Int?
+    var lastRemovalInputTile: Int? { lock.withLock { _lastRemovalInputTile } }
     /// Told as decodes, refinements, renders and trims begin and end, for the drive hook's memory
     /// timeline; under `observerLock`.
     private var observer: (@Sendable (String) -> Void)?
@@ -220,16 +229,19 @@ public final class FilmPreviews: @unchecked Sendable {
     /// left: 26 MB each at 2190 by 1460, 77 MB at 3800 by 2533. Its renders share the rendered
     /// image budget, 15 MB each at 2190 by 1460. `decoderChoices` says which decoder each file goes to;
     /// `inHouseDecodesAtOnce` bounds the in-house decodes among the `concurrentDecodes`. `digests`
-    /// gives the raws' SHA-256 for the disk cache.
+    /// gives the raws' SHA-256 for the disk cache. `learnedDecodeTile` is RAW 9's develop tile size
+    /// for refinements and removal inputs.
     public init(stocks: [Stock], linearCacheBytes: Int = 512 << 20, filmCacheBytes: Int = 192 << 20,
                 framesKept: Int = 3, frameImageBytes: Int = 128 << 20, diskCache: LinearDiskCache? = nil,
                 decoderChoices: DecoderChoices = DecoderChoices(),
                 inHouseDecodesAtOnce: Int? = FilmPreviews.inHouseDecodesAtOnce, digests: SourceDigests = .shared,
-                patches: (any RemovalPatchSource)? = nil) throws {
+                patches: (any RemovalPatchSource)? = nil,
+                learnedDecodeTile: Int? = RollDeveloper.learnedDecodeTile) throws {
         self.stocks = stocks
         self.diskCache = diskCache
         self.digests = digests
         self.decoderChoices = decoderChoices
+        self._learnedDecodeTile = learnedDecodeTile
         renderedBytes = RenderedImageCache.budget(filmBytes: filmCacheBytes, frameBytes: frameImageBytes)
         renderedImages = RenderedImageCache(byteLimit: renderedBytes)
         // Its own GPU context, so the sheet's small textures never mix with a develop's
@@ -614,23 +626,31 @@ public final class FilmPreviews: @unchecked Sendable {
     public func frameFilm(_ frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace, pixels: Int,
                           priority: Operation.QueuePriority = .veryHigh) async -> CGImage? {
         guard !Task.isCancelled, stocks.indices.contains(stock) else { return nil }
-        let generation = lock.withLock { decodeGeneration }
+        let (generation, tileGeneration) = lock.withLock { (decodeGeneration, learnedTileGeneration) }
         let decode = cachedKey(frame, lens: settings.lens), refined = isFrameDecodeRefined(frame, lens: settings.lens, pixels: pixels)
         // A refined render outlives its decode; looked for before the request, which would let it go.
         if !refined, let kept = renderedImages.image(for: filmKey(decode, stock, settings, space, pixels, frameSized: true, refined: true)) {
-            return isCurrentDecode(generation) ? kept : nil
+            return lock.withLock {
+                decodeGeneration == generation && !(Self.isRaw9DecodeKey(decode) && learnedTileGeneration != tileGeneration)
+            } ? kept : nil
         }
         let requestedKey = filmKey(decode, stock, settings, space, pixels, frameSized: true, refined: refined)
         let ticket = renderedImages.beginRequest(for: requestedKey)
-        if let cached = renderedImages.image(for: requestedKey, ticket: ticket) { return isCurrentDecode(generation) ? cached : nil }
+        if let cached = renderedImages.image(for: requestedKey, ticket: ticket) {
+            return lock.withLock {
+                decodeGeneration == generation && !(refined && Self.isRaw9DecodeKey(decode) && learnedTileGeneration != tileGeneration)
+            } ? cached : nil
+        }
         guard let entry = await frameDecode(frame, lens: settings.lens, longSide: Self.frameDecodeSide(forPixels: pixels), priority: priority,
                                            generation: generation),
               !Task.isCancelled, isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
+        let isRaw9Refined = entry.refined && DecoderChoice.of(entry.frame) == .raw9
         let key = filmKey(keepKey(frame, madeFrom: entry), stock, settings, space, pixels, frameSized: true, refined: entry.refined)
         return await QueuedWork.runStoppable(on: renderQueue, priority: priority, prepare: { operation in
             self.renderedImages.attach(operation, to: ticket)
         }) { [self] stopped in
             guard !stopped(), isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
+            if isRaw9Refined, lock.withLock({ learnedTileGeneration != tileGeneration }) { return nil }
             if let cached = renderedImages.image(for: key, ticket: ticket) { return cached }
             note("frame-render \(frame.name) \(pixels) +")
             decodeTurns.beginRender()
@@ -641,11 +661,13 @@ public final class FilmPreviews: @unchecked Sendable {
             guard let renderer = try? renderer(stock),
                   let image = try? render(entry.frame, with: renderer, settings: settings, space: space, maxPixelSize: pixels)
             else { return nil }
-            guard !stopped(), isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
-            if let source = entry.source, SourceStamp.of(frame.url) == source {
-                renderedImages.store(image, for: key, ticket: ticket)
+            guard !stopped(), renderedImages.isCurrent(ticket) else { return nil }
+            let sourceMatches = entry.source.map { SourceStamp.of(frame.url) == $0 } ?? false
+            return lock.withLock {
+                guard decodeGeneration == generation, !isRaw9Refined || learnedTileGeneration == tileGeneration else { return nil }
+                if sourceMatches { renderedImages.store(image, for: key, ticket: ticket) }
+                return image
             }
-            return image
         }
     }
 
@@ -657,22 +679,30 @@ public final class FilmPreviews: @unchecked Sendable {
     public func frameNeutral(_ frame: Frame, lens: LensSettings, space: OutputSpace, pixels: Int,
                              priority: Operation.QueuePriority = .veryHigh) async -> CGImage? {
         guard !Task.isCancelled else { return nil }
-        let generation = lock.withLock { decodeGeneration }
+        let (generation, tileGeneration) = lock.withLock { (decodeGeneration, learnedTileGeneration) }
         let decode = cachedKey(frame, lens: lens), refined = isFrameDecodeRefined(frame, lens: lens, pixels: pixels)
         if !refined, let kept = renderedImages.image(for: neutralKey(decode, space: space, pixels: pixels, refined: true)) {
-            return isCurrentDecode(generation) ? kept : nil
+            return lock.withLock {
+                decodeGeneration == generation && !(Self.isRaw9DecodeKey(decode) && learnedTileGeneration != tileGeneration)
+            } ? kept : nil
         }
         let requestedKey = neutralKey(decode, space: space, pixels: pixels, refined: refined)
         let ticket = renderedImages.beginRequest(for: requestedKey)
-        if let cached = renderedImages.image(for: requestedKey, ticket: ticket) { return isCurrentDecode(generation) ? cached : nil }
+        if let cached = renderedImages.image(for: requestedKey, ticket: ticket) {
+            return lock.withLock {
+                decodeGeneration == generation && !(refined && Self.isRaw9DecodeKey(decode) && learnedTileGeneration != tileGeneration)
+            } ? cached : nil
+        }
         guard let entry = await frameDecode(frame, lens: lens, longSide: Self.frameDecodeSide(forPixels: pixels), priority: priority,
                                            generation: generation),
               !Task.isCancelled, isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
+        let isRaw9Refined = entry.refined && DecoderChoice.of(entry.frame) == .raw9
         let key = neutralKey(keepKey(frame, madeFrom: entry), space: space, pixels: pixels, refined: entry.refined)
         return await QueuedWork.runStoppable(on: renderQueue, priority: priority, prepare: { operation in
             self.renderedImages.attach(operation, to: ticket)
         }) { [self] stopped in
             guard !stopped(), isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
+            if isRaw9Refined, lock.withLock({ learnedTileGeneration != tileGeneration }) { return nil }
             if let cached = renderedImages.image(for: key, ticket: ticket) { return cached }
             note("neutral-render \(frame.name) \(pixels) +")
             decodeTurns.beginRender()
@@ -681,11 +711,13 @@ public final class FilmPreviews: @unchecked Sendable {
                 note("neutral-render \(frame.name) \(pixels) -")
             }
             guard let image = try? displayImage(entry.frame.texture, space: space, maxPixelSize: pixels) else { return nil }
-            guard !stopped(), isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
-            if let source = entry.source, SourceStamp.of(frame.url) == source {
-                renderedImages.store(image, for: key, ticket: ticket)
+            guard !stopped(), renderedImages.isCurrent(ticket) else { return nil }
+            let sourceMatches = entry.source.map { SourceStamp.of(frame.url) == $0 } ?? false
+            return lock.withLock {
+                guard decodeGeneration == generation, !isRaw9Refined || learnedTileGeneration == tileGeneration else { return nil }
+                if sourceMatches { renderedImages.store(image, for: key, ticket: ticket) }
+                return image
             }
-            return image
         }
     }
 
@@ -713,7 +745,9 @@ public final class FilmPreviews: @unchecked Sendable {
             if let entry = frameEntry(Self.key(frame, source, decoderChoices.choice(for: frame.url), self.lens(frame, source, lens))), entry.fits(longSide) {
                 return entry
             }
-            let previous = lock.withLock { frameLinear.last(where: { $0.key.hasPrefix(path + "|") })?.entry }
+            let (previous, tileGeneration) = lock.withLock {
+                (frameLinear.last(where: { $0.key.hasPrefix(path + "|") })?.entry, learnedTileGeneration)
+            }
             let input: LinearFrame
             let refined: Bool
             if let previous, previous.source == source, previous.fits(longSide), let kept = previous.input {
@@ -748,8 +782,10 @@ public final class FilmPreviews: @unchecked Sendable {
             // While a develop runs, only the frame on screen. Read before the lock: the turns' lock comes
             // first (`DecodeTurns`).
             let kept = decodeTurns.isDevelopRunning ? 1 : framesKept
+            let isRaw9Refined = refined && DecoderChoice.of(input) == .raw9
             return lock.withLock {
-                guard !stopped(), decodeGeneration == generation else { return nil }
+                guard !stopped(), decodeGeneration == generation,
+                      !isRaw9Refined || learnedTileGeneration == tileGeneration else { return nil }
                 frameLinear.removeAll { $0.key.hasPrefix(path + "|") }
                 frameLinear.append((key, entry))
                 if frameLinear.count > kept { frameLinear.removeFirst(frameLinear.count - kept) }
@@ -774,7 +810,7 @@ public final class FilmPreviews: @unchecked Sendable {
     public func refineFrame(_ frame: Frame, lens: LensSettings, pixels: Int) async -> Bool {
         guard !Task.isCancelled else { return false }
         let longSide = Self.frameDecodeSide(forPixels: pixels)
-        let generation = lock.withLock { decodeGeneration }
+        let (generation, learnedTile, tileGeneration) = lock.withLock { (decodeGeneration, _learnedDecodeTile, learnedTileGeneration) }
         let entryKey = cachedKey(frame, lens: lens)
         guard let base = peekFrameEntry(entryKey), base.fits(longSide) else { return false }
         if base.refined { return true }
@@ -785,7 +821,10 @@ public final class FilmPreviews: @unchecked Sendable {
         let (width, height) = (base.frame.width, base.frame.height)
         return await QueuedWork.runStoppable(on: refineQueue) { [self] stopped in
             func halted() -> Bool {
-                stopped() || lock.withLock { decodeGeneration != generation || !refines || refinementPaused }
+                stopped() || lock.withLock {
+                    decodeGeneration != generation || !refines || refinementPaused
+                        || (madeBy == .raw9 && learnedTileGeneration != tileGeneration)
+                }
             }
             guard !halted(), lock.withLock({ frameLinear.contains { $0.entry.input?.image === base.input?.image && $0.entry.source == source } }) else { return false }
             // None starts while a develop runs; one under way as it starts holds its first frame back.
@@ -797,7 +836,7 @@ public final class FilmPreviews: @unchecked Sendable {
             decoder.trim()
             var options = DecodeOptions()
             // In the develop's tiles for the decoder.
-            options.tileSize = madeBy == .raw9 ? RollDeveloper.learnedDecodeTile : RollDeveloper.decodeTile
+            options.tileSize = madeBy == .raw9 ? learnedTile : RollDeveloper.decodeTile
             options.appleDecoder = madeBy == .raw9 ? .learned : .classic
             options.lensCorrection = false
             let refined: LinearFrame
@@ -812,7 +851,8 @@ public final class FilmPreviews: @unchecked Sendable {
                 // A raw that changed during the decode or stage gives a picture of neither version.
                 let unchanged = SourceStamp.of(frame.url) == source
                 let correction = lock.withLock { () -> ResolvedLensCorrection? in
-                    guard unchanged, !stopped(), decodeGeneration == generation, refines, !refinementPaused,
+                    guard unchanged, !stopped(), decodeGeneration == generation,
+                          madeBy != .raw9 || learnedTileGeneration == tileGeneration, refines, !refinementPaused,
                           let entry = frameLinear.first(where: { $0.entry.input?.image === base.input?.image && $0.entry.source == source }),
                           let correction = entry.entry.frame.lens else {
                         refinementsDropped += 1
@@ -827,7 +867,8 @@ public final class FilmPreviews: @unchecked Sendable {
                 }
                 let stillUnchanged = SourceStamp.of(frame.url) == source
                 let installed = lock.withLock { () -> Bool? in
-                    guard stillUnchanged, !stopped(), decodeGeneration == generation, refines, !refinementPaused,
+                    guard stillUnchanged, !stopped(), decodeGeneration == generation,
+                          madeBy != .raw9 || learnedTileGeneration == tileGeneration, refines, !refinementPaused,
                           let index = frameLinear.firstIndex(where: { $0.entry.input?.image === base.input?.image && $0.entry.source == source }) else {
                         refinementsDropped += 1
                         return false
@@ -842,6 +883,28 @@ public final class FilmPreviews: @unchecked Sendable {
                 if let installed { return installed }
             }
         } ?? false
+    }
+
+    /// RAW 9's decode tile size for the frame view's refinement (`refineFrame`) and removal inputs
+    /// (`removalInput`), kept in step with the next develop's memory target. Changing it drops kept
+    /// RAW 9 refined decodes and refined renders and stops in-flight RAW 9 refinements so a
+    /// refinement made at another tile is not shown as the develop's pixels. RAW 8 keeps
+    /// `RollDeveloper.decodeTile`.
+    public var learnedDecodeTile: Int? {
+        get { lock.withLock { _learnedDecodeTile } }
+        set {
+            lock.withLock {
+                guard _learnedDecodeTile != newValue else { return }
+                _learnedDecodeTile = newValue
+                learnedTileGeneration &+= 1
+                frameLinear.removeAll { $0.entry.refined && DecoderChoice.of($0.entry.frame) == .raw9 }
+                renderedImages.remove { $0.refined && Self.isRaw9DecodeKey($0.familyDecode ?? $0.decode) }
+            }
+        }
+    }
+
+    private static func isRaw9DecodeKey(_ key: String) -> Bool {
+        key.hasSuffix("|\(DecoderChoice.raw9.rawValue)") || key.contains("|\(DecoderChoice.raw9.rawValue)|")
     }
 
     /// Whether frame decodes are refined (`refineFrame`); on unless the drive hook turns it off to
@@ -1437,7 +1500,7 @@ extension FilmPreviews {
                 // The develop's own decode, in its tiles, since its pixels are the ones the patch is laid into.
                 var options = DecodeOptions()
                 options.tileSize = RollDeveloper.decodeTile
-                options.learnedTileSize = RollDeveloper.learnedDecodeTile
+                options.learnedTileSize = lock.withLock { _learnedDecodeTile }
                 options.lensCorrection = false
                 let result = Result { try decoder.decode(frame.url, options: options) }
                 decodeTurns.endPreview()
@@ -1445,7 +1508,9 @@ extension FilmPreviews {
                 trimWhenIdle()
                 switch result {
                 case .failure(let error): return .failure(error)
-                case .success(let whole): (decoded, source) = (whole, snapshot.source)
+                case .success(let whole):
+                    lock.withLock { _lastRemovalInputTile = whole.pins?.tileSize }
+                    (decoded, source) = (whole, snapshot.source)
                 }
             }
             guard !halted() else { return nil }

@@ -44,14 +44,29 @@ import Testing
     /// Whether the frame view is in the window, by the mask canvas it holds.
     private func hasFrameView(_ host: NSView) -> Bool { !views(MaskCanvasView.self, in: host).isEmpty }
 
-    /// Waits until the frame view is in the window, or is not, for no longer than `seconds`; the seconds it took, or
-    /// `nil` if it did not happen.
+    /// Asks `done` every 10 ms until it holds, for no longer than `seconds` of this test's own turns; whether it held.
+    ///
+    /// A turn that comes late counts as one: the main actor was a suite's beside this one, held seconds at a time by work
+    /// that does not let go of it (a mask's raster made on it in a debug build, a run loop turned by hand), and the frame
+    /// view, whose animation goes by the clock, could not leave meanwhile either. It is seen through at the turns that
+    /// follow. Counted by the clock, a wait came to its end in a stall of 5.7 s and found the frame view still there.
+    private func poll(atMost seconds: TimeInterval, until done: () -> Bool) async throws -> Bool {
+        var waited = 0.0, last = CACurrentMediaTime()
+        while !done() {
+            guard waited < seconds else { return false }
+            try await Task.sleep(for: .milliseconds(10))
+            let now = CACurrentMediaTime()
+            waited += min(now - last, 0.05)
+            last = now
+        }
+        return true
+    }
+
+    /// Waits until the frame view is in the window, or is not, for no longer than `seconds` of this test's own turns
+    /// (`poll`); the seconds it took by the clock, or `nil` if it did not happen.
     private func wait(for shown: Bool, in host: NSView, atMost seconds: TimeInterval) async throws -> TimeInterval? {
         let start = CACurrentMediaTime()
-        while hasFrameView(host) != shown {
-            guard CACurrentMediaTime() - start < seconds else { return nil }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        guard try await poll(atMost: seconds, until: { hasFrameView(host) == shown }) else { return nil }
         return CACurrentMediaTime() - start
     }
 
@@ -87,8 +102,7 @@ import Testing
             defer { window.close() }
             record.turn = { Task { @MainActor in moved.x = 0 } }
             moved.x = 300
-            let start = CACurrentMediaTime()
-            while record.ended == nil, CACurrentMediaTime() - start < 6 { try await Task.sleep(for: .milliseconds(10)) }
+            _ = try await poll(atMost: 6) { record.ended != nil }
             let ended = try #require(record.ended)
             guard let merge = record.merges.first else { continue }
             #expect(record.merges.count == 1)
@@ -244,7 +258,12 @@ import Testing
     }
 
     /// Closes the open frame, scrolls the sheet a tenth of a second later as `scroll` does, and says how much of the
-    /// frame view, still in the window, is drawn then. Tried again if the frame view had gone by then; `nil` after three.
+    /// frame view, still in the window, is drawn once the sheet has moved: nothing, or what it was when it left. Tried
+    /// again if the frame view had gone by then; `nil` after three.
+    ///
+    /// Waited for, not timed (`poll`): the sheet scrolled by the keys moves on an animation whose first step comes after
+    /// the model has heard of the scroll, 12 ms on an idle Mac and more than the 50 ms this once waited on a busy one, and
+    /// SwiftUI draws the frame view clear in a later turn than a wheel's scroll moves the sheet in.
     private func opacityOnceScrolled(_ model: RollModel, _ host: NSView, scroll: @MainActor (NSScrollView) throws -> Void) async throws -> CGFloat? {
         for _ in 0..<3 {
             model.openFrame()
@@ -255,15 +274,17 @@ import Testing
             let before = frameViewOpacity(host)
             let sheet = try sheetScroller(host), from = sheet.contentView.bounds.minY
             try scroll(sheet)
-            try await Task.sleep(for: .milliseconds(50))
-            // Only a frame view there before the scroll and after it has been asked anything.
-            let after = before == 1 && hasFrameView(host) ? frameViewOpacity(host) : nil
-            let moved = sheet.contentView.bounds.minY != from
-            try #require(try await wait(for: false, in: host, atMost: 6) != nil)
-            if let after {
-                #expect(moved)
-                return after
+            var moved = false, after: CGFloat?
+            _ = try await poll(atMost: 6) {
+                moved = moved || sheet.contentView.bounds.minY != from
+                let there = hasFrameView(host)
+                if moved, there { after = frameViewOpacity(host) }
+                return moved && (!there || after == 0)
             }
+            #expect(moved, "The sheet did not move in six seconds of the test's own")
+            try #require(try await wait(for: false, in: host, atMost: 6) != nil)
+            // Only a frame view drawn whole before the scroll and still there once the sheet had moved has been asked anything.
+            if before == 1, let after { return after }
         }
         return nil
     }

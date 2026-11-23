@@ -472,6 +472,33 @@ import Testing
         #expect(first == again && first == elsewhere)
     }
 
+    /// A full-size RAW 9 decode is the same bits in a develop's two tile sizes, 1024 and 2048 pixels, with the decoder's own lens
+    /// correction off, as the develop, the frame view's refinement and the removal input decode. So the Settings choice that moves
+    /// a develop's tile (`DevelopBudget.learnedDecodeTile(forMemoryTarget:)`) moves no pixel, and a removal's patch cut at one tile
+    /// lies exactly in a decode at the other: 0 of 98,224,128 samples differed on the lossless L and the uncompressed sample
+    /// (measured 2026-11-23, docs/decoder.md section 18). With lens correction on the two differ, on 0.03 percent of samples.
+    /// This fails the day a macOS update makes the tile show.
+    @Test(.enabled(if: AppleRawDecoderTests.hasSample))
+    func raw9DevelopTilesAreTheSameBits() throws {
+        let gpu = try GPU(maxIdlePoolBytes: 0)
+        let decoder = AppleRawDecoder(gpu: gpu, contextPerDecode: true)
+        func pixels(tile: Int) throws -> [Float16] {
+            try autoreleasepool {
+                var options = DecodeOptions()
+                options.appleDecoder = .learned
+                options.tileSize = tile
+                options.lensCorrection = false
+                let frame = try decoder.decode(Self.sample, options: options)
+                #expect(frame.pins?.tileSize == tile && frame.pins?.lensCorrection == false)
+                return ExposureAnalyzer.pixels(of: frame.texture)
+            }
+        }
+        let small = try pixels(tile: 1024), large = try pixels(tile: 2048)
+        #expect(small.count == 7008 * 4672 * 4 && small.count == large.count)
+        let same = small.withUnsafeBytes { a in large.withUnsafeBytes { b in a.count == b.count && memcmp(a.baseAddress, b.baseAddress, a.count) == 0 } }
+        #expect(same, "a RAW 9 decode in 1024-pixel tiles is no longer the bits of one in 2048-pixel tiles")
+    }
+
     private static let uncompressed = sample.deletingLastPathComponent()
         .appendingPathComponent("ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW")
 

@@ -646,6 +646,12 @@ private struct FramePicture: View {
                                         refined: view.refined)) { await view.refine() }
                 // A decode for another size starts scaled again.
                 .onChange(of: view.pixels) { view.refinedPixels = nil }
+                // A memory setting change that switches RAW 9's develop tile drops kept RAW 9 refinements.
+                .onChange(of: model.developMemory.choice) {
+                    if model.films?.isFrameDecodeRefined(frame, lens: view.pictureLensSettings, pixels: view.pixels) != true {
+                        view.refinedPixels = nil
+                    }
+                }
                 .task(id: view.currentAutomaticRequest) { await view.loadAutomatic() }
                 .task(id: ClippingRequest(kind: model.lightClipping, film: view.film.map(ObjectIdentifier.init))) {
                     await view.loadClipping()

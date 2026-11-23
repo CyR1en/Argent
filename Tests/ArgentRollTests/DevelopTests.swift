@@ -936,6 +936,81 @@ extension DevelopSampleTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: again.path).sorted()
                 == stopped.compactMap(\.file).map(\.lastPathComponent).sorted())
     }
+
+    /// A develop at 3000 MiB or above decodes RAW 9 in 2048-pixel tiles, weighs the frame at 2048 in
+    /// the memory gate, records 2048 in the receipt's decode pins and reports it on the developer;
+    /// an explicit tile at init still wins, RAW 8 keeps 768, and a tile change never redoes a file
+    /// already developed.
+    @Test(.enabled(if: DevelopSampleTests.hasSamples))
+    func aRaisedTargetDevelopsRAW9At2048WeighsAt2048AndRecordsIt() async throws {
+        let large = "ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW"
+        let small = "ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW"
+        let (roll, root) = try await roll([large, small])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let raw9Frame = try #require(roll.frames.first { $0.name.contains("Large") })
+        let raw8Frame = try #require(roll.frames.first { $0.name.contains("Small") })
+        let stock = try toyStock()
+        let library = root.appendingPathComponent("library")
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let developer = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: 2000 << 20, recipeWriter: writer)
+        let output = OutputSettings(size: .longEdge2048)
+
+        func makeJob(_ frame: Frame) throws -> RollDeveloper.Job {
+            RollDeveloper.Job(frame: frame, recipe: try Recipe.make(
+                frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: stock.digest,
+                roll: RollControls(), own: FrameControls(), grain: output.grain, sharpen: true,
+                editRevision: 1, editLineage: "tile-test"))
+        }
+
+        // Default target (2000 MiB): RAW 9 decodes and weighs at 1024 and records 1024 in the receipt.
+        let outDefault = root.appendingPathComponent("out-2000")
+        let defaultOutcomes = await developer.develop([try makeJob(raw9Frame)], to: outDefault, output: output, memoryTarget: 2000 << 20)
+        guard case .developed(let defaultFile) = defaultOutcomes[0] else { Issue.record("\(defaultOutcomes)"); return }
+        let raw9Size = RollDeveloper.pixelSize(of: raw9Frame.url)
+        #expect(developer.lastMemoryTarget == 2000 << 20)
+        #expect(developer.lastLearnedDecodeTile == 1024)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 1024))
+        let receipt2000 = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(receipt2000.develops.last?.decode?.tileSize == 1024)
+
+        // Files already developed at 1024 are skipped at 3000 MiB: changing the tile never redoes them.
+        let skipped = await developer.develop([RollDeveloper.Job(frame: raw9Frame, recipe: receipt2000)],
+                                              to: outDefault, output: output, memoryTarget: 3000 << 20)
+        #expect(skipped == [.alreadyDeveloped(defaultFile)])
+
+        // Raised target (3000 MiB) into a new folder on the same developer: RAW 9 decodes and weighs at 2048 and records 2048.
+        let outRaised = root.appendingPathComponent("out-3000")
+        let raisedOutcomes = await developer.develop([try makeJob(raw9Frame)], to: outRaised, output: output, memoryTarget: 3000 << 20)
+        guard case .developed = raisedOutcomes[0] else { Issue.record("\(raisedOutcomes)"); return }
+        #expect(developer.lastMemoryTarget == 3000 << 20)
+        #expect(developer.lastLearnedDecodeTile == 2048)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 2048))
+        let receipt3000 = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(receipt3000.develops.last?.decode?.tileSize == 2048)
+
+        // RAW 8 keeps its 768-pixel tile even when the develop's target is raised.
+        let raw8Outcomes = await developer.develop([try makeJob(raw8Frame)], to: outRaised, output: output, memoryTarget: 3000 << 20)
+        guard case .developed = raw8Outcomes[0] else { Issue.record("\(raw8Outcomes)"); return }
+        let raw8Size = RollDeveloper.pixelSize(of: raw8Frame.url)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw8Size.width, height: raw8Size.height, decoder: .apple, tile: 768))
+        let raw8Receipt = try #require(try await writer.load(for: raw8Frame, library: library))
+        #expect(raw8Receipt.develops.last?.decode?.tileSize == 768)
+
+        // An explicit tile at init still wins over the target's rule.
+        let pinned = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                       digests: digests, learnedDecodeTile: 1536, memoryTarget: 2000 << 20, recipeWriter: writer)
+        let outPinned = root.appendingPathComponent("out-pinned")
+        let pinnedOutcomes = await pinned.develop([try makeJob(raw9Frame)], to: outPinned, output: output, memoryTarget: 4000 << 20)
+        guard case .developed = pinnedOutcomes[0] else { Issue.record("\(pinnedOutcomes)"); return }
+        #expect(pinned.lastLearnedDecodeTile == 1536)
+        #expect(pinned.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 1536))
+        let pinnedReceipt = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(pinnedReceipt.develops.last?.decode?.tileSize == 1536)
+        developer.trim()
+        pinned.trim()
+    }
 }
 
 private final class InFlight: @unchecked Sendable {
@@ -957,6 +1032,172 @@ private final class InFlight: @unchecked Sendable {
         #expect(DevelopBudget.target(physicalMemory: 16 << 30) == 2000 << 20)
         #expect(DevelopBudget.target(physicalMemory: 64 << 30) == 2000 << 20)
         #expect(DevelopBudget.target(physicalMemory: 8 << 30) == 1024 << 20)
+    }
+
+    @Test func choicesFollowAQuarterOfPhysicalMemory() {
+        #expect(DevelopBudget.Choice.default.bytes == nil)
+        #expect(DevelopBudget.Choice.gb3.bytes == 3000 << 20)
+        #expect(DevelopBudget.Choice.gb4.bytes == 4000 << 20)
+        #expect(DevelopBudget.Choice.gb6.bytes == 6000 << 20)
+        #expect(DevelopBudget.choices(physicalMemory: 8 << 30) == [.default])
+        #expect(DevelopBudget.choices(physicalMemory: 12 << 30) == [.default, .gb3])
+        #expect(DevelopBudget.choices(physicalMemory: 16 << 30) == [.default, .gb3, .gb4])
+        #expect(DevelopBudget.choices(physicalMemory: 24 << 30) == [.default, .gb3, .gb4, .gb6])
+        #expect(DevelopBudget.choices(physicalMemory: 64 << 30) == [.default, .gb3, .gb4, .gb6])
+    }
+
+    @Test func budgetPrecedencePrefersOverridesThenChoiceThenDefaultRule() {
+        let ram24: UInt64 = 24 << 30
+        // Environment override beats UserDefaults override, user choice and default rule.
+        #expect(DevelopBudget.resolve(choice: .gb6, environmentOverride: "3500", defaultsOverride: 5000, physicalMemory: ram24)
+                == 3500 << 20)
+        // UserDefaults override beats user choice and default rule.
+        #expect(DevelopBudget.resolve(choice: .gb6, environmentOverride: nil, defaultsOverride: 5000, physicalMemory: ram24)
+                == 5000 << 20)
+        // Invalid or non-positive overrides fall through to the next source.
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: "0", defaultsOverride: 3200, physicalMemory: ram24)
+                == 3200 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: "not-a-number", defaultsOverride: -1, physicalMemory: ram24)
+                == 4000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, environmentOverride: nil, defaultsOverride: true, physicalMemory: ram24)
+                == 4000 << 20)
+        // User choice beats default rule when offered.
+        #expect(DevelopBudget.resolve(choice: .gb3, physicalMemory: 12 << 30) == 3000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb4, physicalMemory: 16 << 30) == 4000 << 20)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: ram24) == 6000 << 20)
+        // Default rule when nothing else is chosen.
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 8 << 30) == 1024 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 12 << 30) == 1536 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 16 << 30) == 2000 << 20)
+        #expect(DevelopBudget.resolve(choice: .default, physicalMemory: 64 << 30) == 2000 << 20)
+
+        // End-to-end key lookup through `target(choice:physicalMemory:environment:defaults:)`.
+        let defaults = MemoryDefaults()
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 4000 << 20)
+        defaults.set(3500, forKey: DevelopBudget.overrideDefaultsKey)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 3500 << 20)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24,
+                                     environment: [DevelopBudget.overrideEnvironmentKey: "2500"], defaults: defaults) == 2500 << 20)
+        defaults.set(true, forKey: DevelopBudget.overrideDefaultsKey)
+        #expect(DevelopBudget.target(choice: .gb4, physicalMemory: ram24, environment: [:], defaults: defaults) == 4000 << 20)
+    }
+
+    @Test func aSavedChoiceNoLongerOfferedFallsBackToDefault() {
+        #expect(DevelopBudget.effectiveChoice(.gb6, physicalMemory: 16 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: 16 << 30) == 2000 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb4, physicalMemory: 12 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb4, physicalMemory: 12 << 30) == 1536 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb3, physicalMemory: 8 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb3, physicalMemory: 8 << 30) == 1024 << 20)
+
+        #expect(DevelopBudget.effectiveChoice(.gb6, physicalMemory: 8 << 30) == .default)
+        #expect(DevelopBudget.resolve(choice: .gb6, physicalMemory: 8 << 30) == 1024 << 20)
+    }
+
+    @Test func aPerDevelopMemoryTargetReachesTheGate() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("argent-per-develop-budget-\(UUID().uuidString)")
+        let rollDir = root.appendingPathComponent("roll"), outDir = root.appendingPathComponent("out")
+        let library = root.appendingPathComponent("library")
+        try FileManager.default.createDirectory(at: rollDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let rawURL = rollDir.appendingPathComponent("DSC00601.ARW")
+        try Data("not a real raw".utf8).write(to: rawURL)
+        let stock = try toyStock()
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let defaultTarget = 2000 << 20
+        let developer = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: defaultTarget, recipeWriter: writer)
+        let item = frame("DSC00601.ARW", in: rollDir)
+        let recipe = Recipe(frame: item, byteCount: RecipeStore.byteCount(of: rawURL), stock: stock,
+                            stockDigest: stock.digest, roll: RollControls(), own: FrameControls(),
+                            editRevision: 1, editLineage: "budget-test")
+        let job = RollDeveloper.Job(frame: item, recipe: recipe)
+
+        // Passing an explicit budget uses it for the gate without mutating the developer's default.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(developer.memoryTarget == defaultTarget)
+        #expect(developer.lastMemoryTarget == 4000 << 20)
+        #expect(developer.lastGateCeiling == (4000 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions?.admitted == 1)
+
+        // A tight per-develop budget on the same developer actually makes the gate wait before admitting.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 1 << 20)
+        #expect(developer.lastMemoryTarget == 1 << 20)
+        #expect(developer.lastGateCeiling == (1 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions.map { $0.admitted == 1 && $0.waited == 1 } == true)
+
+        // A generous per-develop budget on the same developer admits immediately without waiting.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 6000 << 20)
+        #expect(developer.lastMemoryTarget == 6000 << 20)
+        #expect(developer.lastGateCeiling == (6000 << 20) - DevelopBudget.margin)
+        #expect(developer.lastAdmissions.map { $0.admitted == 1 && $0.waited == 0 } == true)
+
+        // Omitting `memoryTarget` falls back to the developer's own target.
+        _ = await developer.develop([job], to: outDir, output: OutputSettings())
+        #expect(developer.lastMemoryTarget == defaultTarget)
+        #expect(developer.lastGateCeiling == defaultTarget - DevelopBudget.margin)
+    }
+
+    @Test func raw9TileFollowsTheMemoryTarget() {
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 1999 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 2000 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 2999 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 3000 << 20) == 2048)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 4000 << 20) == 2048)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 6000 << 20) == 2048)
+        #expect(RollDeveloper.decodeTile == 768)
+        #expect(RollDeveloper.learnedDecodeTile == 1024)
+    }
+
+    @Test func aDevelopPicksRAW9sTileFromItsTargetAndAnExplicitTileStillWins() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("argent-develop-tile-\(UUID().uuidString)")
+        let rollDir = root.appendingPathComponent("roll"), outDir = root.appendingPathComponent("out")
+        let library = root.appendingPathComponent("library")
+        try FileManager.default.createDirectory(at: rollDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let rawURL = rollDir.appendingPathComponent("DSC00601.ARW")
+        try Data("not a real raw".utf8).write(to: rawURL)
+        let stock = try toyStock()
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let item = frame("DSC00601.ARW", in: rollDir)
+        let recipe = Recipe(frame: item, byteCount: RecipeStore.byteCount(of: rawURL), stock: stock,
+                            stockDigest: stock.digest, roll: RollControls(), own: FrameControls(),
+                            editRevision: 1, editLineage: "tile-unit")
+        let job = RollDeveloper.Job(frame: item, recipe: recipe)
+
+        let automatic = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: 2000 << 20, recipeWriter: writer)
+        #expect(automatic.lastLearnedDecodeTile == nil)
+        #expect(automatic.learnedDecodeTile == 1024)
+
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 2999 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 1024)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 3000 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 2048)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 6000 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 2048)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings())
+        #expect(automatic.lastLearnedDecodeTile == 1024)
+
+        let fixed = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                      digests: digests, learnedDecodeTile: 1536, memoryTarget: 2000 << 20, recipeWriter: writer)
+        #expect(fixed.learnedDecodeTile == 1536)
+        _ = await fixed.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 2000 << 20)
+        #expect(fixed.lastLearnedDecodeTile == 1536)
+        _ = await fixed.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(fixed.lastLearnedDecodeTile == 1536)
+
+        let whole = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                      digests: digests, learnedDecodeTile: .some(nil), memoryTarget: 4000 << 20, recipeWriter: writer)
+        #expect(whole.learnedDecodeTile == nil)
+        _ = await whole.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(whole.lastLearnedDecodeTile == nil)
     }
 
     @Test func aDecodeAddsItsFrameAndItsDecodersWorkingMemory() {
@@ -1263,4 +1504,13 @@ private final class ProgressLog: @unchecked Sendable {
     private var entries: [(Int, RollDeveloper.Outcome)] = []
     func add(_ index: Int, _ outcome: RollDeveloper.Outcome) { lock.withLock { entries.append((index, outcome)) } }
     var count: Int { lock.withLock { entries.count } }
+}
+
+private final class MemoryDefaults: UserDefaults {
+    private let lock = NSLock()
+    private var values: [String: Any] = [:]
+    init() { super.init(suiteName: "argent-roll-tests-memory")! }
+    override func object(forKey key: String) -> Any? { lock.withLock { values[key] } }
+    override func set(_ value: Any?, forKey key: String) { lock.withLock { values[key] = value } }
+    override func removeObject(forKey key: String) { lock.withLock { values[key] = nil } }
 }

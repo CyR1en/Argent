@@ -66,7 +66,7 @@ struct AppRail: View {
             .disabled(model.roll == nil || page == .importReview)
             RailSeparator()
             item(.settings, title: "Settings", symbol: "gearshape", isSelected: here == .settings,
-                 help: "Settings: the appearance. Command-Comma.") {
+                 help: "Settings: appearance and develop memory. Command-Comma.") {
                 model.showWorkspacePage(page == .settings ? .roll : .settings)
             }
         }
