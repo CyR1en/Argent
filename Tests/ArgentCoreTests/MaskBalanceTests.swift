@@ -146,11 +146,13 @@ import Testing
     /// 0.8 px transition is the hardest the field can make — 1.337 and 1.381, held under 1.6 and 1.7 (about a fifth to spare).
     ///
     /// Re-measured 2026-11-23 across all 14 current baked stocks: every `densityRange = 2.5` stock still stays under 1.6 and 1.7 (worst `cinestill-800t`
-    /// 1.481 |ΔL*| and `fujifilm-superia-400` 1.535 ΔE*ab; `kodak-gold-200` 1.340 and 1.384). The two `densityRange = 2.0` cinema stocks convert the
-    /// same paper-stop balance shift into 25 % larger normalized dye steps against `CaptureSharpening`'s fixed 0.009 dye-unit coring threshold, giving
-    /// `kodak-vision3-500t` 0.299 / 0.313 at full 7008 (0.048 at Amount 1), 0.039 / 0.060 in a 2190 RAW 9 drag, 0.899 / 0.922 in 2190 draft, and
-    /// 1.820 / 1.877 on this 0.8 px bound (0.391 at Amount 1; `kodak-vision3-500t-cinema` 1.685 / 1.800). Those two stocks are held under 2.2 and 2.3
-    /// (the same ~20 % margin); every other stock keeps 1.6 and 1.7.
+    /// 1.481 |ΔL*| and `fujifilm-superia-400` 1.535 ΔE*ab; `kodak-gold-200` 1.340 and 1.384). The two `densityRange = 2.0` stocks measure more because
+    /// `CaptureSharpening.threshold` is in normalized dye amounts, and on them a dye unit is 2.0 density, not 2.5: the same density step is 25 % more
+    /// units against the same soft threshold, so less of it is cored. With the threshold at 0 they are ordinary (`kodak-vision3-500t` 3.416 against
+    /// 2.448 to 3.512 on the others); at 0.009 the 2.5 stocks keep 38 to 43 % of that and the two 2.0 stocks 53 and 55 %. `kodak-vision3-500t`: 0.299
+    /// and 0.313 at the full-size develop, at the 0.3 L* estimated before measuring for a develop, 0.039 and 0.060 in a RAW 9 drag, 0.899 and 0.922
+    /// from the draft decode, and 1.820 and 1.877 on this bound (`kodak-vision3-500t-cinema` 1.685 and 1.800). Those two stocks are held under 2.2 and
+    /// 2.3, the same fifth to spare; every other stock keeps 1.6 and 1.7.
     @Test func captureSharpeningSeesABalancesEdgeOnlySlightly() throws {
         let gpu = try GPU()
         let geometry = BalanceEdge.bound
