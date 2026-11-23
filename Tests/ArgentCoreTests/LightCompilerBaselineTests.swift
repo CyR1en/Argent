@@ -9,8 +9,9 @@ import Testing
 /// from main before any change for the later compiler. Originally taken at 81e029d (2026-10-09-1)
 /// and 3f67969 (2026-10-29-1 and no edit); re-recorded for the toy stock and the 14 baked stocks
 /// on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut compression,
-/// `RenderGraph.version` 2026-11-19-1. A re-baked stock has another digest and is skipped; the toy
-/// stock is built in code and always checked.
+/// `RenderGraph.version` 2026-11-19-1. The toy stock is built in code and always checked; when
+/// `build/stocks` is present, every baked stock must have a recorded digest so a bake change cannot
+/// silently drop stock coverage.
 @Suite struct LightCompilerBaselineTests {
     static let width = 64, height = 48
 
@@ -243,31 +244,34 @@ import Testing
     ]
 
     @Test func recordedCompilerRendersTheBytesItRenderedBefore() throws {
-        let gpu = try GPU()
-        var stocks = [Self.toyStock()]
-        for url in Self.bakedStocks { stocks.append(try Stock.load(from: url)) }
-        var checked = 0
-        for stock in stocks {
-            guard let expected = Self.recorded[Self.fingerprint(stock)] else { continue }
-            #expect(try Self.digest(stock: stock, gpu: gpu) == expected, "\(stock.id)")
-            checked += 1
-        }
-        #expect(checked >= 1)
+        try check(Self.recorded, edits: Self.edits)
     }
 
-    /// Every stock with a recorded digest renders it. Which stocks those are depends on the checkout, so
-    /// at least the toy's is required, and the baked stocks count toward it when they are the recorded bake.
+    /// The toy stock and every baked stock in `build/stocks` render their recorded digests. A fresh
+    /// checkout with no `build/stocks` checks the toy stock alone; when baked stocks are present, any
+    /// whose fingerprint is missing from `recorded` fails rather than silently skipping coverage.
     private func check(_ recorded: [String: String], edits: () throws -> [ManualRenderSettings], tone: PrintTone = .identity) throws {
         let gpu = try GPU()
-        var stocks = [Self.toyStock()]
-        for url in Self.bakedStocks { stocks.append(try Stock.load(from: url)) }
-        var checked = 0
-        for stock in stocks {
-            guard let expected = recorded[Self.fingerprint(stock)] else { continue }
-            #expect(try Self.digest(stock: stock, gpu: gpu, edits: edits(), tone: tone) == expected, "\(stock.id)")
-            checked += 1
+        let resolvedEdits = try edits()
+        let toy = Self.toyStock()
+        let toyExpected = try #require(recorded[Self.fingerprint(toy)], "missing recorded digest for \(toy.id) (\(Self.fingerprint(toy)))")
+        #expect(try Self.digest(stock: toy, gpu: gpu, edits: resolvedEdits, tone: tone) == toyExpected, "\(toy.id)")
+
+        var unrecorded: [String] = []
+        for url in Self.bakedStocks {
+            let stock = try Stock.load(from: url)
+            let fingerprint = Self.fingerprint(stock)
+            guard let expected = recorded[fingerprint] else {
+                unrecorded.append("\(stock.id) (\(fingerprint))")
+                continue
+            }
+            #expect(try Self.digest(stock: stock, gpu: gpu, edits: resolvedEdits, tone: tone) == expected, "\(stock.id)")
         }
-        #expect(checked >= 1)
+        #expect(unrecorded.isEmpty, """
+                Baked stocks have no recorded baseline digest: \(unrecorded.joined(separator: ", ")). \
+                Re-record the digests in LightCompilerBaselineTests after an intended change of the bake, \
+                or re-bake build/stocks if this checkout's bake is out of date.
+                """)
     }
 
     @Test func compilerReadingTheExposedBaseRendersTheBytesItRenderedBefore() throws {
