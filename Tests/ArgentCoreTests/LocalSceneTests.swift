@@ -158,10 +158,10 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
         "99e292f723e67e6c": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-colorplus-200
         "41dd35cf8baec974": "8abd8c7693b6fc450b01f96694c2dac58226d46bc10d3946b2f2708067163a12", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-gold-200
-        "ef2f5ccafa11838d": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160
-        "e92abdcb666a21d9": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "2aeab8c2152ab37002f09c8af19d21c1ba2104ddd93d842cbe5f040866f5879c", // kodak-portra-400
-        "fdfd3cce8c35fb37": "f0e7a3e268aa7fd7e778ba84e2b90e834e549a5e03409e68d1ba40f711e243f1", // kodak-portra-800
+        "a990b7f8e421ce56": "cc084ce1253972acfd167d0649d5a7aeb9df8de75a6713e920057151fdc1ff96", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "cc084ce1253972acfd167d0649d5a7aeb9df8de75a6713e920057151fdc1ff96", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "30c2458187485fa22d97dd02423cec65dec6a8b462b1dcee113094e037e944bb", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "16f5ddecc8d8f0521a628e25570f1c4e4d9cb33d19c49fee124fd8b4863c8e84", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "70a4d3401f1048850a71ddeb9bf18ffa7f7ad038e96c05f298c18db227046dee", // kodak-ultramax-400
         "d0334068916dcff7": "20a648f61712db4ec0f247b5928f563afa3d8085daec4226e55bbb21c958212f", // kodak-vision3-500t
         "712fa666980b0174": "44c5d5e0f8fb45f9b21052314dfff2a1595749ee2af41162d635daf102521dce", // kodak-vision3-500t-cinema
@@ -392,10 +392,14 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
         return (worstRMS, worstLevel)
     }
 
+    /// Held to the worst measured plus about a third. 2026-11-23, the toy and the 14 baked stocks with FIG. 2 read 0.142 at
+    /// scene density 0.0: rms at most 0.0182 (`kodak-portra-800`, and Portra 400), level at most 0.166 L* (`kodak-portra-160`);
+    /// the stocks other than the Portras 0.0089 to 0.0150 and 0.076 to 0.125. The bounds were 0.03 and 0.4 against 0.0204 and 0.32 on Portra 160's
+    /// shoulder, which was the print curve's misread point: before it was read again Portra 800 reached 0.0313 and 0.474.
     @Test func betweenKnotsHighlightsAndShadowsStayWithinTheInterpolationTolerance() throws {
         for stock in try sceneStocks() {
             let worst = try Self.betweenKnots(stock)
-            #expect(worst.rms < 0.03 && worst.level < 0.4, "\(stock.id): worst rms \(worst.rms), worst level \(worst.level) L*")
+            #expect(worst.rms < 0.025 && worst.level < 0.23, "\(stock.id): worst rms \(worst.rms), worst level \(worst.level) L*")
         }
     }
 
@@ -821,24 +825,30 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
     /// The toy and each baked stock, a test case each, since they run side by side.
     static let orderStocks: [URL?] = [nil] + LightCompilerBaselineTests.bakedStocks
 
-    /// Order where the base follows the pixel. The form this replaced falls by up to 4.8 L* here on
-    /// Portra 160. This one cannot be held to no fall at all, and these are the bounds it must be
+    /// Order where the base follows the pixel. The form this replaced falls by 2.85 to 2.94 L* here on
+    /// the four Portras. This one cannot be held to no fall at all, and these are the bounds it must be
     /// allowed, measured over the grid above, for two reasons:
     /// - A mask's row is the panel's times k > 1, which the gate fixes, and k can tip a slope that was
-    ///   nearly flat just below zero. On one control under 0.03 L*. On both, where two rows' slopes add
-    ///   on one stock's shoulder, under 0.3.
+    ///   nearly flat just below zero.
     /// - Off the knots a row is interpolated between its neighbours, so the row at the panel's value
     ///   over k is not exactly the panel's table, and the difference stays behind once the fade has
-    ///   run. Under 0.55 L*, the worst on one stock's shoulder at a small panel value.
+    ///   run.
+    /// Each bound is the worst measured plus about a third. 2026-11-23, the toy and the 14 baked stocks with FIG. 2 read
+    /// 0.142 at scene density 0.0: a mask alone on one control at most 0.0162 L* and on both 0.0158 (`fujifilm-c200`);
+    /// with a panel at most 0.130 (`fujifilm-c200`, opposed), the toy 0.075 and the Portras 0.030 at most. The bounds were
+    /// 0.03, 0.3 and 0.55 against 0.023, 0.23 and 0.49 on Portra 160's shoulder, the print curve's misread point;
+    /// before it was read again Portra 800 fell 0.084, 0.35 and 1.02.
     @Test(arguments: orderStocks)
     func thePanelAndAMaskKeepOrderWhereTheBaseFollowsThePixel(url: URL?) throws {
         let stock = try url.map { try Stock.load(from: $0) } ?? LightCompilerBaselineTests.toyStock()
         let falls = try Self.panelAndMaskFalls(stock)
-        #expect(falls.alone < 0.03, "\(stock.id): \(falls)")
-        #expect(falls.aloneBoth < 0.3, "\(stock.id): \(falls)")
-        #expect(falls.sameSign < 0.55 && falls.opposed < 0.55 && falls.both < 0.55, "\(stock.id): \(falls)")
-        // The test's teeth: the form it replaced falls this far on the Portras.
-        if stock.id.hasPrefix("kodak-portra") { #expect(falls.added > 3, "\(stock.id): \(falls)") }
+        #expect(falls.alone < 0.022, "\(stock.id): \(falls)")
+        #expect(falls.aloneBoth < 0.022, "\(stock.id): \(falls)")
+        #expect(falls.sameSign < 0.18 && falls.opposed < 0.18 && falls.both < 0.18, "\(stock.id): \(falls)")
+        // The test's teeth: the form it replaced falls this far on the Portras, at least 2.85 L* (Portra 160, 2026-11-23),
+        // held a quarter lower, and twelve times the bound above. It was > 3 against 3.49 to 5.55 while the misread point
+        // deepened the Portras' shoulder.
+        if stock.id.hasPrefix("kodak-portra") { #expect(falls.added > 2.1, "\(stock.id): \(falls)") }
     }
 
     /// The blend, written out: the two tables in sequence while the smaller slider is under 25, the
@@ -979,6 +989,10 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
     /// of 2026-11-11 0.0080 to 0.0147 stops; on the 14 baked now 0.0080 to 0.0162, and on
     /// `kodak-vision3-500t` 0.0201 (0.020 L*, slope −0.044), its Shadows at knot 3 rated at 200 at level
     /// −5.3, deeper than any other stock's worst (−2.3 to −4.4). At ±100, the panel itself, it never dips.
+    /// Slopes, 2026-11-23 with FIG. 2 read 0.142 at scene density 0.0: every dip is in Shadows, the worst −0.0437 on
+    /// `kodak-vision3-500t` and −0.0302 to −0.0427 on the others; no baked stock's Highlights row dips (the toy's −0.036).
+    /// A third over the worst is −0.058, so the bound stays −0.06. It had been set on Portra 160's Highlights, −0.0567, at
+    /// the print curve's misread point, which reached −0.078 before the point was read again.
     @Test func highlightsAndShadowsBarelyLoseOrderInASmoothArea() throws {
         for stock in try sceneStocks() {
             let depthLimit: Float = stock.id == "kodak-vision3-500t" ? 0.025 : 0.02

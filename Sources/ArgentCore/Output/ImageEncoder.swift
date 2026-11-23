@@ -83,7 +83,9 @@ public enum EncodeError: LocalizedError, CustomStringConvertible {
 }
 
 /// Writes a display-referred texture to disk through ImageIO, carrying the raw's EXIF, GPS
-/// and XMP through and resetting orientation, since the decoder already rotated.
+/// and XMP (without the vendor MakerNote), restoring the EXIF UTC offsets and `aux:Lens` name
+/// that Apple's ARW reader drops or rewrites, and resetting orientation, since the decoder
+/// already rotated.
 public final class ImageEncoder {
     private let gpu: GPU
     private let resize: AreaResize
@@ -170,11 +172,32 @@ public final class ImageEncoder {
         return output
     }
 
-    /// Encodes `image` to `url`. The raw's metadata comes through whole, EXIF, GPS and XMP,
-    /// with the orientation reset, the pixel dimensions set to the picture's, and `software`
-    /// recorded as the creator tool.
+    /// EXIF fields read straight from a TIFF-structured raw's Exif IFD: the three UTC offsets
+    /// Apple's ARW reader omits from its metadata tree, and `LensModel` (0xA434), which Apple's
+    /// reader replaces with a lens-ID lookup in `aux:Lens`.
+    struct RawExif: Sendable, Equatable {
+        var offsetTime: String?
+        var offsetTimeOriginal: String?
+        var offsetTimeDigitized: String?
+        var lensModel: String?
+    }
+
+    /// Encodes `image` to `url`. Copies the source's EXIF, GPS and XMP metadata through ImageIO
+    /// (the vendor MakerNote is not carried), restores any well-formed `OffsetTime*` tags and sets
+    /// `aux:Lens` to the raw's EXIF `LensModel` straight from the TIFF Exif IFD, resets orientation
+    /// to 1, sets pixel dimensions to the picture's, and records `software` as TIFF Software and
+    /// `xmp:CreatorTool`. Leaves out embedded thumbnails: at 7008 by 4672 on the IOSurface path,
+    /// `kCGImageDestinationEmbedThumbnail` adds about 23 ms on HEIC, silently drops JPEG's IFD1
+    /// after ~6.5 ms when a 512 by 340 thumbnail exceeds APP1's 64 KB limit, and does nothing on
+    /// TIFF.
     public func write(_ image: CGImage, to url: URL, format: OutputFormat, metadataFrom source: URL?,
                       software: String? = nil) throws {
+        try write(image, to: url, format: format, metadataFrom: source, software: software,
+                  rawExif: source.map(Self.readRawExif(from:)) ?? RawExif())
+    }
+
+    func write(_ image: CGImage, to url: URL, format: OutputFormat, metadataFrom source: URL?,
+               software: String? = nil, rawExif: RawExif) throws {
         guard let destination = CGImageDestinationCreateWithURL(url as CFURL, format.type.identifier as CFString, 1, nil) else {
             throw EncodeError.destination(url)
         }
@@ -183,7 +206,7 @@ public final class ImageEncoder {
         if format == .tiff16 {
             options[kCGImagePropertyTIFFDictionary] = [kCGImagePropertyTIFFCompression: 1]
         }
-        let metadata = Self.metadata(from: source, width: image.width, height: image.height, software: software)
+        let metadata = Self.metadata(from: source, width: image.width, height: image.height, software: software, rawExif: rawExif)
         CGImageDestinationAddImageAndMetadata(destination, image, metadata, options as CFDictionary)
         // A HEIC's finalize grows the file in memory to 32 MB and frees it; malloc's large cache kept
         // those blocks, 1.1 to 1.3 GB over a roll, so the app is launched with that cache off
@@ -202,6 +225,12 @@ public final class ImageEncoder {
 
     /// The source's metadata as a mutable tree, adjusted for the developed picture.
     static func metadata(from source: URL?, width: Int, height: Int, software: String?) -> CGImageMetadata {
+        metadata(from: source, width: width, height: height, software: software,
+                 rawExif: source.map(readRawExif(from:)) ?? RawExif())
+    }
+
+    static func metadata(from source: URL?, width: Int, height: Int, software: String?,
+                         rawExif: RawExif) -> CGImageMetadata {
         let metadata: CGMutableImageMetadata
         if let source, let imageSource = CGImageSourceCreateWithURL(source as CFURL, nil),
            let found = CGImageSourceCopyMetadataAtIndex(imageSource, 0, nil),
@@ -221,6 +250,74 @@ public final class ImageEncoder {
             set(kCGImagePropertyTIFFDictionary, kCGImagePropertyTIFFSoftware, software)
             _ = CGImageMetadataSetValueWithPath(metadata, nil, "xmp:CreatorTool" as CFString, software as CFString)
         }
+        apply(rawExif, to: metadata)
         return metadata
+    }
+
+    /// Patches the copied metadata tree with the UTC offsets and camera lens name read straight
+    /// from the raw's Exif IFD. Malformed offsets and empty lens strings are ignored.
+    static func apply(_ rawExif: RawExif, to metadata: CGMutableImageMetadata) {
+        let offsets: [(CFString, String?)] = [
+            (kCGImagePropertyExifOffsetTime, rawExif.offsetTime),
+            (kCGImagePropertyExifOffsetTimeOriginal, rawExif.offsetTimeOriginal),
+            (kCGImagePropertyExifOffsetTimeDigitized, rawExif.offsetTimeDigitized),
+        ]
+        for (key, value) in offsets {
+            if let valid = value.flatMap(validOffset) {
+                _ = CGImageMetadataSetValueMatchingImageProperty(metadata, kCGImagePropertyExifDictionary, key, valid as CFString)
+            }
+        }
+        if let lens = rawExif.lensModel?.trimmingCharacters(in: .whitespaces), !lens.isEmpty {
+            _ = CGImageMetadataSetValueWithPath(metadata, nil, "aux:Lens" as CFString, lens as CFString)
+        }
+    }
+
+    /// Reads the EXIF UTC offsets and `LensModel` from a TIFF-structured file's Exif IFD in a few
+    /// small reads, without touching image data or the MakerNote. Returns empty fields for any
+    /// non-TIFF, unreadable, or tag-less source.
+    static func readRawExif(from url: URL) -> RawExif {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return RawExif() }
+        defer { try? handle.close() }
+        guard let reader = try? TIFFReader(handle: handle),
+              let ifd0 = try? reader.readIFD(at: reader.firstIFDOffset),
+              let exifPointer = ifd0[0x8769],
+              let exifOffset = (try? reader.integers(exifPointer))?.first,
+              let exif = try? reader.readIFD(at: exifOffset) else {
+            return RawExif()
+        }
+        return parseRawExif(exif, reader: reader)
+    }
+
+    /// The Exif IFD's offsets and lens name. A string is read as `TIFFReader.string` reads every ASCII field, up to its NUL
+    /// and without the spaces around it, so an offset a camera padded (`+02:00 `) is carried as the `+02:00` it says. One
+    /// that is no offset once read, as the blanks Exif asks for when the zone is unknown (`   :  `), is left out.
+    static func parseRawExif(_ exif: [UInt16: TIFFReader.Entry], reader: TIFFReader) -> RawExif {
+        func ascii(_ tag: UInt16, maxBytes: UInt32) -> String? {
+            guard let entry = exif[tag], entry.type == 2, entry.count > 0, entry.count <= maxBytes,
+                  let text = try? reader.string(entry), !text.isEmpty else { return nil }
+            return text
+        }
+        return RawExif(
+            offsetTime: ascii(0x9010, maxBytes: 32).flatMap(validOffset),
+            offsetTimeOriginal: ascii(0x9011, maxBytes: 32).flatMap(validOffset),
+            offsetTimeDigitized: ascii(0x9012, maxBytes: 32).flatMap(validOffset),
+            lensModel: ascii(0xA434, maxBytes: 1024)
+        )
+    }
+
+    /// Accepts an EXIF UTC offset shaped `+HH:MM` or `-HH:MM` (00 to 23 hours, 00 to 59 minutes).
+    static func validOffset(_ text: String) -> String? {
+        let bytes = Array(text.utf8)
+        guard bytes.count == 6,
+              bytes[0] == UInt8(ascii: "+") || bytes[0] == UInt8(ascii: "-"),
+              bytes[3] == UInt8(ascii: ":") else { return nil }
+        func twoDigits(_ high: UInt8, _ low: UInt8) -> Int? {
+            guard (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(high),
+                  (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(low) else { return nil }
+            return Int(high - UInt8(ascii: "0")) * 10 + Int(low - UInt8(ascii: "0"))
+        }
+        guard let hours = twoDigits(bytes[1], bytes[2]), hours <= 23,
+              let minutes = twoDigits(bytes[4], bytes[5]), minutes <= 59 else { return nil }
+        return text
     }
 }

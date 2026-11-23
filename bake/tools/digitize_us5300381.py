@@ -18,6 +18,10 @@ dark runs; follow the solid curve from its right end (scene density -0.6, where 
 predicting each column from the last five and taking the nearest run within 8 pixels; the dashed gradient
 curve and the tick marks are left behind because the solid line is continuous and the prediction rejects
 jumps. A column where the dashed curve crosses gives two runs; the nearer to the prediction is taken.
+
+Where the dashed curve meets the solid one at a shallow angle the tracker can still ride a dash for a few columns:
+on FIG. 2 it does from scene density -0.022 to +0.008 and prints 0.150 at 0.0, between 0.138 and 0.147. The tool
+prints every fall in its table; print_tone.py keeps a hand reading of such a point and says how it was read.
 """
 
 from __future__ import annotations
@@ -165,6 +169,11 @@ def main(argv) -> int:
         table = np.interp(SCENE, scene, density)
         print("  scene: " + " ".join(f"{s:.2f}" for s in SCENE))
         print("  D:     " + " ".join(f"{d:.3f}" for d in table))
+        pixel = 2.6 / (bottom - top)  # density per pixel; a fall under one is the line's own raggedness
+        falls = [i for i in range(table.size - 1) if table[i + 1] < table[i] - pixel]
+        for i in falls:
+            print(f"  falls from {table[i]:.3f} at {SCENE[i]:.2f} to {table[i + 1]:.3f} at {SCENE[i + 1]:.2f}: the tracker "
+                  "may have followed the dashed curve; read that column by hand")
     return 0
 
 

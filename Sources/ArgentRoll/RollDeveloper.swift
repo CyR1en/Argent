@@ -37,12 +37,12 @@ public final class RollDeveloper: @unchecked Sendable {
     /// surfaces beside its frame, against 387 at 1024, for 19 to 21 percent more time (measured,
     /// docs/M2-shell.md section 10), so two decodes at once fit beside the sheet under 2 GB.
     public static let decodeTile: Int? = 768
-    /// RAW 9's tile size: 1024 pixels. Over 60 lossless L frames it developed at 0.72 frames a second to
-    /// JPEG, 0.72 to HEIC and 0.63 to 16-bit TIFF, peaking at 1736, 1599 and 1710 MB, against 0.63 to JPEG
-    /// at 768 (1473 MB), 0.77, 0.73 and 0.67 at 1536 (1820, 1773 and 1903 MB, too near the target) and
-    /// 0.67 whole (2032 MB, over it); its decode alone took 1.79 s against 1.92 at 768 and 1.26 whole
-    /// (measured on the M5 Pro, 2026-10-19; docs/decoder.md section 18). A frame RAW 9 fails on decodes
-    /// with RAW 8 in RAW 8's tiles (`DecodeOptions.learnedTileSize`), weighed still as RAW 9's.
+    /// RAW 9's default-target tile size: 1024 pixels, used when a develop's memory target is under
+    /// 3000 MiB; develops at 3000 MiB and above use 2048 (`DevelopBudget.learnedDecodeTile(forMemoryTarget:)`).
+    /// Over 60 lossless L frames at the 2000 MiB default on the M5 Pro (2026-11-22), 2048-pixel tiles
+    /// lost 5 to 10 percent on HEIC and 16-bit TIFF against 1024, while at 3000 and 4000 MiB 2048 raised
+    /// throughput across all three formats. A frame RAW 9 fails on decodes with RAW 8 in RAW 8's tiles
+    /// (`DecodeOptions.learnedTileSize`), weighed still as RAW 9's.
     public static let learnedDecodeTile: Int? = 1024
     /// In-house decodes at once among the lanes, so the second lane decodes an Apple frame or waits.
     /// Two at once share the GPU and gained nothing (11.6 to 11.8 frames a second on a roll of
@@ -50,8 +50,11 @@ public final class RollDeveloper: @unchecked Sendable {
     /// lower (measured, docs/decoder.md, section 14).
     public static let inHouseDecodesAtOnce: Int? = 1
     public let decodeTile: Int?
-    /// RAW 9's tile size; see `learnedDecodeTile`.
-    public let learnedDecodeTile: Int?
+    /// Explicit RAW 9 tile override given at init (`.some(nil)` for decodes rendered whole), or `nil`
+    /// to follow each develop's memory target (`DevelopBudget.learnedDecodeTile(forMemoryTarget:)`).
+    private let explicitLearnedDecodeTile: Int??
+    /// RAW 9's tile size for this developer's default `memoryTarget`, or the explicit override given at init.
+    public var learnedDecodeTile: Int? { learnedDecodeTile(forMemoryTarget: memoryTarget) }
 
     /// One frame to develop, with the recipe it is developed from.
     public struct Job: Sendable {
@@ -120,7 +123,7 @@ public final class RollDeveloper: @unchecked Sendable {
     /// LUTs on the GPU, 12 MB, so a develop of one stock does not carry the five others'.
     private var renderers: [String: FilmRenderer] = [:]
     private let renderersLock = NSLock()
-    /// The footprint the develop keeps the app under; see `DevelopBudget`.
+    /// The default footprint a develop keeps the app under when `develop(...)` is not given one; see `DevelopBudget`.
     public let memoryTarget: Int
     /// The turns its frames take with the previews' decodes, the previews' own (`DecodeTurns`).
     private let decodeTurns: DecodeTurns
@@ -129,17 +132,34 @@ public final class RollDeveloper: @unchecked Sendable {
     /// A frame's stages as they begin and end, by its index in the develop, for measuring memory.
     public enum Stage: String, Sendable { case admit, decode, waitPicture, render, encode }
     public var observeStage: (@Sendable (Int, Stage, Bool) -> Void)?
+    private let reportLock = NSLock()
+    /// Under `reportLock`: the last develop's frames let in, its floor, its budget, its RAW 9 tile,
+    /// its gate's ceiling and the last frame's weighed decode cost.
+    private var _lastAdmissions: (admitted: Int, waited: Int, alone: Int)?
+    private var _lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)?
+    private var _lastMemoryTarget: Int?
+    private var _lastLearnedDecodeTile: Int??
+    private var _lastGateCeiling: Int?
+    private var _lastWeighedDecodeCost: Int?
     /// The last develop's frames let in, and how many waited first, for measuring.
-    private(set) var lastAdmissions: (admitted: Int, waited: Int, alone: Int)?
+    var lastAdmissions: (admitted: Int, waited: Int, alone: Int)? { reportLock.withLock { _lastAdmissions } }
     /// The last develop's floor, when it was read and the largest excess, for measuring.
-    private(set) var lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)?
+    var lastFloor: (floor: Int?, readAfter: TimeInterval?, quiet: Bool, largestExcess: Int)? { reportLock.withLock { _lastFloor } }
+    /// The memory target the last develop ran with, in bytes; `nil` before any develop starts.
+    public var lastMemoryTarget: Int? { reportLock.withLock { _lastMemoryTarget } }
+    /// RAW 9's decode tile size the last develop ran with (`nil` for whole decodes or before any develop starts).
+    public var lastLearnedDecodeTile: Int? { reportLock.withLock { _lastLearnedDecodeTile ?? nil } }
+    /// The ceiling the last develop's memory gate enforced, in bytes, for tests.
+    var lastGateCeiling: Int? { reportLock.withLock { _lastGateCeiling } }
+    /// The decode cost the last develop weighed a frame at before admitting it to the gate, in bytes, for tests.
+    var lastWeighedDecodeCost: Int? { reportLock.withLock { _lastWeighedDecodeCost } }
     /// The film passes and the picture, one frame at a time.
     private let renderLock = NSLock()
 
     public init(stocks: [Stock], software: String, library: URL = RecipeStore.defaultLibrary, digests: SourceDigests = .shared,
                 lanes: Int = RollDeveloper.lanes, picturesInFlight: (eight: Int, sixteen: Int) = (2, 1),
                 maxIdlePoolBytes: Int = 0, decodeTile: Int? = RollDeveloper.decodeTile,
-                learnedDecodeTile: Int? = RollDeveloper.learnedDecodeTile,
+                learnedDecodeTile: Int?? = nil,
                 decoderChoices: DecoderChoices = DecoderChoices(),
                 inHouseDecodesAtOnce: Int? = RollDeveloper.inHouseDecodesAtOnce,
                 memoryTarget: Int = DevelopBudget.target(), recipeWriter: RecipeWriter = .shared,
@@ -153,7 +173,7 @@ public final class RollDeveloper: @unchecked Sendable {
         laneCount = lanes
         self.picturesInFlight = picturesInFlight
         self.decodeTile = decodeTile
-        self.learnedDecodeTile = learnedDecodeTile
+        self.explicitLearnedDecodeTile = learnedDecodeTile
         self.decoderChoices = decoderChoices
         // Its own GPU context, apart from the sheet's. Its pool keeps no texture between frames by
         // default: a frame-sized texture kept idle peaked 0.06 to 0.1 GB higher than one let go and made
@@ -212,7 +232,8 @@ public final class RollDeveloper: @unchecked Sendable {
     /// the largest excess it weighed a frame against, and the frames it let in and how many waited,
     /// for the drive hook's memory measurements.
     public var lastGateReport: String? {
-        guard let floor = lastFloor, let admissions = lastAdmissions else { return nil }
+        let (floor, admissions) = reportLock.withLock { (_lastFloor, _lastAdmissions) }
+        guard let floor, let admissions else { return nil }
         let read = floor.readAfter.map { String(format: "%.3f s", $0) } ?? "never"
         return "gate floor \(floor.floor.map { "\($0 >> 20) MB" } ?? "none") read after \(read)"
             + (floor.quiet ? " quiet" : " not quiet") + ", largest excess \(floor.largestExcess >> 20) MB,"
@@ -298,11 +319,30 @@ public final class RollDeveloper: @unchecked Sendable {
         return own
     }
 
+    /// RAW 9's decode tile size for a develop running with `target` bytes: the explicit override given
+    /// at init when one was passed, otherwise `DevelopBudget.learnedDecodeTile(forMemoryTarget:)`.
+    func learnedDecodeTile(forMemoryTarget target: Int) -> Int? {
+        if let explicitLearnedDecodeTile { return explicitLearnedDecodeTile }
+        return DevelopBudget.learnedDecodeTile(forMemoryTarget: target)
+    }
+
     /// Develops `jobs` into `destination` in order and returns what came of each, calling
-    /// `progress` as each frame finishes. Cancelling the task stops the develop at frame
+    /// `progress` as each frame finishes. `memoryTarget`, when given, sets the budget for this
+    /// develop in place of the developer's default. Cancelling the task stops the develop at frame
     /// boundaries.
     public func develop(_ jobs: [Job], to destination: URL, output: OutputSettings,
+                        memoryTarget: Int? = nil,
                         progress: @escaping @Sendable (Int, Outcome) -> Void = { _, _ in }) async -> [Outcome] {
+        let target = memoryTarget ?? self.memoryTarget
+        let learnedTile = learnedDecodeTile(forMemoryTarget: target)
+        reportLock.withLock {
+            _lastMemoryTarget = target
+            _lastLearnedDecodeTile = .some(learnedTile)
+            _lastGateCeiling = nil
+            _lastWeighedDecodeCost = nil
+            _lastAdmissions = nil
+            _lastFloor = nil
+        }
         do {
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         } catch {
@@ -372,7 +412,8 @@ public final class RollDeveloper: @unchecked Sendable {
         let plan = DevelopBudget.plan(for: output.format, lanes: laneCount, pictures: slots,
                                       allInHouse: jobs.allSatisfy { decoderChoices.choice(for: $0.frame.url) == .inHouse })
         decoder.keepsInHouseBuffers = plan.keepsInHouseBuffers
-        let gate = MemoryGate(ceiling: memoryTarget - DevelopBudget.margin, maxInFlight: plan.framesInFlight, turns: decodeTurns)
+        let gate = MemoryGate(ceiling: target - DevelopBudget.margin, maxInFlight: plan.framesInFlight, turns: decodeTurns)
+        reportLock.withLock { _lastGateCeiling = gate.ceiling }
         let operations: [Operation] = jobs.indices.compactMap { index in
             guard case .ready(_, let source) = checks[index] else {
                 let outcome = checks[index].outcome ?? .stopped
@@ -392,7 +433,7 @@ public final class RollDeveloper: @unchecked Sendable {
                     group.leave()
                 }
                 developOne(jobs[index], index: index, to: files[index], output: Self.output(output, for: jobs[index]), source: source,
-                           outputSource: outputSources[index],
+                           outputSource: outputSources[index], learnedTile: learnedTile,
                            pictures: pictures, gate: gate, stopped: { operation?.isCancelled ?? true }, finish: finish)
             }
             operation.completionBlock = {
@@ -411,8 +452,10 @@ public final class RollDeveloper: @unchecked Sendable {
         } onCancel: {
             for operation in operations { operation.cancel() }
         }
-        lastAdmissions = (gate.counts.admitted, gate.counts.waited, gate.loneCount)
-        lastFloor = gate.floorReport
+        reportLock.withLock {
+            _lastAdmissions = (gate.counts.admitted, gate.counts.waited, gate.loneCount)
+            _lastFloor = gate.floorReport
+        }
         return results.all
     }
 
@@ -506,6 +549,7 @@ public final class RollDeveloper: @unchecked Sendable {
     /// waiting to be let in when `stopped` says so is stopped. `source` is the raw's version its
     /// check read; a raw changed by the end of its decode fails.
     private func developOne(_ job: Job, index: Int, to file: URL, output: OutputSettings, source: SourceStamp, outputSource: SourceStamp?,
+                            learnedTile: Int?,
                             pictures: DispatchSemaphore, gate: MemoryGate, stopped: () -> Bool,
                             finish: @escaping @Sendable (Outcome) -> Void) {
         let observe = observeStage
@@ -567,9 +611,10 @@ public final class RollDeveloper: @unchecked Sendable {
         // Let in once the plan allows another frame and the footprint has room for its decode.
         let size = Self.pixelSize(of: job.frame.url)
         let choice = decoderChoices.choice(for: job.frame.url)
-        let tile = choice == .raw9 ? learnedDecodeTile : decodeTile
+        let tile = choice == .raw9 ? learnedTile : decodeTile
         let decodeCost = DevelopBudget.decodeCost(width: size.width, height: size.height, decoder: choice,
                                                   tile: tile, inHouseKept: decoder.inHouseKeptBytes)
+        reportLock.withLock { _lastWeighedDecodeCost = decodeCost }
         // HEIC's two frames in flight peak as one's film passes meet the other's decode. JPEG's
         // develops stay far under the target, and counting 16-bit TIFF's film passes halved its speed
         // (docs/manual-development-validation.md, "fix⁗").
@@ -606,7 +651,7 @@ public final class RollDeveloper: @unchecked Sendable {
         // in-house decoder shares, so it reaches only a decode on the same scale.
         var options = DecodeOptions()
         options.tileSize = decodeTile
-        options.learnedTileSize = learnedDecodeTile
+        options.learnedTileSize = learnedTile
         if let pins = recipe.develops.last?.decode {
             if pins.decoderVersion == AppleRawDecoder.learnedDecoderVersion {
                 options.learnedLuminanceNoiseReduction = pins.luminanceNoiseReduction

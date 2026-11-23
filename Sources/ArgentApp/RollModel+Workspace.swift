@@ -17,7 +17,7 @@ enum WorkspacePage: Equatable, Sendable {
     case develop
     /// The library's rolls, Import roll, and an import's copy under way.
     case rolls
-    /// The appearance.
+    /// Appearance and develop memory settings.
     case settings
     /// A card or a folder being read, its frames reviewed, or an import that failed.
     case importReview

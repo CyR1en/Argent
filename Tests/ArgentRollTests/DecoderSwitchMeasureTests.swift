@@ -200,7 +200,10 @@ import Testing
     func frameView() async throws {
         let stocks = StockLibrary.load(from: Self.stocks).stocks
         let choices = DecoderChoices()
-        let films = try FilmPreviews(stocks: stocks, decoderChoices: choices, inHouseDecodesAtOnce: Self.atOnce)
+        let learnedTile = ProcessInfo.processInfo.environment["ARGENT_DECODE_TILE"].flatMap(Int.init).map { $0 > 0 ? $0 : nil }
+            ?? DevelopBudget.learnedDecodeTile(forMemoryTarget: DevelopBudget.target())
+        let films = try FilmPreviews(stocks: stocks, decoderChoices: choices, inHouseDecodesAtOnce: Self.atOnce,
+                                     learnedDecodeTile: learnedTile)
         let frames = await Self.frames()
         let clock = ContinuousClock()
         for frame in Dictionary(grouping: frames, by: { Self.group($0.url, choices.route) }).values.compactMap(\.first) {
@@ -264,20 +267,23 @@ import Testing
         guard ProcessInfo.processInfo.environment["ARGENT_REFINE"] == "1" else { return }
         films.removeAll()
         var refinedUp: [DecoderChoice: [Double]] = [:], refinement: [DecoderChoice: [Double]] = [:]
-        for frame in frames {
-            let decoder = Self.group(frame.url, choices.route)
-            let start = clock.now
-            _ = await films.frameFilm(frame, stock: 0, settings: Self.settings(frame), pixels: pixels)
-            try await Task.sleep(for: FilmPreviews.refineSettle)
-            let asked = clock.now
-            guard await films.refineFrame(frame, lens: .default, pixels: pixels) else { continue }
-            _ = await films.frameFilm(frame, stock: 0, settings: Self.settings(frame), pixels: pixels)
-            refinedUp[decoder, default: []].append(M.ms(clock.now - start))
-            refinement[decoder, default: []].append(M.ms(clock.now - asked))
+        let (refineBase, refinePeak) = await peakFootprint {
+            for frame in frames {
+                let decoder = Self.group(frame.url, choices.route)
+                let start = clock.now
+                _ = await films.frameFilm(frame, stock: 0, settings: Self.settings(frame), pixels: pixels)
+                try? await Task.sleep(for: FilmPreviews.refineSettle)
+                let asked = clock.now
+                guard await films.refineFrame(frame, lens: .default, pixels: pixels) else { continue }
+                _ = await films.frameFilm(frame, stock: 0, settings: Self.settings(frame), pixels: pixels)
+                refinedUp[decoder, default: []].append(M.ms(clock.now - start))
+                refinement[decoder, default: []].append(M.ms(clock.now - asked))
+            }
         }
         for decoder in [DecoderChoice.raw9, .inHouse, .apple] where refinedUp[decoder] != nil {
             print("MEASURE   frames the route gives the \(decoder.rawValue) decoder: refined film up \(M.summary(refinedUp[decoder]!)) from the open, settling \(FilmPreviews.refineSettle); the refinement and its film \(M.summary(refinement[decoder]!))")
         }
+        print("MEASURE   refinement with RAW 9 tile \(learnedTile.map(String.init) ?? "whole"): footprint \(refineBase >> 20) MB at start, peak \(refinePeak >> 20) MB")
     }
 
     /// The in-house decoder's scaled decodes, rendered as the sheet and the frame view render

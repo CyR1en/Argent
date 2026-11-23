@@ -335,7 +335,7 @@ class TestCommandLine:
         assert "Traceback" not in captured.out + captured.err
         if document is None:
             assert captured.err == ""
-            assert "all gates pass" in captured.out
+            assert "all negative gates pass" in captured.out
         else:
             assert captured.out == ""
             assert len(captured.err.splitlines()) == 1
