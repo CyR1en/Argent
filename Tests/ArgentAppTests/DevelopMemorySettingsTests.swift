@@ -1,6 +1,8 @@
+import AppKit
 import ArgentCore
 @testable import ArgentRoll
 import Foundation
+import SwiftUI
 import Testing
 @testable import ArgentApp
 
@@ -154,6 +156,59 @@ import Testing
             #expect(developer.lastMemoryTarget == 6000 << 20)
             #expect(developer.lastGateCeiling == (6000 << 20) - DevelopBudget.margin)
             #expect(defaults.object(forKey: DevelopBudget.overrideDefaultsKey) == nil)
+        }
+    }
+
+    @Test func developMemoryCardRendersEnabledAndDisabledStates() async throws {
+        let mac24 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 24 << 30, environment: [:])
+        mac24.setChoice(.gb4)
+        let mac16 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 16 << 30, environment: [:])
+        let mac12 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 12 << 30, environment: [:])
+        mac12.setChoice(.gb3)
+        let mac8 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 8 << 30, environment: [:])
+
+        let sheet = VStack(alignment: .leading, spacing: 24) {
+            ForEach([("Develop · 24 GB Mac (4 GB selected)", mac24),
+                     ("Develop · 16 GB Mac (Default selected)", mac16),
+                     ("Develop · 12 GB Mac (3 GB selected)", mac12),
+                     ("Develop · 8 GB Mac (disabled)", mac8)], id: \.0) { label, settings in
+                VStack(alignment: .leading, spacing: 14) {
+                    PageSectionHeading(title: label)
+                        .frame(height: 20)
+                    DevelopMemoryCard(settings: settings)
+                }
+            }
+        }
+        .frame(width: 720)
+        .padding(.horizontal, 44)
+        .padding(.vertical, 32)
+        .background(Graphite.workspace)
+        .environment(\.colorScheme, AppearanceSettings.shared.colorScheme)
+
+        _ = NSApplication.shared
+        let host = NSHostingView(rootView: sheet)
+        let fitting = host.fittingSize
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: fitting), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: AppearanceSettings.shared.palette.isDark ? .darkAqua : .aqua)
+        window.contentView = host
+        defer { window.close() }
+        host.frame = NSRect(origin: .zero, size: fitting)
+        host.layoutSubtreeIfNeeded()
+        // Allow SwiftUI's `onGeometryChange` pass to place each segmented thumb.
+        try await Task.sleep(for: .milliseconds(50))
+        host.layoutSubtreeIfNeeded()
+
+        let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        #expect(rep.pixelsWide > 0 && rep.pixelsHigh > 0)
+
+        if let output = ProcessInfo.processInfo.environment["ARGENT_RENDER_DEVELOP_MEMORY_ROW"], !output.isEmpty {
+            let data = try #require(rep.representation(using: .png, properties: [:]))
+            let url = URL(fileURLWithPath: output)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
         }
     }
 }

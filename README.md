@@ -57,8 +57,9 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
 Edits leave the source RAW data untouched, and image processing stays on the Mac. Auto is a
 starting point, not a guarantee of identical brightness across reframings.
 
-Settings (⌘,) saves appearance changes automatically, including the window shell, frame
-surround and Rolls backdrop. Develop output settings are kept per roll.
+Settings (⌘,) saves changes automatically, including appearance (the window shell, frame
+surround and Rolls backdrop) and the memory limit while developing. Develop output settings are
+kept per roll.
 
 ## Install Argent
 

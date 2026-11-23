@@ -26,6 +26,8 @@ struct SettingsPage: View {
                 FrameSurroundCard(settings: settings, picture: pictures.first ?? nil)
                 sectionHeading("Rolls")
                 RollsBackdropCard(settings: settings)
+                sectionHeading("Develop")
+                DevelopMemoryCard(settings: model.developMemory)
             }
             .frame(maxWidth: Self.columnWidth)
             .padding(.horizontal, Self.pageInset)
@@ -281,5 +283,40 @@ private struct RollsBackdropCard: View {
         }
         .graphiteCard(cornerRadius: Graphite.Metric.m)
         .onScrollVisibilityChange(threshold: 0.01) { isVisible = $0 }
+    }
+}
+
+struct DevelopMemoryCard: View {
+    let settings: DevelopMemorySettings
+
+    static let enabledNote = "More memory lets two frames decode at once; changes apply from the next develop"
+    static let disabledNote = "Higher limits require at least 12 GB of memory"
+
+    var body: some View {
+        let selection = Binding(get: { settings.choice }, set: { settings.setChoice($0) })
+        SettingsRow(title: "Memory while developing",
+                    note: settings.hasExtraChoices ? Self.enabledNote : Self.disabledNote) {
+            GraphiteSegmented(
+                selection: selection,
+                segments: settings.offeredChoices.map { choice in
+                    .init(value: choice, title: choice.title,
+                          help: Self.help(for: choice, hasExtraChoices: settings.hasExtraChoices))
+                },
+                size: .large,
+                fillsWidth: true
+            )
+            .frame(width: max(84, CGFloat(settings.offeredChoices.count) * 76))
+            .disabled(!settings.hasExtraChoices)
+            .accessibilityLabel("Memory while developing")
+        }
+        .graphiteCard(cornerRadius: Graphite.Metric.m)
+    }
+
+    private static func help(for choice: DevelopBudget.Choice, hasExtraChoices: Bool) -> String {
+        guard hasExtraChoices else { return disabledNote }
+        switch choice {
+        case .default: return "Keep develops under the standard memory limit"
+        case .gb3, .gb4, .gb6: return "Allow develops up to \(choice.title) so two frames can decode at once"
+        }
     }
 }
