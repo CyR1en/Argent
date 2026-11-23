@@ -11,6 +11,9 @@ private struct Scene {
     /// The Light compiler the golden recipes were written under. It stays supported, so naming it keeps their bytes when a
     /// newer compiler becomes current.
     static let recordedLight = "2026-10-29-1"
+    /// The tone step's version the golden recipes were written under. It stays supported, so a frame saved on it keeps its
+    /// bytes, as one on `recordedLight` does.
+    static let recordedTone = "2026-11-05-2"
     /// The render graph the golden recipes' receipts were written under (`main` 3f67969, before scene gamut compression moved
     /// `RenderGraph.version` to `2026-11-19-1`). Fixing the leading base version keeps the v5 fixture's bytes independent of
     /// later render changes while still checking any suffixes `RenderGraph.version(for:)` appends.
@@ -56,11 +59,13 @@ private struct Scene {
     }
 
     func recipe(_ manual: ManualEdit?, held: ManualEdit? = nil, aim override: PrintAim? = nil, receipts: Int = 0,
-                revision: UInt64 = 12, previous: Recipe? = nil, renderGraph: String? = nil) throws -> Recipe {
+                revision: UInt64 = 12, previous: Recipe? = nil, renderGraph: String? = nil, tone: String? = nil) throws -> Recipe {
         var recipe = try Recipe.make(frame: frame, byteCount: 4096, stock: stock, stockDigest: stock.digest, roll: controls, own: FrameControls(),
                                      analysis: ExposureAnalysis(meanStops: -0.3, validWeight: 1), aim: override ?? aim, grain: .off, previous: previous,
                                      manual: manual, editRevision: revision, editLineage: "golden-lineage", heldManual: held)
         recipe.raw.sha256 = sha
+        // A frame saved on an older tone step version holds it; a new one takes the current version.
+        if let tone { recipe.render.tone?.version = tone }
         let fullVersion = RenderGraph.version(for: recipe.render.settings)
         let renderVersion: String
         if let renderGraph {
@@ -129,7 +134,7 @@ private func sha256(_ data: Data) -> String { SHA256.hash(data: data).map { Stri
             ("Light only", try scene.recipe(edit(light)), 2, 2273, "4270e061aafc1576421de5a717bc28629491f519cfd67d3c2daeff51b2dba9ac"),
             ("curves", try scene.recipe(edit(curves)), 3, 6123, "d8c9eeb07a5245e1c3b98b47c5e932334c3aa784739797c8dba40f89caf9833b"),
             ("identity Original", try scene.recipe(edit(.identity, origin: .original)), 4, 1949, "a948c984ea4660f2524a062d3d1babfdc257a58fc77c9491b29b08753cde68cb"),
-            ("tone step", try scene.recipe(nil, aim: toneAim), 5, 1174, "2b09c6407d9977574204d590359d08252894972946e3bfa22bd2ad9ad2871e0d"),
+            ("tone step", try scene.recipe(nil, aim: toneAim, tone: Scene.recordedTone), 5, 1174, "2b09c6407d9977574204d590359d08252894972946e3bfa22bd2ad9ad2871e0d"),
             ("Light, held edit, 20 receipts",
              try scene.recipe(edit(light), held: edit(curves), receipts: 20, renderGraph: Scene.recordedRenderGraph),
              3, 25021, "d002fac6f9f804358958d03c114e2ccc98f9a87c02f645a4c655a0210ae8919d"),

@@ -69,8 +69,13 @@ import Testing
         ]
     }
 
-    /// The tone step the digests with one use: Auto's burn and dodge at a reference of its own.
-    static let toneStep = PrintTone(burn: 0.6, dodge: 0.4, referenceStops: -0.3)
+    /// The tone step the digests with one use: Auto's burn and dodge at a reference of its own, on the version they were
+    /// recorded on, which a frame saved before 2026-11-23 holds and must go on rendering.
+    static let toneStep = PrintTone(burn: 0.6, dodge: 0.4, referenceStops: -0.3, version: "2026-11-05-2")
+
+    /// The same tone step on 2026-11-23-1, whose table differs only where the print is at the paper's white
+    /// (`PrintTone.WhiteHold`).
+    static let correctedToneStep = PrintTone(burn: 0.6, dodge: 0.4, referenceStops: -0.3, version: "2026-11-23-1")
 
     /// Each stock the checkout has baked. `build/stocks` is resolved first, since listing a symbolic
     /// link to a folder fails (ENOTDIR) and a worktree's is one: without that, this is silently empty.
@@ -105,8 +110,9 @@ import Testing
     }
 
     /// One digest of every edit's output bytes, in order: `edits`, by default 2026-10-09-1's.
-    static func digest(stock: Stock, gpu: GPU, edits: [ManualRenderSettings]? = nil, tone: PrintTone = .identity) throws -> String {
-        let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+    static func digest(stock: Stock, gpu: GPU, edits: [ManualRenderSettings]? = nil, tone: PrintTone = .identity,
+                       renderer: FilmRenderer? = nil) throws -> String {
+        let renderer = try renderer ?? FilmRenderer(gpu: gpu, stock: stock)
         var hash = SHA256()
         for manual in try edits ?? Self.edits() {
             let settings = DevelopSettings(ratedAt: 200, labBalance: SIMD3(0.1, -0.05, 0.03), printExposure: 0.3,
@@ -201,6 +207,21 @@ import Testing
         "712fa666980b0174": "1c2189af5dbdf4bb632b8a594af5ee4664912a275c588de6289aea87e57f8a91", // kodak-vision3-500t-cinema
     ]
 
+    /// Output digests for `exposedBaseEdits()` with `correctedToneStep`, only where they differ from
+    /// `recordedExposedBaseWithToneStep`: every other stock renders its bytes under either version. Recorded on
+    /// `fix/print-tone-at-print-white` on 2026-11-23 (macOS 27.2 build 26B123), `RenderGraph.version` 2026-11-19-1.
+    static let recordedExposedBaseWithCorrectedToneStep: [String: String] = [
+        "949d6164d3351a62": "e9c26d53c9057813fd35d4d031313cee4ab0eb87629acaea923e128542db509c", // cinestill-800t
+        "a6da1896b2b4f9b5": "18ddc4e7a553c552a5c0a9c259d5636bacfbcf10fa357d49016fa3f2618e0c72", // fujifilm-c200
+        "ab3fc45ad153d406": "fb8ce045f5c2cd65153666a19f4342fde6d6b9845817a0f0389fa6976fe532f3", // fujifilm-pro-400h
+        "034d966e7021564d": "3c4ef1bae138a3b32da7d36f39912c2431a6d6ef2a2af83132b6dcedbef73f21", // fujifilm-superia-400
+        "99e292f723e67e6c": "0da6f7e3f51b918e84daac7be518aec8e3faabbbcf9e861f52618f0f6be70a68", // kodak-colorplus-200
+        "41dd35cf8baec974": "ed6f526c77b7d0d1507f31bb22c4469407c7133ade3e7fba0107c5c02f021d39", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "ae1c7a8652fb689a65acf6dbd8cc90f37eeee35948a1a0772b8e4ce90415f51e", // kodak-gold-200
+        "46b68f5377170d20": "8ed5dc7456afc70f4fefb31262f40a888f0268965399c8630331009385492455", // kodak-ultramax-400
+        "712fa666980b0174": "425199bd3504a684831056a39c7f63e2cadddc84600e5a94fc4c52edadebc482", // kodak-vision3-500t-cinema
+    ]
+
     /// Output digests for a frame with no edit (`.identity`) without the tone step by stock fingerprint,
     /// recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut
     /// compression, `RenderGraph.version` 2026-11-19-1.
@@ -241,6 +262,15 @@ import Testing
         "46b68f5377170d20": "d8b12655e10ef9456ca8c74291682861bd528bb9e1e652ae262583f50c0a52da", // kodak-ultramax-400
         "d0334068916dcff7": "8e1c838b45780c68b4ec156e57456603f0d8732c1a7e3ea41f3766b1b47eb740", // kodak-vision3-500t
         "712fa666980b0174": "6659018f6a2b5f62df04d136a980ee8170ad20ef5d3c6c7c66d232b8a31de767", // kodak-vision3-500t-cinema
+    ]
+
+    /// Output digests for a frame with no edit with `correctedToneStep`, only where they differ from
+    /// `recordedNoEditWithToneStep`. Recorded as `recordedExposedBaseWithCorrectedToneStep` was.
+    static let recordedNoEditWithCorrectedToneStep: [String: String] = [
+        "949d6164d3351a62": "a2a8c63623ff03c319625e8b9730cbdef0469731bdf41ebde604c5966dda49bd", // cinestill-800t
+        "a6da1896b2b4f9b5": "39d23c5aaa370506e8763b13047c1087031046c95eb90f03fa84677866330177", // fujifilm-c200
+        "ab3fc45ad153d406": "f05ff8039fcbaaf4d003ba4970b87d49a1203bb0cd4905a0e5e975a014604351", // fujifilm-pro-400h
+        "034d966e7021564d": "082185cf82bad3d5dee2dc20eeb88953ca553f94b29be4cd728ff8850a5e3808", // fujifilm-superia-400
     ]
 
     @Test func recordedCompilerRendersTheBytesItRenderedBefore() throws {
@@ -286,5 +316,29 @@ import Testing
     @Test func aFrameWithNoEditRendersTheBytesItRenderedBefore() throws {
         try check(Self.recordedNoEdit, edits: { [.identity] })
         try check(Self.recordedNoEditWithToneStep, edits: { [.identity] }, tone: Self.toneStep)
+    }
+
+    /// The tone step's second version renders the first's bytes on every stock but those recorded apart.
+    @Test func theCorrectedToneStepRendersTheFirstsBytesButWhereItsTableDiffers() throws {
+        try check(Self.recordedExposedBaseWithToneStep.merging(Self.recordedExposedBaseWithCorrectedToneStep) { $1 },
+                  edits: Self.exposedBaseEdits, tone: Self.correctedToneStep)
+        try check(Self.recordedNoEditWithToneStep.merging(Self.recordedNoEditWithCorrectedToneStep) { $1 },
+                  edits: { [.identity] }, tone: Self.correctedToneStep)
+    }
+
+    /// A renderer keeps one tone table at a time, so a frame on either version after the other renders that version's bytes.
+    @Test func oneRendererRendersEachToneVersionsOwnBytes() throws {
+        let gpu = try GPU()
+        let edits = try Self.exposedBaseEdits()
+        for url in Self.bakedStocks {
+            let stock = try Stock.load(from: url)
+            let fingerprint = Self.fingerprint(stock)
+            guard let corrected = Self.recordedExposedBaseWithCorrectedToneStep[fingerprint],
+                  let first = Self.recordedExposedBaseWithToneStep[fingerprint] else { continue }
+            let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+            for (tone, expected) in [(Self.toneStep, first), (Self.correctedToneStep, corrected), (Self.toneStep, first)] {
+                #expect(try Self.digest(stock: stock, gpu: gpu, edits: edits, tone: tone, renderer: renderer) == expected, "\(stock.id) \(tone.version)")
+            }
+        }
     }
 }
