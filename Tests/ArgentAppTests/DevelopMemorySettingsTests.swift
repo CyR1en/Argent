@@ -154,8 +154,42 @@ import Testing
             await FlagStateTests.develop(model) { model.develop(resuming: stopped) }
             #expect(model.developer === developer)
             #expect(developer.lastMemoryTarget == 6000 << 20)
+            #expect(developer.lastLearnedDecodeTile == 2048)
             #expect(developer.lastGateCeiling == (6000 << 20) - DevelopBudget.margin)
             #expect(defaults.object(forKey: DevelopBudget.overrideDefaultsKey) == nil)
+        }
+    }
+
+    @Test func rollModelKeepsFilmPreviewsTileInStepWithDevelopMemory() async throws {
+        try await FlagStateTests.withRoll { fixture in
+            let defaults = Self.defaults()
+            let memory = DevelopMemorySettings(defaults: defaults, physicalMemory: 24 << 30, environment: [:])
+            let model = RollModel(bookmarks: BookmarkStore(file: fixture.folder.appendingPathComponent("bookmarks.json"), securityScoped: false),
+                                  stocksDirectory: fixture.stocks, decisions: AutoDecisionStore(library: fixture.library),
+                                  flagStore: FlagStore(library: fixture.library), recipeLibrary: fixture.library,
+                                  previewCache: fixture.folder.appendingPathComponent("Linear Previews"), digestsFile: nil,
+                                  developMemory: memory)
+            fixture.made.models.append(model)
+            #expect(model.films?.learnedDecodeTile == 1024)
+
+            memory.setChoice(.gb3)
+            #expect(model.films?.learnedDecodeTile == 2048)
+            memory.setChoice(.gb4)
+            #expect(model.films?.learnedDecodeTile == 2048)
+            memory.setChoice(.gb6)
+            #expect(model.films?.learnedDecodeTile == 2048)
+            memory.setChoice(.default)
+            #expect(model.films?.learnedDecodeTile == 1024)
+
+            // A model created with a raised choice already saved starts FilmPreviews at 2048.
+            memory.setChoice(.gb4)
+            let reopened = RollModel(bookmarks: BookmarkStore(file: fixture.folder.appendingPathComponent("bookmarks-2.json"), securityScoped: false),
+                                     stocksDirectory: fixture.stocks, decisions: AutoDecisionStore(library: fixture.library),
+                                     flagStore: FlagStore(library: fixture.library), recipeLibrary: fixture.library,
+                                     previewCache: fixture.folder.appendingPathComponent("Linear Previews 2"), digestsFile: nil,
+                                     developMemory: memory)
+            fixture.made.models.append(reopened)
+            #expect(reopened.films?.learnedDecodeTile == 2048)
         }
     }
 

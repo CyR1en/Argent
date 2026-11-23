@@ -222,6 +222,17 @@ final class RenderedImageCache: @unchecked Sendable {
         }
     }
 
+    /// Drops every cached picture whose key matches `predicate` and cancels matching in-flight requests.
+    func remove(where predicate: (RenderedImageKey) -> Bool) {
+        lock.withLock {
+            for key in images.keys.filter(predicate) { remove(key) }
+            for (slot, request) in requests where predicate(request.key) {
+                request.operation?.cancel()
+                requests.removeValue(forKey: slot)
+            }
+        }
+    }
+
     private func tick() -> UInt64 { clock &+= 1; return clock }
     private func isFocused(_ key: RenderedImageKey) -> Bool {
         focusedPrefix.map { key.decode.hasPrefix($0) } ?? false

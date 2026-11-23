@@ -312,6 +312,240 @@ import Testing
         }
     }
 
+    /// Direct pixel comparison of full-size RAW 9 decodes at 1024-pixel tiles against 2048-pixel
+    /// tiles on the CC0 lossless L and uncompressed samples, and the removal patch seam check in
+    /// both directions (patch cut at 1024 laid into 2048 and the reverse, straddling tile seams).
+    @Test(.enabled(if: enabled))
+    func tiles1024Against2048AndRemovalSeam() async throws {
+        let gpu = try GPU(maxIdlePoolBytes: 0)
+        let decoder = AppleRawDecoder(gpu: gpu, contextPerDecode: true)
+        let stock = try Stock.load(from: DecoderSwitchMeasureTests.stocks.appendingPathComponent("kodak-portra-400"))
+        let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+        let encoder = try ImageEncoder(gpu: gpu)
+        let files = ProvenanceMeasureTests.files().isEmpty ? [M.lossless, SyntheticRaw.base] : ProvenanceMeasureTests.files()
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        func halfSteps(_ a: Float16, _ b: Float16) -> Double {
+            guard a != b else { return 0 }
+            let step = Double(a.nextUp - a)
+            return step > 0 ? abs(Double(b) - Double(a)) / step : .infinity
+        }
+
+        for url in files {
+            func comparePixels(_ a: [Float16], _ b: [Float16], width w: Int, height h: Int)
+                -> (differing: Int, total: Int, largest: Double, stops: Double, steps: Double, near: Int, elsewhere: Int, worst: (x: Int, y: Int)) {
+                var differing = 0, largest = 0.0, largestStops = 0.0, largestSteps = 0.0, near1024Seam = 0, elsewhere = 0
+                var worstPoint = (x: w / 2, y: h / 2)
+                for idx in stride(from: 0, to: a.count, by: 4) {
+                    let pixel = idx / 4
+                    let px = pixel % w, py = h - 1 - pixel / w
+                    let dx = min(px % 1024, 1024 - 1 - px % 1024), dy = min(py % 1024, 1024 - 1 - py % 1024)
+                    let near = min(dx, dy) < 8
+                    for c in 0..<3 {
+                        let va = a[idx + c], vb = b[idx + c]
+                        guard va != vb else { continue }
+                        differing += 1
+                        if near { near1024Seam += 1 } else { elsewhere += 1 }
+                        let da = Double(va), db = Double(vb)
+                        largest = max(largest, abs(da - db))
+                        if da > 0.01, db > 0.01 {
+                            let stops = abs(log2(db / da))
+                            if stops > largestStops {
+                                largestStops = stops
+                                worstPoint = (px, py)
+                            }
+                        }
+                        largestSteps = max(largestSteps, halfSteps(va, vb))
+                    }
+                }
+                return (differing, w * h * 3, largest, largestStops, largestSteps, near1024Seam, elsewhere, worstPoint)
+            }
+
+            // Production path (lensCorrection = false, matching RollDeveloper and FilmPreviews since LC5).
+            var opt1024 = Self.options(.learned, tile: 1024); opt1024.lensCorrection = false
+            var opt2048 = Self.options(.learned, tile: 2048); opt2048.lensCorrection = false
+            var optWhole = Self.options(.learned, tile: nil); optWhole.lensCorrection = false
+            let d1024 = try decoder.decode(url, options: opt1024)
+            let d2048 = try decoder.decode(url, options: opt2048)
+            let dWhole = try decoder.decode(url, options: optWhole)
+            try #require(d1024.pins?.tileSize == 1024 && d2048.pins?.tileSize == 2048 && dWhole.pins?.tileSize == nil)
+            try #require(d1024.decoderVersion == "9" && d2048.decoderVersion == "9" && dWhole.decoderVersion == "9")
+            let p1024 = ExposureAnalyzer.pixels(of: d1024.texture)
+            let p2048 = ExposureAnalyzer.pixels(of: d2048.texture)
+            let pWhole = ExposureAnalyzer.pixels(of: dWhole.texture)
+            let w = d1024.width, h = d1024.height
+            let c1024vs2048 = comparePixels(p1024, p2048, width: w, height: h)
+            let c1024vsWhole = comparePixels(p1024, pWhole, width: w, height: h)
+            let c2048vsWhole = comparePixels(p2048, pWhole, width: w, height: h)
+            print(String(format: "MEASURE tiles-1024-vs-2048 %@ (lensCorrection=false, %dx%d, pins %d vs %d): %d of %d samples differ (%.4f%%), largest %.5f (%.4f stops above 0.01 at %d,%d, %.2f half-float steps); near 1024 seam (<8px) %d, elsewhere %d",
+                         url.lastPathComponent, w, h, d1024.pins?.tileSize ?? 0, d2048.pins?.tileSize ?? 0,
+                         c1024vs2048.differing, c1024vs2048.total, 100 * Double(c1024vs2048.differing) / Double(c1024vs2048.total),
+                         c1024vs2048.largest, c1024vs2048.stops, c1024vs2048.worst.x, c1024vs2048.worst.y, c1024vs2048.steps,
+                         c1024vs2048.near, c1024vs2048.elsewhere))
+            print(String(format: "MEASURE tiles-vs-whole %@ (lensCorrection=false): 1024 vs whole %d/%d (%.4f%%, %.4f stops); 2048 vs whole %d/%d (%.4f%%, %.4f stops)",
+                         url.lastPathComponent,
+                         c1024vsWhole.differing, c1024vsWhole.total, 100 * Double(c1024vsWhole.differing) / Double(c1024vsWhole.total), c1024vsWhole.stops,
+                         c2048vsWhole.differing, c2048vsWhole.total, 100 * Double(c2048vsWhole.differing) / Double(c2048vsWhole.total), c2048vsWhole.stops))
+
+            // Also check with decoder lensCorrection = true (matching Raw9MeasureTests/tiles).
+            try autoreleasepool {
+                let lc1024 = try decoder.decode(url, options: Self.options(.learned, tile: 1024))
+                let lc2048 = try decoder.decode(url, options: Self.options(.learned, tile: 2048))
+                let cLC = comparePixels(ExposureAnalyzer.pixels(of: lc1024.texture), ExposureAnalyzer.pixels(of: lc2048.texture),
+                                        width: lc1024.width, height: lc1024.height)
+                print(String(format: "MEASURE tiles-1024-vs-2048 %@ (lensCorrection=true, %dx%d, pins %d vs %d): %d of %d samples differ (%.4f%%), largest %.5f (%.4f stops above 0.01 at %d,%d, %.2f half-float steps); near 1024 seam (<8px) %d, elsewhere %d",
+                             url.lastPathComponent, lc1024.width, lc1024.height, lc1024.pins?.tileSize ?? 0, lc2048.pins?.tileSize ?? 0,
+                             cLC.differing, cLC.total, 100 * Double(cLC.differing) / Double(cLC.total),
+                             cLC.largest, cLC.stops, cLC.worst.x, cLC.worst.y, cLC.steps, cLC.near, cLC.elsewhere))
+            }
+
+            // Removal seam check: two 640x640 crops straddling tile boundaries plus one centered so the
+            // feather edge passes through the pixel with the largest 1024-vs-2048 stop difference.
+            let worstPoint = c1024vs2048.worst
+            let worstX = min(max(worstPoint.x - 320 + 100, 0), w - 640)
+            let worstY = min(max(worstPoint.y - 320, 0), h - 640)
+            let boxes = [
+                ("seam-1024x1024", try RemovalPatch.Box(x: 704, y: 704, width: 640, height: 640)),
+                ("seam-3072x2048", try RemovalPatch.Box(x: 2752, y: 1728, width: 640, height: 640)),
+                ("worst-edge-\(worstPoint.x)x\(worstPoint.y)", try RemovalPatch.Box(x: worstX, y: worstY, width: 640, height: 640)),
+            ]
+            let decodes: [Int: LinearFrame] = [1024: d1024, 2048: d2048]
+            let lensBase = LensResolver.correction(for: url, settings: .default)
+            let renderSettings = DevelopSettings(grain: 0, grainSeed: 0, halation: true, sharpen: true)
+
+            for (boxLabel, box) in boxes {
+                // Centered disc object mask of radius 100 px inside the 640x640 box so the object and its
+                // feather straddle the tile boundary.
+                var object = [UInt8](repeating: 0, count: box.width * box.height)
+                for y in 0..<box.height {
+                    for x in 0..<box.width {
+                        let d = hypot(Double(x) + 0.5 - Double(box.width) / 2, Double(y) + 0.5 - Double(box.height) / 2)
+                        if d <= 100 { object[y * box.width + x] = 255 }
+                    }
+                }
+                let plan = try RemovalPipeline.Plan(box: box, object: object, frameWidth: w, frameHeight: h)
+
+                let baseStage = try LensStage(gpu: gpu)
+                var crops: [Int: RemovalPipeline.Crop] = [:]
+                var preparedByTile: [Int: RemovalPipeline.Prepared] = [:]
+                var patchesByTile: [Int: RemovalPatch] = [:]
+                var identityPatches: [Int: RemovalPatch] = [:]
+                for tile in [1024, 2048] {
+                    let frame = decodes[tile]!
+                    let rgb = try baseStage.removalInput(frame, removals: [], box: box)
+                    let crop = try RemovalPipeline.Crop(box: box, rgb: rgb, decoder: frame.decoderVersion)
+                    crops[tile] = crop
+                    let prepared = try RemovalPipeline.prepare(crop, plan: plan, seed: 42)
+                    preparedByTile[tile] = prepared
+                    let output = try await FakeRemovalEngine().run(prepared.job) { _, _ in }
+                    let patch = try RemovalPipeline.finish(output, prepared: prepared, faces: [])
+                    patchesByTile[tile] = patch
+                    // Identity-filled patch holding tile's own surround pixels with the real feather alphas,
+                    // isolating cross-tile mismatch across the feather seam with no model variance.
+                    identityPatches[tile] = try RemovalPatch(box: box, width: box.width, height: box.height, rgb: rgb,
+                                                             objectAlpha: patch.objectAlpha, effectsAlpha: patch.effectsAlpha)
+                }
+
+                for (cutTile, targetTile) in [(1024, 2048), (2048, 1024)] {
+                    let targetDecode = decodes[targetTile]!
+
+                    // 1. Identity-fill cross-tile composite vs unmodified target decode over the box & feather.
+                    let idPatch = identityPatches[cutTile]!
+                    let idStage = try LensStage(gpu: gpu, patches: FixedPatchSource([idPatch]))
+                    let idLaid = try idStage.correct(targetDecode, with: ResolvedLensCorrection.identity.removing([Removal(patch: idPatch.ref)]))
+                    let idPixels = ExposureAnalyzer.pixels(of: idLaid.texture)
+                    let targetPixels = targetTile == 1024 ? p1024 : p2048
+                    var idDiff = 0, idStops = 0.0, idMaxAbs = 0.0, idMaxSteps = 0.0
+                    var featherDiff = 0, featherTotal = 0, featherStops = 0.0, featherSteps = 0.0
+                    for y in 0..<box.height {
+                        for x in 0..<box.width {
+                            let alpha = idPatch.effectsAlpha[y * box.width + x]
+                            let isFeather = alpha > 0 && alpha < 255
+                            if isFeather { featherTotal += 3 }
+                            let fy = box.y + y, fx = box.x + x
+                            let idx = ((h - 1 - fy) * w + fx) * 4
+                            for c in 0..<3 {
+                                let a = targetPixels[idx + c], b = idPixels[idx + c]
+                                guard a != b else { continue }
+                                idDiff += 1
+                                let da = Double(a), db = Double(b)
+                                idMaxAbs = max(idMaxAbs, abs(da - db))
+                                let stops = (da > 0.01 && db > 0.01) ? abs(log2(db / da)) : 0
+                                let steps = halfSteps(a, b)
+                                idStops = max(idStops, stops)
+                                idMaxSteps = max(idMaxSteps, steps)
+                                if isFeather {
+                                    featherDiff += 1
+                                    featherStops = max(featherStops, stops)
+                                    featherSteps = max(featherSteps, steps)
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Real pipeline patch cut at cutTile laid into targetTile, vs patch cut at targetTile laid into targetTile.
+                    // Compare both linear scene and film-rendered 16-bit sRGB (dE2000).
+                    let cutPatch = patchesByTile[cutTile]!
+                    let targetPatch = patchesByTile[targetTile]!
+                    let crossStage = try LensStage(gpu: gpu, patches: FixedPatchSource([cutPatch]))
+                    let ownStage = try LensStage(gpu: gpu, patches: FixedPatchSource([targetPatch]))
+                    let crossScene = try crossStage.correct(targetDecode, with: lensBase.removing([Removal(patch: cutPatch.ref)]))
+                    let ownScene = try ownStage.correct(targetDecode, with: lensBase.removing([Removal(patch: targetPatch.ref)]))
+                    let crossLinear = ExposureAnalyzer.pixels(of: crossScene.texture)
+                    let ownLinear = ExposureAnalyzer.pixels(of: ownScene.texture)
+                    var sceneDiff = 0, sceneMaxStops = 0.0, sceneMaxSteps = 0.0, sceneMaxRel = 0.0
+                    for y in 0..<box.height {
+                        for x in 0..<box.width {
+                            let fy = box.y + y, fx = box.x + x
+                            let idx = ((h - 1 - fy) * w + fx) * 4
+                            for c in 0..<3 {
+                                let a = ownLinear[idx + c], b = crossLinear[idx + c]
+                                guard a != b else { continue }
+                                sceneDiff += 1
+                                let da = Double(a), db = Double(b)
+                                if da > 0.01, db > 0.01 { sceneMaxStops = max(sceneMaxStops, abs(log2(db / da))) }
+                                sceneMaxSteps = max(sceneMaxSteps, halfSteps(a, b))
+                                sceneMaxRel = max(sceneMaxRel, abs(db - da) / (abs(da) + 0.01))
+                            }
+                        }
+                    }
+                    // Render both through Portra 400 to 16-bit sRGB and compute dE2000 over the crop region.
+                    let crossFilm = try renderer.render(crossScene, settings: renderSettings)
+                    let ownFilm = try renderer.render(ownScene, settings: renderSettings)
+                    let crossPic = try encoder.picture(crossFilm.image.texture, colorSpace: gpu.workingColorSpace, format: .tiff16, space: .sRGB)
+                    let ownPic = try encoder.picture(ownFilm.image.texture, colorSpace: gpu.workingColorSpace, format: .tiff16, space: .sRGB)
+                    let crossFile = root.appendingPathComponent("cross-\(boxLabel)-\(cutTile)-\(targetTile).tif")
+                    let ownFile = root.appendingPathComponent("own-\(boxLabel)-\(cutTile)-\(targetTile).tif")
+                    try encoder.write(crossPic, to: crossFile, format: .tiff16, metadataFrom: url, software: "measure")
+                    try encoder.write(ownPic, to: ownFile, format: .tiff16, metadataFrom: url, software: "measure")
+                    let crossRGB = try #require(PerformanceTargetMeasureTests.pixels(crossFile))
+                    let ownRGB = try #require(PerformanceTargetMeasureTests.pixels(ownFile))
+                    try? FileManager.default.removeItem(at: crossFile)
+                    try? FileManager.default.removeItem(at: ownFile)
+                    var boxCross: [UInt16] = [], boxOwn: [UInt16] = []
+                    boxCross.reserveCapacity(box.width * box.height * 4)
+                    boxOwn.reserveCapacity(box.width * box.height * 4)
+                    for y in box.y..<(box.y + box.height) {
+                        for x in box.x..<(box.x + box.width) {
+                            let i = (y * crossRGB.width + x) * 4
+                            boxCross += crossRGB.values[i..<(i + 4)]
+                            boxOwn += ownRGB.values[i..<(i + 4)]
+                        }
+                    }
+                    let de = PerformanceTargetMeasureTests.deltaE(boxCross, boxOwn)
+                    let boxSamples = box.width * box.height * 3
+                    print(String(format: "MEASURE removal-seam %@ %@ cut %d -> laid %d: identity-patch %d/%d diff (max %.5f, %.4f stops, %.2f half-steps; feather %d/%d diff, %.4f stops, %.2f half-steps); pipeline-patch vs own %d/%d diff (max %.4f stops, %.2f half-steps, rel %.5f); film dE2000 over box mean %.4f p95 %.2f p99 %.2f max %.2f (%.4f%% identical)",
+                                 url.lastPathComponent, boxLabel, cutTile, targetTile,
+                                 idDiff, boxSamples, idMaxAbs, idStops, idMaxSteps,
+                                 featherDiff, featherTotal, featherStops, featherSteps,
+                                 sceneDiff, boxSamples, sceneMaxStops, sceneMaxSteps, sceneMaxRel,
+                                 de.mean, de.p95, de.p99, de.max, 100 * de.same))
+                }
+            }
+        }
+    }
+
     /// RAW 9's speed in the app's paths, beside RAW 8's and the in-house decoder's, on the lossless L
     /// sample (or ARGENT_FILES), each decode in a Core Image context of its own as the app decodes: the
     /// sheet's 960 pixels, the frame view's 2190 filled, a full-size decode in the develop's tiles and the
