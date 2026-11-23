@@ -83,11 +83,15 @@ import Testing
 
     /// V3's six fitted strengths stay in `2026-11-11-1` and `2026-11-23-1` (validate/colour/report.md, section 3.1); `2026-11-23-1`
     /// adds the eight newer stocks' rule-derived strengths (test-baselines-20261123.noindex/vibrance/current-bake-chroma-ratios.json),
-    /// while `2026-11-11-1` leaves them at the default 1 and 1 so recipes saved on it render the same.
+    /// while `2026-11-11-1` leaves them at the default 1 and 1 so recipes saved on it render the same. Seven of the eight lie below
+    /// the chroma ratios the rule was fitted on, and where its value did not cut the chroma-ratio error on the 20 held-out frames the
+    /// stock keeps 1 for that sign: the negative strength of the three tungsten stocks, whose rule values (1.40, 1.33 and 1.22) raised
+    /// the error at -100 from 93.1 to 99.2, 70.1 to 81.9 and 62.9 to 67.7 percent, and Cinema 500's positive, whose 0.99 changed nothing
+    /// (measured 2026-11-23, `method.json`'s `heldOut`).
     @Test func vibrancesStrengthIsMeasuredPerStockAndSign() throws {
         let current = try #require(PresenceConstants.named(Presence.currentVersion)).vibrance
         let expected: [String: PresenceConstants.Vibrance.Strength] = [
-            "cinestill-800t": .init(positive: 1.16, negative: 1.40),
+            "cinestill-800t": .init(positive: 1.16, negative: 1),
             "fujifilm-c200": .init(positive: 1.29, negative: 1.53),
             "fujifilm-pro-400h": .init(positive: 1.28, negative: 1.52),
             "fujifilm-superia-400": .init(positive: 1.32, negative: 1.55),
@@ -99,8 +103,8 @@ import Testing
             "kodak-portra-400": .init(positive: 1.45, negative: 1.72),
             "kodak-portra-800": .init(positive: 1.46, negative: 1.74),
             "kodak-ultramax-400": .init(positive: 1.64, negative: 1.92),
-            "kodak-vision3-500t": .init(positive: 1.10, negative: 1.33),
-            "kodak-vision3-500t-cinema": .init(positive: 0.99, negative: 1.22),
+            "kodak-vision3-500t": .init(positive: 1.10, negative: 1),
+            "kodak-vision3-500t-cinema": .init(positive: 1, negative: 1),
         ]
         #expect(current.strengths.count == 14)
         for (stockID, strength) in expected {
@@ -129,11 +133,27 @@ import Testing
             let rule = try #require(strength["rule"] as? [String: Any]), ratios = try #require(rule["chromaRatio"] as? [String: Double])
             let vibrance = constants.vibrance
             #expect(Set(ratios.keys) == Set(vibrance.strengths.keys), "\(constants.version)")
+            // The held-out check on the stocks added since V3: a sign is kept at 1 exactly where the rule's strength did not cut the
+            // chroma-ratio error, at -100 for the negative sign and at both +50 and +100 for the positive.
+            let heldOut = strength["heldOut"] as? [String: Any] ?? [:]
+            let keptAtOne = heldOut["keptAtOne"] as? [String: Any] ?? [:]
+            for (stock, values) in heldOut["ratioErrorPercent"] as? [String: [String: [String: Double]]] ?? [:] {
+                func cut(_ value: String) throws -> Bool { try #require(values[value]?["atRule"]) < (try #require(values[value]?["atOne"])) }
+                let kept = keptAtOne[stock] as? [String: Any] ?? [:]
+                #expect((kept["negative"] != nil) == !(try cut("-100")), "\(constants.version) \(stock) negative")
+                #expect((kept["positive"] != nil) == !(try cut("50") && cut("100")), "\(constants.version) \(stock) positive")
+            }
             for (sign, read) in [("positive", \PresenceConstants.Vibrance.Strength.positive), ("negative", \.negative)] {
                 let fit = try #require(rule[sign] as? [String: Double])
                 let slope = try #require(fit["slope"]), intercept = try #require(fit["intercept"]), worst = try #require(fit["leaveOneOutMax"])
                 for (stock, c) in ratios {
                     let listed = Double(try #require(vibrance.strengths[stock])[keyPath: read])
+                    // A sign the held-out check turned down keeps 1, and the file still says what the rule gave it.
+                    if let kept = (keptAtOne[stock] as? [String: Any])?[sign] as? [String: Double] {
+                        #expect(listed == Double(vibrance.defaultStrength[keyPath: read]), "\(constants.version) \(stock) \(sign) keeps the default")
+                        #expect(abs(slope * c + intercept - (try #require(kept["rule"]))) <= twoDecimals, "\(constants.version) \(stock) \(sign)'s rule value")
+                        continue
+                    }
                     let limit = legacyStocks.contains(stock) ? worst + twoDecimals : twoDecimals
                     #expect(abs(slope * c + intercept - listed) <= limit, "\(constants.version) \(stock) \(sign)")
                 }
