@@ -404,6 +404,23 @@ import Testing
         }
     }
 
+    /// An offset the raw padded with spaces is the offset it says: read without the padding, as every TIFF string is, and
+    /// carried so. `validOffset` itself takes only the six characters, so nothing padded is ever written.
+    @Test func aPaddedOffsetIsCarriedWithoutItsPadding() throws {
+        var builder = TIFFBuilder()
+        builder.chain = [0]
+        builder.ifds = [
+            [(0x0110, .ascii("ILCE-7M4")), (0x8769, .ifdOffset(1))],
+            [(0x9010, .ascii("+02:00 ")), (0x9011, .ascii(" -07:00")), (0x9012, .ascii("+02:00 x"))],
+        ]
+        let tiffURL = temporaryURL(prefix: "argent-padded-offset", ext: "arw")
+        try builder.build().write(to: tiffURL)
+        defer { try? FileManager.default.removeItem(at: tiffURL) }
+
+        #expect(ImageEncoder.readRawExif(from: tiffURL) == ImageEncoder.RawExif(
+            offsetTime: "+02:00", offsetTimeOriginal: "-07:00", offsetTimeDigitized: nil, lensModel: nil))
+    }
+
     /// Each of the three offset tags maps to its own EXIF tag without crossing wires.
     @Test(arguments: ImageEncoderMetadataTests.allFormats)
     func threeDistinctOffsetsMapToTheirOwnExifTags(format: OutputFormat) throws {

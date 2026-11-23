@@ -288,6 +288,9 @@ public final class ImageEncoder {
         return parseRawExif(exif, reader: reader)
     }
 
+    /// The Exif IFD's offsets and lens name. A string is read as `TIFFReader.string` reads every ASCII field, up to its NUL
+    /// and without the spaces around it, so an offset a camera padded (`+02:00 `) is carried as the `+02:00` it says. One
+    /// that is no offset once read, as the blanks Exif asks for when the zone is unknown (`   :  `), is left out.
     static func parseRawExif(_ exif: [UInt16: TIFFReader.Entry], reader: TIFFReader) -> RawExif {
         func ascii(_ tag: UInt16, maxBytes: UInt32) -> String? {
             guard let entry = exif[tag], entry.type == 2, entry.count > 0, entry.count <= maxBytes,
