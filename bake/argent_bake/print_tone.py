@@ -10,9 +10,14 @@ perceived" of a conventional negative film printed on paper:
 - FIG. 1, "a typical amateur film/paper system";
 - FIG. 2, "a typical professional film/paper system".
 Both digitized every 0.05 of scene density from the patent's drawing sheets by tools/digitize_us5300381.py
-(the solid curves; line width 0.015 D; FIG. 2 agrees with measure.md's 13 points read by eye within 0.006 D;
-at scene density 0.0 to 0.1 the dashed gradient curve crosses FIG. 2's and the reading there carries about
-0.01 D). "As perceived" includes viewing flare, so the print gets a flare that takes its D-max to the
+(the solid curves; line width 0.015 D; FIG. 2 agrees with measure.md's 13 points read by eye within 0.006 D).
+FIG. 2's dashed gradient curve crosses the solid one at scene density about -0.01; the tool's tracker rode the
+dash from -0.022 to +0.008 and read 0.150 at 0.0, between 0.138 and 0.147, a fall no print curve makes. That
+point is read by hand from the drawing (2026-11-23): the solid line's lower edge, which the dash does not touch
+in that column, plus half the line's width gives 0.142, and the lone columns either side, 0.137 at -0.031 and
+0.143 at +0.012, put it at 0.141; 0.142 is kept, within 0.0005 D of its neighbours' interpolation. Before that
+correction the fall became a flat stretch in the Portras' tone stage, and their highlights lost order 2.5 stops
+over mid-gray. "As perceived" includes viewing flare, so the print gets a flare that takes its D-max to the
 figure's (-log10(10^-D + f), first principles).
 
 And Kodak's US7372597: the largest gamma, d L*(reproduction, visually perceived) / d L*(scene), lies between
@@ -40,7 +45,7 @@ FIG1_PRINT = np.array([
     1.157, 1.248, 1.351, 1.445, 1.532, 1.607, 1.677, 1.744, 1.800, 1.839, 1.877, 1.911, 1.941, 1.962, 1.978, 1.991,
     1.998, 2.006, 2.014, 2.022, 2.027, 2.034, 2.039, 2.043, 2.046, 2.048, 2.050, 2.052, 2.051])
 FIG2_PRINT = np.array([
-    0.119, 0.119, 0.120, 0.121, 0.122, 0.124, 0.125, 0.128, 0.129, 0.132, 0.134, 0.138, 0.150, 0.147, 0.153, 0.162,
+    0.119, 0.119, 0.120, 0.121, 0.122, 0.124, 0.125, 0.128, 0.129, 0.132, 0.134, 0.138, 0.142, 0.147, 0.153, 0.162,
     0.179, 0.204, 0.236, 0.274, 0.318, 0.364, 0.414, 0.472, 0.535, 0.608, 0.680, 0.751, 0.815, 0.879, 0.948, 1.027,
     1.110, 1.198, 1.284, 1.370, 1.451, 1.523, 1.587, 1.650, 1.707, 1.768, 1.826, 1.864, 1.893, 1.914, 1.933, 1.942,
     1.950, 1.959, 1.965, 1.973, 1.978, 1.984, 1.989, 1.993, 1.996, 2.000, 2.001, 2.001, 2.003])
