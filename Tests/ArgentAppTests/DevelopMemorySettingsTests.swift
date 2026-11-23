@@ -159,6 +159,22 @@ import Testing
         }
     }
 
+    /// The default's segment names its amount, the rule's for the Mac whatever is chosen or overridden, in the choices' units.
+    @Test func theDefaultIsNamedByItsAmount() {
+        #expect(DevelopMemoryCard.amount(2000 << 20) == "2 GB")
+        #expect(DevelopMemoryCard.amount(1536 << 20) == "1.5 GB")
+        #expect(DevelopMemoryCard.amount(1024 << 20) == "1 GB")
+        #expect(DevelopMemoryCard.amount(3000 << 20) == DevelopBudget.Choice.gb3.title)
+        #expect(DevelopMemoryCard.enabledNote(default: "2 GB").contains("the default 2 GB"))
+
+        let mac24 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 24 << 30,
+                                          environment: [DevelopBudget.overrideEnvironmentKey: "5000"])
+        mac24.setChoice(.gb4)
+        #expect(mac24.defaultTarget == 2000 << 20)
+        #expect(DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 12 << 30, environment: [:]).defaultTarget == 1536 << 20)
+        #expect(DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 8 << 30, environment: [:]).defaultTarget == 1024 << 20)
+    }
+
     @Test func developMemoryCardRendersEnabledAndDisabledStates() async throws {
         let mac24 = DevelopMemorySettings(defaults: Self.defaults(), physicalMemory: 24 << 30, environment: [:])
         mac24.setChoice(.gb4)

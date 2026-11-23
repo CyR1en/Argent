@@ -20,6 +20,9 @@ import Observation
 
     /// Whether this Mac offers any choice beyond the default.
     var hasExtraChoices: Bool { offeredChoices.count > 1 }
+    /// What the default rule gives this Mac, in bytes, whatever is chosen or overridden: the amount the Settings row shows
+    /// for its default.
+    var defaultTarget: Int { DevelopBudget.resolve(choice: .default, physicalMemory: physicalMemory) }
 
     init(defaults: UserDefaults,
          physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory,

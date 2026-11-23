@@ -289,18 +289,31 @@ private struct RollsBackdropCard: View {
 struct DevelopMemoryCard: View {
     let settings: DevelopMemorySettings
 
-    static let enabledNote = "More memory lets two frames decode at once; changes apply from the next develop"
     static let disabledNote = "Higher limits require at least 12 GB of memory"
+
+    /// The row's note on a Mac that offers more than the default, which it names by its amount.
+    static func enabledNote(default amount: String) -> String {
+        "More than the default \(amount) lets two frames decode at once; changes apply from the next develop"
+    }
+
+    /// A budget as the row names it, in the choices' own gigabytes of 1000 MiB: the default rule's 2000 MiB is "2 GB", and
+    /// an eighth of a 12 GB Mac's memory "1.5 GB".
+    static func amount(_ bytes: Int) -> String {
+        let gigabytes = (Double(bytes >> 20) / 100).rounded() / 10
+        return gigabytes.formatted(.number.precision(.fractionLength(0...1))) + " GB"
+    }
 
     var body: some View {
         let selection = Binding(get: { settings.choice }, set: { settings.setChoice($0) })
+        // The default's segment says how much it is, so the row reads 2 GB, 3 GB, 4 GB, 6 GB and the note says which is the default.
+        let defaultAmount = Self.amount(settings.defaultTarget)
         SettingsRow(title: "Memory while developing",
-                    note: settings.hasExtraChoices ? Self.enabledNote : Self.disabledNote) {
+                    note: settings.hasExtraChoices ? Self.enabledNote(default: defaultAmount) : Self.disabledNote) {
             GraphiteSegmented(
                 selection: selection,
                 segments: settings.offeredChoices.map { choice in
-                    .init(value: choice, title: choice.title,
-                          help: Self.help(for: choice, hasExtraChoices: settings.hasExtraChoices))
+                    .init(value: choice, title: choice == .default ? defaultAmount : choice.title,
+                          help: Self.help(for: choice, defaultAmount: defaultAmount, hasExtraChoices: settings.hasExtraChoices))
                 },
                 size: .large,
                 fillsWidth: true
@@ -312,10 +325,10 @@ struct DevelopMemoryCard: View {
         .graphiteCard(cornerRadius: Graphite.Metric.m)
     }
 
-    private static func help(for choice: DevelopBudget.Choice, hasExtraChoices: Bool) -> String {
+    private static func help(for choice: DevelopBudget.Choice, defaultAmount: String, hasExtraChoices: Bool) -> String {
         guard hasExtraChoices else { return disabledNote }
         switch choice {
-        case .default: return "Keep develops under the standard memory limit"
+        case .default: return "The default: keep the app under \(defaultAmount) while developing"
         case .gb3, .gb4, .gb6: return "Allow develops up to \(choice.title) so two frames can decode at once"
         }
     }
