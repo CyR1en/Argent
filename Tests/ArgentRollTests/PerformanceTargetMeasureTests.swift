@@ -131,9 +131,10 @@ import Testing
         if !unhashed { try Self.hash(frames) }
         let hashed = M.ms(clock.now - hashing) / 1000
         // ARGENT_DECODE_TILE replaces RAW 9's decode tile, 0 for decodes rendered whole, for measuring.
-        let tile = Self.environment["ARGENT_DECODE_TILE"].flatMap(Int.init).map { $0 > 0 ? $0 : nil } ?? RollDeveloper.learnedDecodeTile
+        // Left unset, RollDeveloper picks the tile from each develop's memory target.
+        let explicitTile: Int?? = Self.environment["ARGENT_DECODE_TILE"].flatMap(Int.init).map { $0 > 0 ? $0 : nil }
         let developer = try RollDeveloper(stocks: stocks, software: "Argent measure", library: root.appendingPathComponent("library"),
-                                          digests: unhashed ? SourceDigests() : .shared, learnedDecodeTile: tile)
+                                          digests: unhashed ? SourceDigests() : .shared, learnedDecodeTile: explicitTile)
         let start = clock.now
         let admitted = Stamps(), written = Stamps()
         developer.observeStage = { _, stage, begins in if stage == .admit, begins { admitted.note(M.ms(clock.now - start) / 1000) } }
@@ -157,7 +158,8 @@ import Testing
                      Double(done.count) / max(seconds - checked, 1e-9), checked, steady, window > 0 ? slowest : 0, window,
                      unhashed ? "no SHA-256 known" : String(format: "SHA-256 known, read before in %.1f s", hashed),
                      Self.decoders(frames, developer.decoderChoices), InHouseDecoderMeasureTests.loadAverage()))
-        print("MEASURE T6 develop to \(format.title), \(jobs.count) frames, RAW 9 decode tile \(tile.map(String.init) ?? "whole"): footprint \(base >> 20) MB at start, peak \(peak >> 20) MB "
+        let usedTile = developer.lastLearnedDecodeTile
+        print("MEASURE T6 develop to \(format.title), \(jobs.count) frames, RAW 9 decode tile \(usedTile.map(String.init) ?? "whole"): footprint \(base >> 20) MB at start, peak \(peak >> 20) MB "
               + "(target 2000), budget \((developer.lastMemoryTarget ?? developer.memoryTarget) >> 20) MB; \(developer.lastGateReport ?? "no gate report")")
         for reason in failed.prefix(5) { print("MEASURE failed: \(reason)") }
         #expect(failed.isEmpty, "\(failed.count) of \(jobs.count) frames failed")
@@ -212,7 +214,7 @@ import Testing
         let verdict = compared < outcomes.count ? "INCOMPLETE \(compared)/\(outcomes.count)" : worst < 0.5 ? "within" : "OVER"
         print(String(format: "MEASURE T8 output stability against %@: worst frame's mean dE2000 %.4f over %d of %d frames (target under 0.5), %@",
                      reference.path, worst, compared, outcomes.count, verdict))
-        print("MEASURE T8 decoders: \(decoders)")
+        print("MEASURE T8 decoders: \(decoders); RAW 9 decode tile \(developer.lastLearnedDecodeTile.map(String.init) ?? "whole"), budget \((developer.lastMemoryTarget ?? developer.memoryTarget) >> 20) MB")
     }
 
     /// A 16-bit file's pixels as stored, drawn into its own colour space: RGBA, 16 bits a channel.
