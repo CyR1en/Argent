@@ -4,8 +4,10 @@ import Metal
 import Testing
 @testable import ArgentCore
 
-/// A frame without a brush renders and bakes exactly as Phase 1 did: the bytes of gradient-only coverage arrays and of masked renders
-/// through the toy stock, against digests taken at `bceb32a`, before the brush could bake.
+/// A frame without a brush renders and bakes without changing Phase 1's gradient path: the bytes of gradient-only coverage arrays
+/// (still `bceb32a`'s digest, before the brush could bake) and of masked renders through the toy stock (originally `bceb32a`;
+/// re-recorded on `main` at `e5bca7c7` on 2026-11-23, macOS 27.2 build 26B123, after scene gamut compression, `RenderGraph.version`
+/// 2026-11-19-1).
 @Suite struct BrushPhaseOneIdentityTests {
     static let sets: [[Mask]] = {
         func linear(_ fx: Float, _ fy: Float, _ zx: Float, _ zy: Float, _ operation: MaskOperation = .add, invert: Bool = false) -> MaskComponent {
@@ -67,9 +69,11 @@ import Testing
         #expect(digest == "51bdbe22eae5d63fed643dcf1f3a80425f3d521efb9fe03545db6179b339ea18")
     }
 
+    /// Recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut compression,
+    /// `RenderGraph.version` 2026-11-19-1.
     @Test func gradientRendersArePhaseOnesBytes() throws {
         let digest = try Self.renderDigest(try GPU())
         MaskRender.report("phase-one render digest \(digest)")
-        #expect(digest == "f15416ae1745edaa107bf729919e818280f63c756e543918e1f5c8b06b177b06")
+        #expect(digest == "c866ef8fc85d6de336166042dcdccdf4e777f65f5e5b9e73400cdd0cafa0c886")
     }
 }
