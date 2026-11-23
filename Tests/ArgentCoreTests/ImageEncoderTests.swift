@@ -46,7 +46,7 @@ import Testing
 
         let exif = try #require(written[kCGImagePropertyExifDictionary] as? [CFString: Any])
         let rawExif = try #require(raw[kCGImagePropertyExifDictionary] as? [CFString: Any])
-        for key in [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifLensModel] {
+        for key in [kCGImagePropertyExifDateTimeOriginal, kCGImagePropertyExifSubsecTimeOriginal, kCGImagePropertyExifLensModel] {
             #expect(exif[key] as? String == rawExif[key] as? String, "\(key)")
             #expect(exif[key] != nil, "\(key)")
         }
@@ -56,15 +56,94 @@ import Testing
         }
         let iso = try #require(rawExif[kCGImagePropertyExifISOSpeedRatings] as? [Int])
         #expect(exif[kCGImagePropertyExifISOSpeedRatings] as? [Int] == iso)
+        let lensSpec = try #require(rawExif[kCGImagePropertyExifLensSpecification] as? [Double])
+        #expect(exif[kCGImagePropertyExifLensSpecification] as? [Double] == lensSpec)
         #expect(exif[kCGImagePropertyExifPixelXDimension] as? Int == picture.width)
+        #expect(exif[kCGImagePropertyExifPixelYDimension] as? Int == picture.height)
         let tiff = try #require(written[kCGImagePropertyTIFFDictionary] as? [CFString: Any])
+        let rawTIFF = try #require(raw[kCGImagePropertyTIFFDictionary] as? [CFString: Any])
         #expect(tiff[kCGImagePropertyTIFFSoftware] as? String == "Argent test")
+        #expect(tiff[kCGImagePropertyTIFFMake] as? String == rawTIFF[kCGImagePropertyTIFFMake] as? String)
         #expect(tiff[kCGImagePropertyTIFFModel] as? String == "ILCE-7M4")
 
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        #expect(CGImageSourceGetCount(source) == 1)
         let metadata = try #require(CGImageSourceCopyMetadataAtIndex(source, 0, nil))
         let creator = CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmp:CreatorTool" as CFString) as String?
         #expect(creator == "Argent test")
+        let rating = CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmp:Rating" as CFString) as String?
+        #expect(rating == "0")
+    }
+
+    /// Checks the bytes written to disk against the raw's own TIFF Exif IFD: Apple's ARW reader
+    /// drops `OffsetTime*` and rewrites `aux:Lens`, so JPEG's APP1 Exif block and TIFF's IFDs are
+    /// parsed directly with `TIFFReader` rather than trusting ImageIO's reading of the raw.
+    @Test(.enabled(if: ImageEncoderSampleTests.hasSample),
+          arguments: [OutputFormat.jpeg(quality: 0.92), .heic(quality: 0.9), .tiff16])
+    func writesTheRawsExifOffsetsAndLensNameOnDisk(format: OutputFormat) throws {
+        let tags: [UInt16] = [0x9010, 0x9011, 0x9012, 0xA434]
+        let rawOnDisk = try ExifBytes.readTIFF(Self.sample, tags: tags).tags
+        let offsetTime = try #require(rawOnDisk[0x9010])
+        let offsetOriginal = try #require(rawOnDisk[0x9011])
+        let offsetDigitized = try #require(rawOnDisk[0x9012])
+        let rawLens = try #require(rawOnDisk[0xA434])
+        #expect(!rawLens.isEmpty)
+
+        // Confirm ImageIO's own reading of the raw drops the offsets and rewrites `aux:Lens`.
+        let rawImageSource = try #require(CGImageSourceCreateWithURL(Self.sample as CFURL, nil))
+        let rawProps = try #require(CGImageSourceCopyPropertiesAtIndex(rawImageSource, 0, nil) as? [CFString: Any])
+        let rawExifProps = try #require(rawProps[kCGImagePropertyExifDictionary] as? [CFString: Any])
+        #expect(rawExifProps[kCGImagePropertyExifOffsetTimeOriginal] == nil)
+        let rawMeta = try #require(CGImageSourceCopyMetadataAtIndex(rawImageSource, 0, nil))
+        let rawAuxLens = CGImageMetadataCopyStringValueWithPath(rawMeta, nil, "aux:Lens" as CFString) as String?
+        #expect(rawAuxLens != rawLens)
+
+        let gpu = try GPU()
+        var options = DecodeOptions()
+        options.maxLongSide = 900
+        let frame = try AppleRawDecoder(gpu: gpu).decode(Self.sample, options: options)
+        let encoder = try ImageEncoder(gpu: gpu)
+        let picture = try encoder.picture(frame.texture, colorSpace: gpu.workingColorSpace, format: format,
+                                          space: .sRGB, longEdge: 600)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("argent-exif-disk-\(UUID().uuidString).\(format.fileExtension)")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try encoder.write(picture, to: url, format: format, metadataFrom: Self.sample, software: "Argent test")
+
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        #expect(CGImageSourceGetCount(source) == 1)
+
+        switch format {
+        case .jpeg:
+            let onDisk = try ExifBytes.readJPEG(url, tags: tags)
+            #expect(onDisk.tags[0x9010] == offsetTime)
+            #expect(onDisk.tags[0x9011] == offsetOriginal)
+            #expect(onDisk.tags[0x9012] == offsetDigitized)
+            #expect(onDisk.tags[0xA434] == rawLens)
+        case .tiff16:
+            let onDisk = try ExifBytes.readTIFF(url, tags: tags)
+            #expect(onDisk.nextIFDOffset == 0)
+            #expect(onDisk.tags[0x9010] == offsetTime)
+            #expect(onDisk.tags[0x9011] == offsetOriginal)
+            #expect(onDisk.tags[0x9012] == offsetDigitized)
+            #expect(onDisk.tags[0xA434] == rawLens)
+        case .heic:
+            break
+        }
+
+        let props = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let exif = try #require(props[kCGImagePropertyExifDictionary] as? [CFString: Any])
+        #expect(exif[kCGImagePropertyExifOffsetTime] as? String == offsetTime)
+        #expect(exif[kCGImagePropertyExifOffsetTimeOriginal] as? String == offsetOriginal)
+        #expect(exif[kCGImagePropertyExifOffsetTimeDigitized] as? String == offsetDigitized)
+        #expect(exif[kCGImagePropertyExifLensModel] as? String == rawLens)
+
+        let aux = try #require(props[kCGImagePropertyExifAuxDictionary] as? [CFString: Any])
+        #expect(aux[kCGImagePropertyExifAuxLensModel] as? String == rawLens)
+
+        let metadata = try #require(CGImageSourceCopyMetadataAtIndex(source, 0, nil))
+        #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "aux:Lens" as CFString) as String? == rawLens)
+        #expect(CGImageMetadataCopyStringValueWithPath(metadata, nil, "exifEX:LensModel" as CFString) as String? == rawLens)
     }
 
     /// The Develop sheet's quality, 0 to 100, reaches ImageIO as 0 to 1: each step up gives a larger
