@@ -81,33 +81,106 @@ import Testing
         #expect(abs(weight.at(lightness: 45) - (weight.values[4] + weight.values[5]) / 2) < 1e-6)
     }
 
-    /// V3's strengths (validate/colour/report.md, section 3.1).
+    /// V3's six fitted strengths stay in `2026-11-11-1` and `2026-11-23-1` (validate/colour/report.md, section 3.1); `2026-11-23-1`
+    /// adds the eight newer stocks' rule-derived strengths (test-baselines-20261123.noindex/vibrance/current-bake-chroma-ratios.json),
+    /// while `2026-11-11-1` leaves them at the default 1 and 1 so recipes saved on it render the same. Seven of the eight lie below
+    /// the chroma ratios the rule was fitted on, and where its value did not cut the chroma-ratio error on the 20 held-out frames the
+    /// stock keeps 1 for that sign: the negative strength of the three tungsten stocks, whose rule values (1.40, 1.33 and 1.22) raised
+    /// the error at -100 from 93.1 to 99.2, 70.1 to 81.9 and 62.9 to 67.7 percent, and Cinema 500's positive, whose 0.99 changed nothing
+    /// (measured 2026-11-23, `method.json`'s `heldOut`).
     @Test func vibrancesStrengthIsMeasuredPerStockAndSign() throws {
-        let vibrance = try #require(PresenceConstants.named("2026-11-11-1")).vibrance
-        #expect(vibrance.strength(for: "kodak-portra-400") == .init(positive: 1.45, negative: 1.72))
-        #expect(vibrance.strength(for: "kodak-ektar-100") == .init(positive: 1.77, negative: 2))
-        #expect(vibrance.strength(for: LightCompilerBaselineTests.toyStock().id) == .init(positive: 1, negative: 1))
-        #expect(vibrance.strengths.count == 6)
+        let current = try #require(PresenceConstants.named(Presence.currentVersion)).vibrance
+        let expected: [String: PresenceConstants.Vibrance.Strength] = [
+            "cinestill-800t": .init(positive: 1.16, negative: 1),
+            "fujifilm-c200": .init(positive: 1.29, negative: 1.53),
+            "fujifilm-pro-400h": .init(positive: 1.28, negative: 1.52),
+            "fujifilm-superia-400": .init(positive: 1.32, negative: 1.55),
+            "kodak-colorplus-200": .init(positive: 1.65, negative: 1.89),
+            "kodak-ektar-100": .init(positive: 1.77, negative: 2),
+            "kodak-gold-200": .init(positive: 1.74, negative: 1.96),
+            "kodak-portra-160": .init(positive: 1.41, negative: 1.61),
+            "kodak-portra-160-natural": .init(positive: 1.30, negative: 1.54),
+            "kodak-portra-400": .init(positive: 1.45, negative: 1.72),
+            "kodak-portra-800": .init(positive: 1.46, negative: 1.74),
+            "kodak-ultramax-400": .init(positive: 1.64, negative: 1.92),
+            "kodak-vision3-500t": .init(positive: 1.10, negative: 1),
+            "kodak-vision3-500t-cinema": .init(positive: 1, negative: 1),
+        ]
+        #expect(current.strengths.count == 14)
+        for (stockID, strength) in expected {
+            #expect(current.strength(for: stockID) == strength, "\(stockID)")
+        }
+        #expect(current.strength(for: LightCompilerBaselineTests.toyStock().id) == .init(positive: 1, negative: 1))
         for url in LightCompilerBaselineTests.bakedStocks {
             let stock = try Stock.load(from: url)
-            #expect(vibrance.strengths[stock.id] != nil, "\(stock.id) needs a strength: method.json's rule gives one from its chroma ratio")
+            #expect(current.strengths[stock.id] != nil, "\(stock.id) needs a strength: method.json's rule gives one from its chroma ratio")
+        }
+
+        let legacy = try #require(PresenceConstants.named("2026-11-11-1")).vibrance
+        #expect(legacy.strengths.count == 6)
+        for stockID in expected.keys where legacy.strengths[stockID] == nil {
+            #expect(legacy.strength(for: stockID) == .init(positive: 1, negative: 1), "2026-11-11-1 keeps default strength for \(stockID)")
         }
     }
 
     @Test func theStrengthRuleGivesEachListedStrength() throws {
-        let method = Self.root.appendingPathComponent("scripts/presence/2026-11-11-1/method.json")
-        let json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: method)) as? [String: Any])
-        let strength = try #require((json["vibrance"] as? [String: Any])?["strength"] as? [String: Any])
-        let rule = try #require(strength["rule"] as? [String: Any]), ratios = try #require(rule["chromaRatio"] as? [String: Double])
-        let vibrance = try #require(PresenceConstants.named("2026-11-11-1")).vibrance, twoDecimals = 0.005
-        #expect(Set(ratios.keys) == Set(vibrance.strengths.keys))
-        for (sign, read) in [("positive", \PresenceConstants.Vibrance.Strength.positive), ("negative", \.negative)] {
-            let fit = try #require(rule[sign] as? [String: Double])
-            let slope = try #require(fit["slope"]), intercept = try #require(fit["intercept"]), worst = try #require(fit["leaveOneOutMax"])
-            for (stock, c) in ratios {
-                let listed = Double(try #require(vibrance.strengths[stock])[keyPath: read])
-                #expect(abs(slope * c + intercept - listed) <= worst + twoDecimals, "\(stock) \(sign)")
+        let legacyStocks = Set(try #require(PresenceConstants.named("2026-11-11-1")).vibrance.strengths.keys)
+        let twoDecimals = 0.005
+        for constants in PresenceConstants.all {
+            let method = Self.root.appendingPathComponent("scripts/presence/\(constants.version)/method.json")
+            let json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: method)) as? [String: Any])
+            let strength = try #require((json["vibrance"] as? [String: Any])?["strength"] as? [String: Any])
+            let rule = try #require(strength["rule"] as? [String: Any]), ratios = try #require(rule["chromaRatio"] as? [String: Double])
+            let vibrance = constants.vibrance
+            #expect(Set(ratios.keys) == Set(vibrance.strengths.keys), "\(constants.version)")
+            // The held-out check on the stocks added since V3: a sign is kept at 1 exactly where the rule's strength did not cut the
+            // chroma-ratio error, at -100 for the negative sign and at both +50 and +100 for the positive.
+            let heldOut = strength["heldOut"] as? [String: Any] ?? [:]
+            let keptAtOne = heldOut["keptAtOne"] as? [String: Any] ?? [:]
+            for (stock, values) in heldOut["ratioErrorPercent"] as? [String: [String: [String: Double]]] ?? [:] {
+                func cut(_ value: String) throws -> Bool { try #require(values[value]?["atRule"]) < (try #require(values[value]?["atOne"])) }
+                let kept = keptAtOne[stock] as? [String: Any] ?? [:]
+                #expect((kept["negative"] != nil) == !(try cut("-100")), "\(constants.version) \(stock) negative")
+                #expect((kept["positive"] != nil) == !(try cut("50") && cut("100")), "\(constants.version) \(stock) positive")
             }
+            for (sign, read) in [("positive", \PresenceConstants.Vibrance.Strength.positive), ("negative", \.negative)] {
+                let fit = try #require(rule[sign] as? [String: Double])
+                let slope = try #require(fit["slope"]), intercept = try #require(fit["intercept"]), worst = try #require(fit["leaveOneOutMax"])
+                for (stock, c) in ratios {
+                    let listed = Double(try #require(vibrance.strengths[stock])[keyPath: read])
+                    // A sign the held-out check turned down keeps 1, and the file still says what the rule gave it.
+                    if let kept = (keptAtOne[stock] as? [String: Any])?[sign] as? [String: Double] {
+                        #expect(listed == Double(vibrance.defaultStrength[keyPath: read]), "\(constants.version) \(stock) \(sign) keeps the default")
+                        #expect(abs(slope * c + intercept - (try #require(kept["rule"]))) <= twoDecimals, "\(constants.version) \(stock) \(sign)'s rule value")
+                        continue
+                    }
+                    let limit = legacyStocks.contains(stock) ? worst + twoDecimals : twoDecimals
+                    #expect(abs(slope * c + intercept - listed) <= limit, "\(constants.version) \(stock) \(sign)")
+                }
+            }
+        }
+    }
+
+    /// A frame saved under `2026-11-11-1` renders Vibrance on a newer stock with default strength 1 and 1, while a frame under
+    /// `2026-11-23-1` renders it with that stock's measured strength.
+    @Test func printParametersKeepLegacyDefaultStrengthOnNewerStocks() throws {
+        let legacy = try #require(PresenceConstants.named("2026-11-11-1"))
+        let current = try #require(PresenceConstants.named("2026-11-23-1"))
+        let toy = LightCompilerBaselineTests.toyStock().id
+        for stockID in ["kodak-colorplus-200", "fujifilm-pro-400h", "kodak-vision3-500t-cinema"] {
+            let legacyPos = try PresencePrint.parameters(try Presence([.vibrance: 50], version: legacy.version), constants: legacy, stockID: stockID)
+            let toyPos = try PresencePrint.parameters(try Presence([.vibrance: 50], version: legacy.version), constants: legacy, stockID: toy)
+            let currentPos = try PresencePrint.parameters(try Presence([.vibrance: 50], version: current.version), constants: current, stockID: stockID)
+            #expect(legacyPos.gainAmplitude == toyPos.gainAmplitude, "\(stockID) +50 under 2026-11-11-1")
+            let expectedPos = toyPos.gainAmplitude * current.vibrance.strength(for: stockID).positive
+            #expect(abs(currentPos.gainAmplitude - expectedPos) <= 1e-6, "\(stockID) +50 under 2026-11-23-1")
+
+            let legacyNeg = try PresencePrint.parameters(try Presence([.vibrance: -50], version: legacy.version), constants: legacy, stockID: stockID)
+            let toyNeg = try PresencePrint.parameters(try Presence([.vibrance: -50], version: legacy.version), constants: legacy, stockID: toy)
+            let currentNeg = try PresencePrint.parameters(try Presence([.vibrance: -50], version: current.version), constants: current, stockID: stockID)
+            #expect(legacyNeg.keep == toyNeg.keep, "\(stockID) -50 under 2026-11-11-1")
+            let expectedNeg = toyNeg.keep / current.vibrance.strength(for: stockID).negative
+            #expect(abs(currentNeg.keep - expectedNeg) <= 1e-6, "\(stockID) -50 under 2026-11-23-1")
         }
     }
 

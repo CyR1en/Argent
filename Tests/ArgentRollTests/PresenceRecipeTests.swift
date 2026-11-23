@@ -118,6 +118,10 @@ private struct PresenceScene {
         #expect(!light.contains("presence"))
         settings.manual = try ManualRenderSettings(adjustments: Self.presence, referenceStops: 0)
         #expect(RenderGraph.version(for: settings) == light + "+presence-" + Presence.currentVersion)
+        let legacy = try ManualAdjustments(contrast: 10, presence: Presence([.vibrance: 40], version: "2026-11-11-1"))
+        settings.manual = try ManualRenderSettings(adjustments: legacy, referenceStops: 0)
+        #expect(RenderGraph.version(for: settings) == light + "+presence-2026-11-11-1")
+        #expect(RenderGraph.version(for: settings) != light + "+presence-" + Presence.currentVersion)
         settings.manual = try ManualRenderSettings(adjustments: ManualAdjustments(presence: Presence([.dehaze: 0])), referenceStops: 0)
         #expect(RenderGraph.version(for: settings) == RenderGraph.version(for: DevelopSettings()), "identity Presence is no edit")
     }

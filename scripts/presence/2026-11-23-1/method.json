@@ -1,0 +1,97 @@
+{
+  "about": "What Presence's stages read that the four fits' constants.json files do not hold: the design's decisions (the evidence folder's design/synthesis.md) and the numbers the fit scripts keep in their code. Each entry names where it comes from.",
+  "detail": {
+    "limitStops": 4,
+    "source": "design/synthesis.md, Decisions closed here: the summed stops of Clarity and Texture are held to the Light tables' limit, ManualToneTables.gainLimit"
+  },
+  "texture": {
+    "minimumFieldLongSide": 16,
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_texture_clarity.py texture_band: F = min(decode, max(16, round(full * field_scale))); guided_coefficients: share 0.5 when the fit's params name none"
+  },
+  "clarity": {
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_texture_clarity.py guided_coefficients: share 0.5 when the fit's params name none"
+  },
+  "dehaze": {
+    "fadeStartRatio": 1,
+    "fadeEndRatio": 2,
+    "coefficientRadiusShare": 0.5,
+    "source": "fit_dehaze.py dehaze: G = 1 + (G - 1) clip(2 - Y / Y_A, 0, 1) for positive values when fade is on; Field: the coefficients boxed at rounded(r_g / 2)"
+  },
+  "vibrance": {
+    "minimumFallOff": 0.02,
+    "lightnessReference": 0.18,
+    "strength": {
+      "default": {"positive": 1, "negative": 1},
+      "stocks": {
+        "cinestill-800t": {"positive": 1.16, "negative": 1},
+        "fujifilm-c200": {"positive": 1.29, "negative": 1.53},
+        "fujifilm-pro-400h": {"positive": 1.28, "negative": 1.52},
+        "fujifilm-superia-400": {"positive": 1.32, "negative": 1.55},
+        "kodak-colorplus-200": {"positive": 1.65, "negative": 1.89},
+        "kodak-ektar-100": {"positive": 1.77, "negative": 2.0},
+        "kodak-gold-200": {"positive": 1.74, "negative": 1.96},
+        "kodak-portra-160": {"positive": 1.41, "negative": 1.61},
+        "kodak-portra-160-natural": {"positive": 1.3, "negative": 1.54},
+        "kodak-portra-400": {"positive": 1.45, "negative": 1.72},
+        "kodak-portra-800": {"positive": 1.46, "negative": 1.74},
+        "kodak-ultramax-400": {"positive": 1.64, "negative": 1.92},
+        "kodak-vision3-500t": {"positive": 1.1, "negative": 1},
+        "kodak-vision3-500t-cinema": {"positive": 1, "negative": 1}
+      },
+      "rule": {
+        "positive": {"slope": 0.5224119978517177, "intercept": 0.651766495282588, "leaveOneOutRms": 0.05670066922133117, "leaveOneOutMax": 0.10674296340882683},
+        "negative": {"slope": 0.5310835563312757, "intercept": 0.8796745865782775, "leaveOneOutRms": 0.005749955723310613, "leaveOneOutMax": 0.009324550140496823},
+        "chromaRatio": {
+          "cinestill-800t": 0.9794707765983078,
+          "fujifilm-c200": 1.2177314005459103,
+          "fujifilm-pro-400h": 1.209823526631646,
+          "fujifilm-superia-400": 1.269859035211141,
+          "kodak-colorplus-200": 1.910791516690519,
+          "kodak-ektar-100": 2.104602384187754,
+          "kodak-gold-200": 2.041747013631734,
+          "kodak-portra-160": 1.3670849574509414,
+          "kodak-portra-160-natural": 1.2389328584375818,
+          "kodak-portra-400": 1.5710648996218772,
+          "kodak-portra-800": 1.6334406938886523,
+          "kodak-ultramax-400": 1.942361301366584,
+          "kodak-vision3-500t": 0.8526671063556528,
+          "kodak-vision3-500t-cinema": 0.6419313534945321
+        },
+        "source": "validate/colour/constants.json vibranceStrength.rule and ruleCandidates.properties (V3, section 3.1): strength = slope * c + intercept per sign, where c is the stock's chromaRatio, the median over 4 x 4 blocks of Argent's base-print C* over Lightroom's base C* (L* 3 to 97, C* above 5, nothing clipped), averaged over round 1's five frames. The original six stocks keep V3's 2026-11-11 chromaRatio values; the eight newer stocks were measured the same way on the 2026-11-23 bake (test-baselines-20261123.noindex/vibrance/current-bake-chroma-ratios.json). Outside c 1.37 to 2.11 the rule extrapolates (all newer stocks except kodak-colorplus-200 lie below 1.37). Below c 1.0 its values failed the held-out check and are not listed: see heldOut. The generator does not read it"
+      },
+      "heldOut": {
+        "criterion": "V3's own (report.md section 3.2): a strength is listed for a stock and sign only where it cuts the chroma-ratio error on round 3's 20 held-out frames against strength 1, at -100 for the negative sign and at +50 and +100 for the positive. Where the rule's value does not, the stock keeps 1 for that sign",
+        "keptAtOne": {
+          "cinestill-800t": {"negative": {"rule": 1.4}},
+          "kodak-vision3-500t": {"negative": {"rule": 1.33}},
+          "kodak-vision3-500t-cinema": {"positive": {"rule": 0.99}, "negative": {"rule": 1.22}}
+        },
+        "ratioErrorPercent": {
+          "cinestill-800t": {"-100": {"atOne": 93.14, "atRule": 99.17}, "50": {"atOne": 7.48, "atRule": 6.19}, "100": {"atOne": 20.45, "atRule": 15.14}},
+          "fujifilm-c200": {"-100": {"atOne": 91.71, "atRule": 81.32}, "50": {"atOne": 8.23, "atRule": 6.51}, "100": {"atOne": 23.21, "atRule": 16.19}},
+          "fujifilm-pro-400h": {"-100": {"atOne": 85.88, "atRule": 83.86}, "50": {"atOne": 8.54, "atRule": 7.17}, "100": {"atOne": 26.71, "atRule": 20.26}},
+          "fujifilm-superia-400": {"-100": {"atOne": 94.98, "atRule": 77.72}, "50": {"atOne": 8.84, "atRule": 6.60}, "100": {"atOne": 24.68, "atRule": 16.22}},
+          "kodak-colorplus-200": {"-100": {"atOne": 119.89, "atRule": 75.64}, "50": {"atOne": 8.94, "atRule": 7.12}, "100": {"atOne": 29.47, "atRule": 19.86}},
+          "kodak-portra-160-natural": {"-100": {"atOne": 65.39, "atRule": 55.86}, "50": {"atOne": 6.70, "atRule": 6.16}, "100": {"atOne": 22.66, "atRule": 17.90}},
+          "kodak-vision3-500t": {"-100": {"atOne": 70.14, "atRule": 81.87}, "50": {"atOne": 5.40, "atRule": 4.78}, "100": {"atOne": 15.27, "atRule": 12.49}},
+          "kodak-vision3-500t-cinema": {"-100": {"atOne": 62.90, "atRule": 67.70}, "50": {"atOne": 6.04, "atRule": 6.07}, "100": {"atOne": 13.95, "atRule": 14.16}}
+        },
+        "source": "test-baselines-20261123.noindex/vibrance/heldout-new-stocks.json and heldout-new-stocks-other-five.json (2026-11-23): fit_colour.py's score_change on the 20 held-out frames, the build at the rule's strengths against the prototype at strength 1, for the eight newer stocks; the build reproduced the prototype within V3's bars and --vibrance 0 was the identity on all eight"
+      },
+      "source": "The six original stocks keep 2026-11-11-1's V3 strengths (validate/colour/constants.json vibranceStrength.carried, + and -, rounded to two decimals). The eight newer stocks take round(slope * c + intercept, 2) from rule above, measured on the 2026-11-23 bake (test-baselines-20261123.noindex/vibrance/). A stock not listed takes 1, F3's law as fitted. The positive strength multiplies a1, a2 and a3, the negative divides c (fit_colour.py strengthen)"
+    },
+    "source": "fit_colour.py vib_gain: the fall-off's width is held to at least 0.02; lightness_stops: l = log2(Y / 0.18)"
+  },
+  "colourSpaces": {
+    "proPhotoToXYZ": [[0.7976749, 0.1351917, 0.0313534], [0.2880402, 0.7118741, 0.0000857], [0.0, 0.0, 0.82521]],
+    "rec2020ToXYZ65": [[0.636958, 0.144617, 0.168881], [0.2627, 0.677998, 0.059302], [0.0, 0.028073, 1.060985]],
+    "d50": [0.96422, 1.0, 0.82521],
+    "d65": [0.95047, 1.0, 1.08883],
+    "bradford": [[0.8951, 0.2664, -0.1614], [-0.7502, 1.7135, 0.0367], [0.0389, -0.0685, 1.0296]],
+    "oklabM1": [[0.8189330101, 0.3618667424, -0.1288597137], [0.0329845436, 0.9293118715, 0.0361456387], [0.0482003018, 0.2643662691, 0.633851707]],
+    "oklabM2": [[0.2104542553, 0.793617785, -0.0040720468], [1.9779984951, -2.428592205, 0.4505937099], [0.0259040371, 0.7827717662, -0.808675766]],
+    "source": "fit_colour.py lines 37 to 77, the spaces Vibrance's law was fitted in: linear ProPhoto (D50) reached from linear Rec. 2020 (D65) by Bradford, and Oklab's hue from ProPhoto adapted to D65, M1's rows scaled so white maps to (1, 1, 1)"
+  }
+}

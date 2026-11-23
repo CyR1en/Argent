@@ -205,7 +205,7 @@ def colour_scores(binary, sliders, subset, work, log):
     # Its print arrays and Lightroom's cached blocks go to the scorecard's work folder, not V3's evidence.
     C.SCRATCH = work / "colour"
     bars = json.loads((C.OUT / "bars.json").read_text())
-    frames, stocks = subset.colour or C.HELD_OUT, subset.colour_stocks or C.ALL_STOCKS
+    frames, stocks = subset.colour or C.HELD_OUT, subset.colour_stocks or sorted(bars["bars"][sliders[0]])
     scores, reproduce, identity = C.score_build(binary, sliders, frames, stocks)
     whole = subset.colour is None and subset.colour_stocks is None
     verdicts = C.judge(scores, {s: {st: bars["bars"][s][st] for st in stocks} for s in sliders})
