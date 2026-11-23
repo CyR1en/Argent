@@ -355,6 +355,8 @@ final class RollModel {
     @ObservationIgnored var trashFrames: @Sendable ([URL]) -> [FrameFiles.Outcome] = { FrameFiles.trash($0) }
     /// The frames a develop of the frames selected was asked for (`developFrames`), until it ends.
     @ObservationIgnored var chosenDevelop: Set<URL>?
+    /// The user's develop memory choice, read when each develop starts.
+    @ObservationIgnored let developMemory: DevelopMemorySettings
     @ObservationIgnored var developer: RollDeveloper?
     @ObservationIgnored var developTask: Task<Void, Never>?
     /// The frame view is showing the selected frame, in place of the contact sheet.
@@ -464,12 +466,14 @@ final class RollModel {
     /// as `SourceDigests.shared` is the whole process's and a test's file would be every test's.
     init(bookmarks: BookmarkStore = BookmarkStore(), stocksDirectory: URL? = nil, decisions: AutoDecisionStore = AutoDecisionStore(),
          flagStore: FlagStore = FlagStore(), recipeLibrary: URL = RecipeStore.defaultLibrary,
-         previewCache: URL = LinearDiskCache.defaultFolder, digestsFile: URL? = SourceDigests.defaultFile) {
+         previewCache: URL = LinearDiskCache.defaultFolder, digestsFile: URL? = SourceDigests.defaultFile,
+         developMemory: DevelopMemorySettings = .shared) {
         self.bookmarks = bookmarks
         coverStore = RollCoverStore(folder: previewCache.deletingLastPathComponent().appendingPathComponent("Roll Covers", isDirectory: true))
         self.decisions = decisions
         self.flagStore = flagStore
         self.recipeLibrary = recipeLibrary
+        self.developMemory = developMemory
         let directory = stocksDirectory ?? Self.stocksDirectory()
         let library = directory.map(StockLibrary.load(from:))
         for failure in library?.failures ?? [] {
