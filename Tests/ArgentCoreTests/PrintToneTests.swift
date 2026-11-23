@@ -369,6 +369,8 @@ import Testing
         #expect(RenderGraph.version(for: settings) == RenderGraph.version, "an older develop keeps its version")
         settings.tone = PrintTone(burn: 0.5, dodge: 0)
         #expect(RenderGraph.version(for: settings) == RenderGraph.version + "+tone-" + PrintTone.currentVersion)
+        settings.tone.version = "2026-11-05-2"
+        #expect(RenderGraph.version(for: settings) == RenderGraph.version + "+tone-2026-11-05-2", "a develop on the first table keeps its name")
     }
 
     @Test func recipesRoundTripAndRefuseWhatTheyCannotHonour() throws {
@@ -377,8 +379,164 @@ import Testing
         #expect(try JSONDecoder().decode(PrintTone.self, from: data) == tone)
         let negative = Data(#"{"burn":-1,"dodge":0,"referenceStops":0,"version":"2026-11-05-2"}"#.utf8)
         #expect(throws: (any Error).self) { try JSONDecoder().decode(PrintTone.self, from: negative) }
+        #expect(PrintTone.currentVersion == "2026-11-23-1" && PrintTone.versions == ["2026-11-05-2", "2026-11-23-1"])
+        let first = Data(#"{"burn":0.5,"dodge":0.25,"referenceStops":-0.3,"version":"2026-11-05-2"}"#.utf8)
+        let recorded = try JSONDecoder().decode(PrintTone.self, from: first)
+        #expect(recorded.version == "2026-11-05-2" && PrintTone.supports(version: recorded.version), "a recipe on the first version keeps it")
+        #expect(try JSONDecoder().decode(PrintTone.self, from: JSONEncoder().encode(recorded)) == recorded)
+        #expect(try recorded.shape() == PrintTone(version: PrintTone.currentVersion).shape(), "the two versions share their curve")
         let future = PrintTone(burn: 0.5, dodge: 0, referenceStops: 0, version: "future")
         #expect(throws: PrintToneError.unsupportedVersion("future")) { try future.stops(baseLog2: 0, ratedStops: 0) }
         #expect(throws: PrintToneError.unsupportedVersion("future")) { try future.table(stock: ToyStock.make(), settings: DevelopSettings()) }
+    }
+
+    /// The first version's table as it was solved until 2026-11-23, kept here so `2026-11-05-2` is held to it.
+    private static func firstVersionTable(_ tone: PrintTone, stock: Stock, settings: DevelopSettings) throws -> [SIMD4<Float>] {
+        let rated = settings.exposureStops(boxSpeed: stock.boxSpeed)
+        let offset = settings.printOffset(densityRange: stock.densityRange, exposurePerUnit: stock.exposurePerUnit)
+        let units = DevelopSettings.printUnits(densityRange: stock.densityRange, exposurePerUnit: stock.exposurePerUnit)
+        let encoding = stock.negative.encoding
+        let luma = SIMD3<Float>(0.2627, 0.6780, 0.0593)
+        let burnColour = try tone.shape().burnColour
+        func printed(_ amounts: SIMD3<Float>) -> SIMD3<Float> {
+            stock.print.sample(encoded: amounts.clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1)))
+        }
+        var values: [SIMD4<Float>] = []
+        for index in 0..<PrintToneTableInfo.entries {
+            let scene = PrintToneTableInfo.firstStops + Float(index) * PrintToneTableInfo.stepStops
+            let stopsHere = try tone.stops(baseLog2: log2(Float(0.18)) + scene, ratedStops: rated)
+            guard stopsHere != 0 else { values.append(.zero); continue }
+            let colourShare = min(max(-stopsHere, 0) * burnColour, 1)
+            let film = stock.negative.sample(encoded: SIMD3(repeating: encoding.encode(encoding.midGray * exp2(scene + rated)))) + offset
+            let plain = stopsHere * units
+            let unmoved = printed(film)
+            let wanted = dot(printed(film + plain), luma)
+            let base = dot(unmoved, luma)
+            guard base > 1e-5, wanted > 1e-6 else { values.append(SIMD4(plain, colourShare)); continue }
+            let target = unmoved * (wanted / base)
+            var delta = plain
+            let limit = abs(plain) + SIMD3(repeating: 0.002)
+            func error(_ d: SIMD3<Float>) -> SIMD3<Float> { printed(film + d) - target }
+            var best = delta, bestError = simd_length(error(delta))
+            for _ in 0..<8 {
+                let e = error(delta)
+                let h: Float = 0.004
+                func column(_ c: Int) -> SIMD3<Float> {
+                    var up = delta, down = delta
+                    up[c] += h; down[c] -= h
+                    return (error(up) - error(down)) / (2 * h)
+                }
+                let jacobian = simd_float3x3(column(0), column(1), column(2))
+                guard abs(jacobian.determinant) > 1e-9 else { break }
+                let step = jacobian.inverse * e
+                guard step.x.isFinite, step.y.isFinite, step.z.isFinite else { break }
+                delta = (delta - step).clamped(lowerBound: plain - limit, upperBound: plain + limit)
+                let size = simd_length(error(delta))
+                if size < bestError { best = delta; bestError = size }
+            }
+            values.append(SIMD4(best, colourShare))
+        }
+        return values
+    }
+
+    /// Settings as Auto makes them and past them: ratings over and under, the lab balance of aims a stop and a half either way
+    /// (its print offset in paper stops), and a print exposure.
+    private static func settingsAcrossAims(_ stock: Stock) -> [DevelopSettings] {
+        var all: [DevelopSettings] = []
+        for rating: Float? in [nil, stock.boxSpeed * 4] {
+            for lab in [SIMD3<Float>(0.05, 0, -0.05), SIMD3(-0.8, -0.75, -0.7), SIMD3(1.1, 1, 0.95)] {
+                for exposure in [Float(0), 0.3] { all.append(DevelopSettings(ratedAt: rating, labBalance: lab, printExposure: exposure)) }
+            }
+        }
+        return all
+    }
+
+    private static let tonesAcrossStrengths: [(burn: Float, dodge: Float, reference: Float)] = [(0.3, 0.1, 0), (0.6, 0.4, -0.3), (1.25, 0.5, 1.5), (1, 0, -1.5)]
+
+    private static var everyStock: [Stock] {
+        get throws { [LightCompilerBaselineTests.toyStock()] + (try LightCompilerBaselineTests.bakedStocks.map { try Stock.load(from: $0) }) }
+    }
+
+    /// A frame saved on the first version renders as it did: its table is the first solve's, to the bit, on every stock.
+    @Test func theFirstVersionKeepsItsTableToTheBit() throws {
+        for stock in try Self.everyStock {
+            for settings in Self.settingsAcrossAims(stock) {
+                for strength in Self.tonesAcrossStrengths {
+                    let tone = PrintTone(burn: strength.burn, dodge: strength.dodge, referenceStops: strength.reference, version: "2026-11-05-2")
+                    let table = try tone.table(stock: stock, settings: settings)
+                    let first = try Self.firstVersionTable(tone, stock: stock, settings: settings)
+                    #expect(table == first, "\(stock.id) \(settings.labBalance) \(settings.printExposure) \(strength)")
+                    #expect(try tone.solved(stock: stock, settings: settings).heldAtWhite.allSatisfy { !$0 }, "the first version holds nothing")
+                }
+            }
+        }
+    }
+
+    /// The second version moves only the entries where a channel of the print is at the paper's white, and there it stays
+    /// within the solve's own box; every entry the solve answers is the first version's, to the bit.
+    @Test func theSecondVersionMovesOnlyWhereThePrintIsAtWhite() throws {
+        var held = 0, moved = 0
+        for stock in try Self.everyStock {
+            let white = stock.print.sample(encoded: SIMD3(repeating: 1))
+            let units = DevelopSettings.printUnits(densityRange: stock.densityRange, exposurePerUnit: stock.exposurePerUnit)
+            for settings in Self.settingsAcrossAims(stock) {
+                let rated = settings.exposureStops(boxSpeed: stock.boxSpeed), encoding = stock.negative.encoding
+                let offset = settings.printOffset(densityRange: stock.densityRange, exposurePerUnit: stock.exposurePerUnit)
+                for strength in Self.tonesAcrossStrengths {
+                    let tone = PrintTone(burn: strength.burn, dodge: strength.dodge, referenceStops: strength.reference)
+                    var firstTone = tone
+                    firstTone.version = "2026-11-05-2"
+                    let first = try firstTone.table(stock: stock, settings: settings)
+                    let second = try tone.solved(stock: stock, settings: settings)
+                    for i in first.indices {
+                        guard second.heldAtWhite[i] else {
+                            #expect(second.values[i] == first[i], "\(stock.id) entry \(i) is answered, so it is the first version's")
+                            continue
+                        }
+                        held += 1
+                        if second.values[i] != first[i] { moved += 1 }
+                        let scene = PrintToneTableInfo.firstStops + Float(i) * PrintToneTableInfo.stepStops
+                        let plain = try tone.stops(baseLog2: log2(Float(0.18)) + scene, ratedStops: rated) * units
+                        let film = stock.negative.sample(encoded: SIMD3(repeating: encoding.encode(encoding.midGray * exp2(scene + rated)))) + offset
+                        let print = stock.print.sample(encoded: (film + plain).clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1)))
+                        #expect(simd_reduce_min(white - print) <= 0.05, "\(stock.id) entry \(i) is held with no channel near the paper's white")
+                        #expect(0.2627 * print.x + 0.6780 * print.y + 0.0593 * print.z > 0.9, "\(stock.id) entry \(i) is held off the paper's white")
+                        let value = SIMD3(second.values[i].x, second.values[i].y, second.values[i].z)
+                        #expect(simd_reduce_max(abs(value - plain) - (abs(plain) + 0.002)) <= 1e-6, "\(stock.id) entry \(i) leaves the solve's box")
+                        #expect(second.values[i].w == first[i].w, "the burn's share of colour is the curve's")
+                    }
+                }
+            }
+        }
+        if !LightCompilerBaselineTests.bakedStocks.isEmpty { #expect(held > 0 && moved > 0, "the baked stocks reach white: \(held) held, \(moved) moved") }
+    }
+
+    /// Where a stock's table does not move between the versions, a frame renders the same bytes on either.
+    @Test func aTableThatDoesNotMoveRendersTheSameBytesOnEitherVersion() throws {
+        let gpu = try GPU()
+        var unmoved: [String] = []
+        for stock in try Self.everyStock {
+            let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+            let settings = DevelopSettings(ratedAt: stock.boxSpeed, labBalance: SIMD3(0.05, 0, -0.05), grain: 1, grainSeed: 37,
+                                           halation: stock.halation != nil, sharpen: true)
+            let second = PrintTone(burn: 0.6, dodge: 0.3), first = PrintTone(burn: 0.6, dodge: 0.3, version: "2026-11-05-2")
+            guard try first.table(stock: stock, settings: settings) == second.table(stock: stock, settings: settings) else { continue }
+            unmoved.append(stock.id)
+            var a = settings, b = settings
+            a.tone = first
+            b.tone = second
+            let frame = try LightCompilerBaselineTests.frame(gpu)
+            #expect(try render(gpu, renderer, frame, a, LightCompilerBaselineTests.width, LightCompilerBaselineTests.height)
+                    == render(gpu, renderer, frame, b, LightCompilerBaselineTests.width, LightCompilerBaselineTests.height), "\(stock.id)")
+        }
+        #expect(unmoved.contains(LightCompilerBaselineTests.toyStock().id), "the toy stock never reaches white")
+        if !LightCompilerBaselineTests.bakedStocks.isEmpty { #expect(unmoved.count > 1, "some baked stock's table does not move: \(unmoved)") }
+    }
+
+    private func render(_ gpu: GPU, _ renderer: FilmRenderer, _ frame: LinearFrame, _ settings: DevelopSettings, _ width: Int, _ height: Int) throws -> [UInt8] {
+        let texture = try renderer.render(frame, settings: settings).image.texture
+        var bytes = [UInt8](repeating: 0, count: width * height * 8)
+        bytes.withUnsafeMutableBytes { texture.getBytes($0.baseAddress!, bytesPerRow: width * 8, from: MTLRegionMake2D(0, 0, width, height), mipmapLevel: 0) }
+        return bytes
     }
 }
