@@ -116,9 +116,11 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
     }
 
     /// Golden tables: every float of the buffer, by stock fingerprint. A change here changes every
-    /// print with a mask, so it needs a new compiler id (plan section 4, rule 6).
+    /// print with a mask, so it needs a new compiler id (plan section 4, rule 6). The toy stock must have a recorded
+    /// digest, and when `build/stocks` is present so must every baked stock: one without fails and is named, as in
+    /// `LightCompilerBaselineTests`, so a bake change cannot quietly leave the baked stocks unchecked.
     @Test func theTablesAreTheOnesFrozen() throws {
-        var checked = 0
+        var unrecorded: [String] = []
         for stock in try sceneStocks() {
             let fingerprint = LightCompilerBaselineTests.fingerprint(stock)
             var hash = SHA256()
@@ -127,11 +129,17 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
                 scene.tables.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
             }
             let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
-            guard let expected = Self.recorded[fingerprint] else { continue }
+            guard let expected = Self.recorded[fingerprint] else {
+                unrecorded.append("\(stock.id) (\(fingerprint))")
+                continue
+            }
             #expect(digest == expected, "\(stock.id)")
-            checked += 1
         }
-        #expect(checked >= 1)
+        #expect(unrecorded.isEmpty, """
+                Stocks have no recorded scene table digest: \(unrecorded.joined(separator: ", ")). \
+                Record them in LocalSceneTableTests.recorded after an intended change of the bake, \
+                or re-bake build/stocks if this checkout's bake is out of date.
+                """)
     }
 
     /// Digests by stock fingerprint (`LightCompilerBaselineTests.fingerprint`). The toy stock's was taken when
