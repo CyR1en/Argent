@@ -320,17 +320,20 @@ private enum Make {
     }
 
     /// Across processes: the bytes this process gets equal those pinned from earlier runs, on the macOS build they were taken
-    /// on, from the same print. Every run of the suite is a new process, so two runs check R2's claim. On another build, or a
-    /// different print (RAW 9 changed, or the print is made another way), the pins are stale: the test prints the new values to
-    /// pin and does not compare. A macOS update re-pins them, as the mask canary re-hashes its frames (plan section 8).
+    /// on, from the same print. Every run of the suite is a new process, so two runs check R2's claim. On another build the
+    /// pins are stale: the test prints the new values to pin and does not compare. A macOS update re-pins them, as the mask
+    /// canary re-hashes its frames (plan section 8). On the pinned build a different print fails rather than passing unread:
+    /// the app's print changed (the lens stage and gamut compression each did, from 2026-11-13 to 2026-11-23, while this
+    /// test went on passing without comparing anything), so the pins must be taken again from the print the app now makes.
     @Test(.enabled(if: AppleSegmentationSampleTests.hasSamples))
     func visionGivesTheSameBytesInEveryProcess() throws {
         let got = try Self.digests()
         let os = ProcessInfo.processInfo.operatingSystemVersionString
-        guard os == Pinned.operatingSystem, got.first == Pinned.digests.first else {
+        guard os == Pinned.operatingSystem else {
             print("MEASURE vision pins are stale: \(os), print \(got[0]); pinned \(Pinned.operatingSystem), print \(Pinned.digests[0]). Now: \(got)")
             return
         }
+        #expect(got.first == Pinned.digests.first, "the print changed on the pinned build; pin again from it if that was meant. Now: \(got)")
         #expect(got == Pinned.digests)
     }
 
