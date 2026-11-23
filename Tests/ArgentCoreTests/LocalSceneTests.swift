@@ -158,10 +158,10 @@ private func samples(reference: Float) -> [(rgb: SIMD3<Float>, base: Float)] {
         "99e292f723e67e6c": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-colorplus-200
         "41dd35cf8baec974": "8abd8c7693b6fc450b01f96694c2dac58226d46bc10d3946b2f2708067163a12", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "a2a96c390eea88f5f8f902c12102a2a932e5e5964b53f8943865d1c5e74aa32f", // kodak-gold-200
-        "ef2f5ccafa11838d": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160
-        "e92abdcb666a21d9": "4d9aa04162de823239a9c909361485a7bab8faa9630ae2301417952cc12693c1", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "2aeab8c2152ab37002f09c8af19d21c1ba2104ddd93d842cbe5f040866f5879c", // kodak-portra-400
-        "fdfd3cce8c35fb37": "f0e7a3e268aa7fd7e778ba84e2b90e834e549a5e03409e68d1ba40f711e243f1", // kodak-portra-800
+        "a990b7f8e421ce56": "cc084ce1253972acfd167d0649d5a7aeb9df8de75a6713e920057151fdc1ff96", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "cc084ce1253972acfd167d0649d5a7aeb9df8de75a6713e920057151fdc1ff96", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "30c2458187485fa22d97dd02423cec65dec6a8b462b1dcee113094e037e944bb", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "16f5ddecc8d8f0521a628e25570f1c4e4d9cb33d19c49fee124fd8b4863c8e84", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "70a4d3401f1048850a71ddeb9bf18ffa7f7ad038e96c05f298c18db227046dee", // kodak-ultramax-400
         "d0334068916dcff7": "20a648f61712db4ec0f247b5928f563afa3d8085daec4226e55bbb21c958212f", // kodak-vision3-500t
         "712fa666980b0174": "44c5d5e0f8fb45f9b21052314dfff2a1595749ee2af41162d635daf102521dce", // kodak-vision3-500t-cinema

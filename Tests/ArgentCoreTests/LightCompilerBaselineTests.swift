@@ -150,10 +150,10 @@ import Testing
         "99e292f723e67e6c": "11515b04e1ef0288495d167b3b74babe9a1bbe3a9be812b92a1011d5941cd321", // kodak-colorplus-200
         "41dd35cf8baec974": "bed448318b5dba374cfa445ba335b83147f2f8b7b653a4a0593101e1ec14ae9c", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "406d2cc4a8b1cbf8465d0c2b35f80ab96298bc438e6393cdbf47d72adada87d0", // kodak-gold-200
-        "ef2f5ccafa11838d": "d20a6f852ba68af5a74005940925fa3c50c05c419f97b1ccd2ad7b2b0e5c0fd2", // kodak-portra-160
-        "e92abdcb666a21d9": "150d39cfc0e60b219d3f9141ef1cc63df69886b4a9cd29d765d40d5987bb8f31", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "4e04d30a88c1ac7bc7b03527734112956806afa1cfbb8655d0d216b2bd3db9b4", // kodak-portra-400
-        "fdfd3cce8c35fb37": "ca36a70cefc4b683ac54852ba73a2f6cd9e3aea220493c07d1a1864257551dac", // kodak-portra-800
+        "a990b7f8e421ce56": "e5d0783ded907db9c7f77417aec4fd647b6c32d0b8c248b03858edeb415c5b1a", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "bca72e59da3fd580ecb7f7b9cecf46892e048f2ca78e53956729fbe805dfcc35", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "8c10f931f0db8bd35500d465aacfcd08b99b4166325653f5e23f837cef179c02", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "58d20df1bb56b9b1e723e7b84fb88da3b2b5a8afe54c3b00f5e56c4f36e8a8d1", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "800baad5d2e070117b9bcbf5b971ff425edf1ae6fa764085f88369acb567dbc5", // kodak-ultramax-400
         "d0334068916dcff7": "8df9faad3e573389f05597436b945bb68bef2d1f3f664f15b383b438fcd62901", // kodak-vision3-500t
         "712fa666980b0174": "30b44bd864823ca29a344e76521f5d365361594222768c3cbcbe28c3cd3e4601", // kodak-vision3-500t-cinema
@@ -171,10 +171,10 @@ import Testing
         "99e292f723e67e6c": "2d64b577e163f7580157dccdebe40b4740eae7bc878059117e2cb480e9d281d6", // kodak-colorplus-200
         "41dd35cf8baec974": "8c887f1ed64fdd8198811dcf5316304a929b4c8c424ae447ab15d507cd5223ff", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "175ed62e8979cd3d71488ff73b7176b6fa80f163e39b0916065ba48af83fc918", // kodak-gold-200
-        "ef2f5ccafa11838d": "e4d949d651c26203c86a104c993017e003a3dfee9b5e21994ca743b588811bde", // kodak-portra-160
-        "e92abdcb666a21d9": "4955248a1317aa3dd1056ee4cd0be512f7a1aab633071a74b12a97e8cdb8c340", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "b09151c2fa70c30f9d5a699c6a49bb62ccd507b4bd511d02618765b8c2e2ef51", // kodak-portra-400
-        "fdfd3cce8c35fb37": "30242e5357455631168b0f9d11f929ecb020b7bcd93951c388eb656f4285d898", // kodak-portra-800
+        "a990b7f8e421ce56": "a87a9e375bd724062c05d9c76ed5909a9e6057d52cb24316101b746d1ec8415d", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "fbd2221ee23db8c7ae9417eb2ec8f74ec29a8d2a4f429f0c4fdbbb64b880cb05", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "6b16afcf2b1cc35d7af75cc7f6590d382ff693cd7cb260f6dd16f2d50945c0ef", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "7bde1bcf8a857a1583f1fbb25dc3bfef7a01ee06f8ef86eb8e3079bb966df4f8", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "cd6857b4e78c59bb38f238983c6ae82919163e3e445b50e593352366c07665e7", // kodak-ultramax-400
         "d0334068916dcff7": "51f5b7689349bf19a1d8ec34369ae2f00b9a7f88d1792c3d85bfac16d94fad31", // kodak-vision3-500t
         "712fa666980b0174": "9a297c57770a7f83deb50ab892f0f754c7dda5e516cd9d94dcfac73ed68bf52b", // kodak-vision3-500t-cinema
@@ -192,10 +192,10 @@ import Testing
         "99e292f723e67e6c": "b6034edb16fb994d5abae4f3c1da41dc79973bba37d6cccfa6bc4b1c0e8912d3", // kodak-colorplus-200
         "41dd35cf8baec974": "2f77d916e74b9e67d955b496884b0f13f9485f0c49af724353bde64ef8fd5fbd", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "07091907ed5203277b6eec13bf8c645753a3ddffa4ff601be5ad2c642180ddea", // kodak-gold-200
-        "ef2f5ccafa11838d": "dfb0188330b33d1f942dc7c7d58719293a63391b9c7838776199793202e21f5a", // kodak-portra-160
-        "e92abdcb666a21d9": "592edb79e0e1ae90756fd32d0ed1bf670c97b080f44d9cb431f8b93b5eba0d4c", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "6fda60b93b8a0e9bf4adcd1d9b1d60a9fd90c6a4f8c367fdd755b369766cec79", // kodak-portra-400
-        "fdfd3cce8c35fb37": "4c53490b2b47b868de30734b9e9995a04bf124052459252540071a51b0557d8a", // kodak-portra-800
+        "a990b7f8e421ce56": "297185b41b755ed4766db24cdefa8a573dba7c3a14c6994fde593001e7f7d8b8", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "a67d1ac59a05a44fd46a124b506b7921d464a49821c933dcb8989dfd92516779", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "45a1d7b498a0bce5117b667c4b928c7e91f1d3a0b84f825fa4fda29b4c40eee1", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "078949d21d684666def5aa2fdd32377c762dab2046dcbf99ac89e247508cdc59", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "ecd55518e40be7929ecad3491845b481c3ba8df0bdf08e772dadd6a569871ff7", // kodak-ultramax-400
         "d0334068916dcff7": "3fa634f8fba2fbe99a1b534397df804fc4f997c8a597a7de8f23bba7a1ce2649", // kodak-vision3-500t
         "712fa666980b0174": "1c2189af5dbdf4bb632b8a594af5ee4664912a275c588de6289aea87e57f8a91", // kodak-vision3-500t-cinema
@@ -213,10 +213,10 @@ import Testing
         "99e292f723e67e6c": "2521467049de0d6b899fe54cd4db01aea8f20b72eaee4e1a5f402c27c23fcf6c", // kodak-colorplus-200
         "41dd35cf8baec974": "899b9f92f129322b6d878471c5fd6538d60a8d84a049fdea495e389850c83f00", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "2fe4f97813aecb56ecbc30e12ace0971f8889cbbea854ed654e4d65f45551df9", // kodak-gold-200
-        "ef2f5ccafa11838d": "94b0474eac86aba1e71dc1cafabe36125ff4b4f451ac1e91d135e085f084802c", // kodak-portra-160
-        "e92abdcb666a21d9": "955fc9d406a2537683e6cf64ca410fe16cb100ba3149b54c948ebda4ed99d80d", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "5bfeb591425eee0fdbac0017f085716d4279f74fc393e0c030e6d5ad1cbaa58a", // kodak-portra-400
-        "fdfd3cce8c35fb37": "0a2e11934b993ce3ba5cb91ed1c18774b320a2fb318171cdcddfbf826de408c1", // kodak-portra-800
+        "a990b7f8e421ce56": "092283ed2ab00be53d42d01a3d9b2b56165ed629b6c7c00608f2c715fc34c90f", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "970e2fa9e2f7d5642fec0afd6fe9f1baccce62dfeabf5ae500d7c2e786382c50", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "77614ef9d427b6f24237d1e6be0ff34e4f2f64c13a1759a09240bd57c5c5236c", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "a1290f4bc0814f63202a6e7e26b7500fdf08a303568a005d022e463504e2e614", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "7df152bb56b537730a598505ab125a0e6b3aea17031742d73292f41fab741f6a", // kodak-ultramax-400
         "d0334068916dcff7": "78479d7ac8bacb64b27511e1d80b3285f495c31ad6932faf6a4f3e3c6b8bb15e", // kodak-vision3-500t
         "712fa666980b0174": "ace8b5354592f4ad179050cb7e688e5653daa5f39ca276f34e6dca3e85e48b85", // kodak-vision3-500t-cinema
@@ -234,10 +234,10 @@ import Testing
         "99e292f723e67e6c": "21dc55e43eb816e718b507c95a733364def775a580cc80d68642a5a36257ffe9", // kodak-colorplus-200
         "41dd35cf8baec974": "cadca5aef04168745c44f93ab7d1f6412b4ebd6f5e4569b294fb026dbf2df2bb", // kodak-ektar-100
         "b4fa9fe6f7e0e06f": "8458a11f9f8eb44c6b5d95aac02cd313ae86f86fb4dc2dc209359e94dbf9d683", // kodak-gold-200
-        "ef2f5ccafa11838d": "9ddc2abcc80b6dd19f257361139ee88bd076a9fd9f776c908b3cfe5d7ff8e759", // kodak-portra-160
-        "e92abdcb666a21d9": "ceebffc2f5bd25a582241ab546fe87efb86404677cc2199e4d8bacdd8400e106", // kodak-portra-160-natural
-        "fc81ea0b270e96f3": "06abd911df41c053108bd54a167f2033b80f19b87e95f43535dd6235874d04a8", // kodak-portra-400
-        "fdfd3cce8c35fb37": "6422ee47cabc4ea41912183dd14a67c606b269dc68260777e96ee730803ac6a3", // kodak-portra-800
+        "a990b7f8e421ce56": "29991178618280b26022438674aed6a7dcb42988801c584538abc05d844b8316", // kodak-portra-160, FIG. 2 at 0.142
+        "b18c2ebf33e1487c": "46741e536e7d1ff2abf6b5ab99a4a205d5e14df99dc4cc55152611ddb5b341a5", // kodak-portra-160-natural, FIG. 2 at 0.142
+        "d5fc94d10c956a79": "6cf520dfea934bff742e10c0dce0dfcd6a0d748c31ad14855869d612fc042e79", // kodak-portra-400, FIG. 2 at 0.142
+        "810b628720233be6": "b8f842ab14c1d44f5beca7837e3929f7bf620741fbc0bb36e39dd2f524fb53af", // kodak-portra-800, FIG. 2 at 0.142
         "46b68f5377170d20": "d8b12655e10ef9456ca8c74291682861bd528bb9e1e652ae262583f50c0a52da", // kodak-ultramax-400
         "d0334068916dcff7": "8e1c838b45780c68b4ec156e57456603f0d8732c1a7e3ea41f3766b1b47eb740", // kodak-vision3-500t
         "712fa666980b0174": "6659018f6a2b5f62df04d136a980ee8170ad20ef5d3c6c7c66d232b8a31de767", // kodak-vision3-500t-cinema
