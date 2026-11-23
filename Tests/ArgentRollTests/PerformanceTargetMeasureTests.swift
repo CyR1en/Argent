@@ -158,7 +158,7 @@ import Testing
                      unhashed ? "no SHA-256 known" : String(format: "SHA-256 known, read before in %.1f s", hashed),
                      Self.decoders(frames, developer.decoderChoices), InHouseDecoderMeasureTests.loadAverage()))
         print("MEASURE T6 develop to \(format.title), \(jobs.count) frames, RAW 9 decode tile \(tile.map(String.init) ?? "whole"): footprint \(base >> 20) MB at start, peak \(peak >> 20) MB "
-              + "(target 2000), budget \(developer.memoryTarget >> 20) MB; \(developer.lastGateReport ?? "no gate report")")
+              + "(target 2000), budget \((developer.lastMemoryTarget ?? developer.memoryTarget) >> 20) MB; \(developer.lastGateReport ?? "no gate report")")
         for reason in failed.prefix(5) { print("MEASURE failed: \(reason)") }
         #expect(failed.isEmpty, "\(failed.count) of \(jobs.count) frames failed")
     }
