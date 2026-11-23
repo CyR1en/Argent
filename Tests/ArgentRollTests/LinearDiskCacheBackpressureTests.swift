@@ -15,6 +15,12 @@ import Testing
         return LinearFrame(image: image, decoderVersion: "8", scale: 1)
     }
 
+    /// Twenty stores on threads of their own, against a limit that holds two; their writes held until the test lets them go.
+    ///
+    /// What it waits for it waits on, as long as a test can take: a write begun, and every store made once the writes go. The
+    /// writer is the cache's own queue, at utility, which a thread of the process's pools serves only when the suites beside this
+    /// one leave it one; on a busy Mac the first write had not begun after 5 s. The producers once waited on those threads too,
+    /// and twenty of them waiting for room held as many of the threads those suites share.
     @Test func boundsConcurrentStoresAndFlushWaitsForWrites() throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -28,13 +34,13 @@ import Testing
         let producers = DispatchGroup()
         for index in 0..<20 {
             producers.enter()
-            DispatchQueue.global().async {
+            Thread {
                 cache.store(frame, key: "\(index)")
                 #expect(cache.pendingBytes <= 2048)
                 producers.leave()
-            }
+            }.start()
         }
-        #expect(entered.wait(timeout: .now() + 5) == .success)
+        #expect(entered.wait(timeout: .now() + 60) == .success)
         defer { for _ in 0..<20 { gate.signal() } }
         #expect(producers.wait(timeout: .now() + 0.1) == .timedOut)
         #expect(cache.pendingBytes > 0 && cache.pendingBytes <= 2048)
@@ -42,7 +48,7 @@ import Testing
         DispatchQueue.global().async { cache.flush(); flushed.signal() }
         #expect(flushed.wait(timeout: .now() + 0.1) == .timedOut)
         for _ in 0..<20 { gate.signal() }
-        #expect(producers.wait(timeout: .now() + 10) == .success)
+        #expect(producers.wait(timeout: .now() + 60) == .success)
         cache.flush()
         #expect(cache.pendingBytes == 0)
         for index in 0..<20 {
