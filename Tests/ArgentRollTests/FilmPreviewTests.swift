@@ -92,7 +92,49 @@ func temporaryFolder() throws -> URL {
 
 /// The sheet's decode of a frame no longer wanted stops reading its raw for the disk cache's key
 /// between megabytes, and decodes nothing.
+///
+/// How soon is timed from the request given up on to the end of the decode's operation, on the thread that ended it. The task
+/// that asked is told later, through the queue's completion block and the task's own resumption, each on a thread of the
+/// process's pools, which the suites beside this one keep busy: through them a stop of a few milliseconds came back after
+/// more than 500 ms on a busy Mac, and after 20 s beside CPU-bound work on as many threads as the pools would give.
 @Suite struct FilmPreviewStopTests {
+    /// When an operation ended, by the clock of the thread that ended it.
+    private final class Ending: @unchecked Sendable {
+        private let lock = NSLock()
+        private var instant: ContinuousClock.Instant?
+        private var observation: NSKeyValueObservation?
+
+        init(of operation: Operation) {
+            observation = operation.observe(\.isFinished, options: [.initial, .new]) { [unowned self] operation, _ in
+                guard operation.isFinished else { return }
+                lock.withLock { if instant == nil { instant = .now } }
+            }
+        }
+
+        private var seen: ContinuousClock.Instant? { lock.withLock { instant } }
+
+        /// When it ended, once that has been seen: the queue can hand the task that waits on it its answer first.
+        func ended() async throws -> ContinuousClock.Instant {
+            let deadline = ContinuousClock.now + .seconds(60)
+            while ContinuousClock.now < deadline {
+                if let seen { return seen }
+                try await Task.sleep(for: .milliseconds(1))
+            }
+            return try #require(seen, "the decode's operation ended")
+        }
+    }
+
+    /// The sheet decode under way on `films`' decode queue, once a thread has started it: no sooner than the threads the suites
+    /// beside this one hold let it, so waited for as long as a test can take.
+    private static func runningDecode(of films: FilmPreviews) async throws -> Operation {
+        let deadline = ContinuousClock.now + .seconds(60)
+        while ContinuousClock.now < deadline {
+            if let running = films.decodeQueue.operations.first(where: { $0.isExecuting }) { return running }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        return try #require(nil as Operation?, "the sheet decode began")
+    }
+
     @Test func aSheetDecodeGivenUpOnStopsReadingItsRaw() async throws {
         let directory = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -107,13 +149,14 @@ func temporaryFolder() throws -> URL {
         let films = try FilmPreviews(stocks: StockLibrary.load(from: directory).stocks,
                                      diskCache: LinearDiskCache(folder: directory.appendingPathComponent("cache")), digests: digests)
         let frame = Frame(id: 0, url: raw, info: ARWFrameInfo())
-        let clock = ContinuousClock()
         let task = Task { await films.measurement(frame) }
+        let ending = Ending(of: try await Self.runningDecode(of: films))
+        // Into the raw by then: a decode given up on before its read began stops before it, and says nothing of the read.
         try await Task.sleep(for: .milliseconds(100))
-        let cancelled = clock.now
+        let cancelled = ContinuousClock.now
         task.cancel()
         #expect(await task.value == nil)
-        let stopping = clock.now - cancelled
+        let stopping = try await ending.ended() - cancelled
         print("MEASURE sheet decode stopped \(stopping.formatted(.units(allowed: [.milliseconds], fractionalPart: .show(length: 1)))) after it was given up on")
         #expect(stopping < .milliseconds(500))
         #expect(digests.readCount == 0 && digests.known(raw) == nil && films.decodeCount == 0)
@@ -133,15 +176,11 @@ func temporaryFolder() throws -> URL {
                                      decoderChoices: DecoderChoices(route: .apple), digests: digests)
         let frame = Frame(id: 0, url: raw, info: ARWFrameInfo())
         let task = Task { await films.measurement(frame) }
-        let deadline = ContinuousClock.now + .seconds(2)
-        while !films.decodeQueue.operations.contains(where: { $0.isExecuting }), ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        try #require(films.decodeQueue.operations.contains(where: { $0.isExecuting }))
+        let ending = Ending(of: try await Self.runningDecode(of: films))
         let invalidated = ContinuousClock.now
         if trimming { films.trimForDevelop() } else { films.removeAll() }
         #expect(await task.value == nil)
-        #expect(ContinuousClock.now - invalidated < .milliseconds(500))
+        #expect(try await ending.ended() - invalidated < .milliseconds(500))
         #expect(digests.readCount == 0 && digests.known(raw) == nil && films.decodeCount == 0)
         #expect(films.cachedMeasurement(frame) == nil && !films.hasLinearPreview(frame, lens: .default))
     }
