@@ -15,6 +15,8 @@ import Testing
         /// leading base version keeps the fixture's bytes independent of later render changes while
         /// still checking the compiler and feature suffixes `RenderGraph.version(for:)` appends.
         static let recordedRenderGraph = "2026-10-09-1"
+        /// The tone step's version the golden recipes were written under, kept as `2026-10-29-1` is.
+        static let recordedTone = "2026-11-05-2"
 
         let root: URL
         let frame: Frame
@@ -43,11 +45,13 @@ import Testing
         }
 
         /// A recipe with fixed revision, lineage and receipts, so its bytes are the same on every run.
-        func recipe(_ manual: ManualEdit?, held: ManualEdit? = nil, aim override: PrintAim? = nil, receipts: Int = 0) throws -> Recipe {
+        func recipe(_ manual: ManualEdit?, held: ManualEdit? = nil, aim override: PrintAim? = nil, receipts: Int = 0,
+                    tone: String? = nil) throws -> Recipe {
             var recipe = try Recipe.make(frame: frame, byteCount: 4096, stock: stock, stockDigest: stock.digest, roll: controls, own: FrameControls(),
                                          analysis: ExposureAnalysis(meanStops: -0.3, validWeight: 1), aim: override ?? aim, grain: .off,
                                          manual: manual, editRevision: 12, editLineage: "golden-lineage", heldManual: held)
             recipe.raw.sha256 = sha
+            if let tone { recipe.render.tone?.version = tone }
             let fullVersion = RenderGraph.version(for: recipe.render.settings)
             try #require(fullVersion.hasPrefix(RenderGraph.version))
             let renderVersion = Self.recordedRenderGraph + fullVersion.dropFirst(RenderGraph.version.count)
@@ -59,8 +63,8 @@ import Testing
             return recipe
         }
 
-        /// The six shapes, each edit on `compiler`, or on what a new edit takes when it is nil.
-        func shapes(compiler: String?) throws -> [(name: String, recipe: Recipe)] {
+        /// The six shapes, each edit on `compiler` and the tone step on `tone`, or on what a new frame takes when they are nil.
+        func shapes(compiler: String?, tone: String? = nil) throws -> [(name: String, recipe: Recipe)] {
             let light = try ManualAdjustments(exposureEV: 0.7, contrast: 10, highlights: -20)
             let curves = try ManualAdjustments(exposureEV: 0.2, curves: ToneCurves(tone: ToneCurves.Preset.softContrast.curve))
             let toneAim = PrintAim(level: -0.3, cast: SIMD3(0.1, -0.05, -0.05), burn: 0.6, dodge: 0.4)
@@ -73,7 +77,7 @@ import Testing
                 ("Light only", try recipe(edit(light))),
                 ("curves", try recipe(edit(curves))),
                 ("identity Original", try recipe(edit(.identity, origin: .original))),
-                ("tone step", try recipe(nil, aim: toneAim)),
+                ("tone step", try recipe(nil, aim: toneAim, tone: tone)),
                 ("Light, held edit, 20 receipts", try recipe(edit(light), held: edit(curves), receipts: 20)),
             ]
         }
@@ -96,27 +100,33 @@ import Testing
     @Test func recipesOnTheRecordedCompilerKeepTheirBytes() throws {
         let scene = try Scene()
         defer { try? FileManager.default.removeItem(at: scene.root) }
-        for (name, recipe) in try scene.shapes(compiler: "2026-10-29-1") {
+        for (name, recipe) in try scene.shapes(compiler: "2026-10-29-1", tone: Scene.recordedTone) {
             let bytes = try recipe.encoded()
             #expect(Self.sha256(bytes) == Self.digests[name], "\(name)")
             #expect(Self.sha256(try Recipe.decodeStrict(bytes).encoded()) == Self.digests[name], "\(name), read and written again")
         }
     }
 
-    /// A new edit takes the current compiler, and that is all that changes in its recipe. A recipe with
-    /// no edit does not name one, so its bytes do not move at all.
+    /// A new edit takes the current compiler, and a new tone step the current tone version, and that is all that changes in
+    /// its recipe. A recipe with neither names neither, so its bytes do not move at all.
     @Test func aNewEditDiffersOnlyInItsCompilerAndNoEditNotAtAll() throws {
         let scene = try Scene()
         defer { try? FileManager.default.removeItem(at: scene.root) }
         let current = ManualRenderSettings.currentVersion
         for (name, recipe) in try scene.shapes(compiler: nil) {
             let bytes = try recipe.encoded(), text = String(decoding: bytes, as: UTF8.self)
-            let recorded = text.replacingOccurrences(of: current, with: "2026-10-29-1")
+            // The tone step's version, set back to the one recorded: the rest of the recipe is what it was.
+            var asRecorded = recipe
+            #expect(asRecorded.render.tone.map { $0.version == PrintTone.currentVersion } ?? true, "\(name) takes the current tone step")
+            asRecorded.render.tone?.version = Scene.recordedTone
+            let recorded = String(decoding: try asRecorded.encoded(), as: UTF8.self).replacingOccurrences(of: current, with: "2026-10-29-1")
             #expect(Self.sha256(Data(recorded.utf8)) == Self.digests[name], "\(name)")
             #expect(try Recipe.decodeStrict(bytes).encoded() == bytes, "\(name), read and written again")
-            if recipe.manual == nil {
+            if recipe.manual == nil && recipe.render.tone == nil {
                 #expect(Self.sha256(bytes) == Self.digests[name], "\(name)")
                 #expect(!text.contains(current), "\(name)")
+            } else if recipe.manual == nil {
+                #expect(Self.sha256(bytes) != Self.digests[name] && text.contains(PrintTone.currentVersion), "\(name) names the current tone step")
             } else {
                 #expect(recipe.manual?.curveVersion == current && text.contains(current), "\(name)")
             }
