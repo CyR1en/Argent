@@ -17,6 +17,7 @@ import Observation
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let environmentOverride: () -> String?
+    @ObservationIgnored private var choiceListeners: [@MainActor () -> Bool] = []
 
     /// Whether this Mac offers any choice beyond the default.
     var hasExtraChoices: Bool { offeredChoices.count > 1 }
@@ -39,8 +40,15 @@ import Observation
     /// Saves `choice` when this Mac offers it, falling back to `.default` otherwise.
     func setChoice(_ choice: DevelopBudget.Choice) {
         let effective = DevelopBudget.effectiveChoice(choice, physicalMemory: physicalMemory)
+        let changed = self.choice != effective
         self.choice = effective
         defaults.set(effective.rawValue, forKey: Self.key)
+        if changed { choiceListeners = choiceListeners.filter { $0() } }
+    }
+
+    /// Calls `listener` synchronously whenever `choice` changes, dropping it once it returns `false`.
+    func onChoiceChange(_ listener: @escaping @MainActor () -> Bool) {
+        choiceListeners.append(listener)
     }
 
     /// The develop memory target in bytes, resolved at the moment a develop starts:
@@ -50,5 +58,10 @@ import Observation
                               environmentOverride: environmentOverride(),
                               defaultsOverride: defaults.object(forKey: DevelopBudget.overrideDefaultsKey),
                               physicalMemory: physicalMemory)
+    }
+
+    /// RAW 9's develop tile size for the currently resolved memory target (`DevelopBudget.learnedDecodeTile(forMemoryTarget:)`).
+    func resolvedLearnedDecodeTile() -> Int {
+        DevelopBudget.learnedDecodeTile(forMemoryTarget: resolvedTarget())
     }
 }

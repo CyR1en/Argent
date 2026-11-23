@@ -711,4 +711,92 @@ private final class Counter: @unchecked Sendable {
         #expect(films.decodeCount <= FilmPreviews.concurrentDecodes)
         print("MEASURE decodes after cancelling \(tasks.count) requests: \(films.decodeCount)")
     }
+
+    /// Changing `learnedDecodeTile` makes RAW 9 refinements and removal inputs decode at the new
+    /// tile and drops kept RAW 9 refinements (both held decodes and refined renders that outlived
+    /// their decode), while leaving RAW 8 refinements untouched and preserving refinements when the
+    /// tile stays the same.
+    @Test(.enabled(if: FilmPreviewSampleTests.hasSamples))
+    func refinementAndRemovalInputFollowLearnedDecodeTileAndDropStaleRefinements() async throws {
+        let (films, directory) = try previews()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let frames = await RollScanner.scan(Self.samples).frames
+        let raw9 = try #require(frames.first { $0.name.contains("Large") })
+        let raw8 = try #require(frames.first { $0.name.contains("Small") })
+        let settings = DevelopSettings()
+        let pixels = 600
+
+        // Refine both a RAW 9 frame and a RAW 8 frame at 1024 (RAW 8 uses 768).
+        #expect(films.learnedDecodeTile == 1024)
+        #expect(await films.frameFilm(raw9, stock: 0, settings: settings, pixels: pixels) != nil)
+        #expect(await films.refineFrame(raw9, lens: .default, pixels: pixels))
+        #expect(films.frameDecode(of: raw9, lens: .default, pixels: pixels)?.pins?.tileSize == 1024)
+        let film1024 = try #require(await films.frameFilm(raw9, stock: 0, settings: settings, pixels: pixels))
+        let neutral1024 = try #require(await films.frameNeutral(raw9, lens: .default, pixels: pixels))
+        #expect(films.isRefinedFrameFilm(film1024, frame: raw9, stock: 0, settings: settings, pixels: pixels))
+
+        #expect(await films.frameFilm(raw8, stock: 0, settings: settings, pixels: pixels) != nil)
+        #expect(await films.refineFrame(raw8, lens: .default, pixels: pixels))
+        #expect(films.frameDecode(of: raw8, lens: .default, pixels: pixels)?.pins?.tileSize == RollDeveloper.decodeTile)
+        let raw8Film = try #require(await films.frameFilm(raw8, stock: 0, settings: settings, pixels: pixels))
+
+        // Switching RAW 9's tile to 2048 drops the RAW 9 refined decode and refined pictures, and keeps RAW 8's.
+        films.learnedDecodeTile = 2048
+        #expect(!films.isFrameDecodeRefined(raw9, lens: .default, pixels: pixels))
+        #expect(films.cachedFrameFilm(raw9, stock: 0, settings: settings, pixels: pixels) == nil)
+        #expect(films.cachedFrameNeutral(raw9, lens: .default, pixels: pixels) == nil)
+        #expect(!films.isRefinedFrameFilm(film1024, frame: raw9, stock: 0, settings: settings, pixels: pixels))
+        #expect(films.isFrameDecodeRefined(raw8, lens: .default, pixels: pixels))
+        #expect(films.cachedFrameFilm(raw8, stock: 0, settings: settings, pixels: pixels) === raw8Film)
+
+        // Refining RAW 9 now decodes at 2048; setting the same tile again (e.g. 3 GB -> 4 GB) keeps it.
+        #expect(await films.frameFilm(raw9, stock: 0, settings: settings, pixels: pixels) != nil)
+        #expect(await films.refineFrame(raw9, lens: .default, pixels: pixels))
+        #expect(films.frameDecode(of: raw9, lens: .default, pixels: pixels)?.pins?.tileSize == 2048)
+        let film2048 = try #require(await films.frameFilm(raw9, stock: 0, settings: settings, pixels: pixels))
+        #expect(film2048 !== film1024 && films.isRefinedFrameFilm(film2048, frame: raw9, stock: 0, settings: settings, pixels: pixels))
+        films.learnedDecodeTile = 2048
+        #expect(films.isFrameDecodeRefined(raw9, lens: .default, pixels: pixels))
+        #expect(films.cachedFrameFilm(raw9, stock: 0, settings: settings, pixels: pixels) === film2048)
+
+        // Even after the refined decode is evicted from `frameLinear`, a tile change still drops its cached picture.
+        for other in frames where other.url != raw9.url { _ = await films.frameNeutral(other, lens: .default, pixels: pixels) }
+        #expect(!films.keepsFrameDecode(raw9, lens: .default, pixels: pixels))
+        #expect(films.cachedFrameFilm(raw9, stock: 0, settings: settings, pixels: pixels) === film2048)
+        films.learnedDecodeTile = 1024
+        #expect(films.cachedFrameFilm(raw9, stock: 0, settings: settings, pixels: pixels) == nil)
+        #expect(neutral1024.width > 0)
+
+        // Removal input uses the current RAW 9 tile: match direct full-size decodes at 1024 and at 2048.
+        let box = try RemovalPatch.Box(x: 704, y: 704, width: 640, height: 640)
+        let gpu = try GPU(maxIdlePoolBytes: 0), stage = try LensStage(gpu: gpu)
+        let rawDecoder = AppleRawDecoder(gpu: gpu, contextPerDecode: true)
+        func directCrop(tile: Int) throws -> [Float16] {
+            var options = DecodeOptions()
+            options.appleDecoder = .learned
+            options.tileSize = RollDeveloper.decodeTile
+            options.learnedTileSize = tile
+            options.lensCorrection = false
+            return try stage.removalInput(try rawDecoder.decode(raw9.url, options: options), removals: [], box: box)
+        }
+        let expected1024 = try directCrop(tile: 1024)
+        let expected2048 = try directCrop(tile: 2048)
+        films.learnedDecodeTile = 1024
+        let crop1024 = try await films.removalInput(raw9, lens: .default, box: box)
+        #expect(crop1024.rgb == expected1024 && films.lastRemovalInputTile == 1024)
+        films.learnedDecodeTile = 2048
+        let crop2048 = try await films.removalInput(raw9, lens: .default, box: box)
+        #expect(crop2048.rgb == expected2048 && films.lastRemovalInputTile == 2048)
+
+        // Changing the tile while a RAW 9 refinement is in flight drops that refinement.
+        films.removeAll()
+        films.learnedDecodeTile = 1024
+        #expect(await films.frameFilm(raw9, stock: 0, settings: settings, pixels: pixels) != nil)
+        let startedBefore = films.refinementCounts.started
+        let inFlight = Task { await films.refineFrame(raw9, lens: .default, pixels: pixels) }
+        while films.refinementCounts.started <= startedBefore { try await Task.sleep(for: .milliseconds(1)) }
+        films.learnedDecodeTile = 2048
+        #expect(await inFlight.value == false)
+        #expect(!films.isFrameDecodeRefined(raw9, lens: .default, pixels: pixels))
+    }
 }
