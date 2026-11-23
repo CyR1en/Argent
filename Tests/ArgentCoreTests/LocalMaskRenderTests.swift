@@ -505,6 +505,13 @@ enum MaskRender {
     }
 
     /// The largest difference over `samples` random pixels of the kernel from the reference, in stops, for `t` and for the summed Exposure.
+    /// The kernel sums each slider as four dot products and `LocalSliders.add` one mask at a time, so with three or more masks the sums
+    /// can differ in their last bits, and summed Exposure moves the level `t` is read at one for one. `t` is therefore read at the kernel's
+    /// own summed Exposure, which the core writes beside it and which is held to the reference's sum on its own: so `t` compares the
+    /// evaluation and not the order of an addition. Where the map is steep in stops that order shows: measured 2026-11-23, sixteen masks
+    /// on Portra 160 summing to Exposure 9.402155 against the kernel's 9.402157 (two ulps), Contrast 331 and Whites 265 over a pixel
+    /// 11.8 stops under the reference, where the map rises 78 stops a stop into the print's white (T̃ at its floor of 1 L* a stop):
+    /// `t` 2.6109157 against 2.6111248, 2.1e-4 stops and as many L*. At the kernel's Exposure the two are the same bits.
     private func worst(_ gpu: GPU, stock: Stock, settings: DevelopSettings, panel adjustments: ManualAdjustments, masks: [Mask], samples: Int,
                        _ rng: inout SplitMix64) throws -> (t: Float, exposure: Float) {
         let reference: Float = settings.manual.referenceStops
@@ -521,8 +528,8 @@ enum MaskRender {
 
         var inputs: [Float] = []
         inputs.reserveCapacity(samples * 18)
-        var expected: [(t: Float, exposure: Float)] = []
-        expected.reserveCapacity(samples)
+        var sums: [(x: Float, xb: Float, sliders: LocalSliders)] = []
+        sums.reserveCapacity(samples)
         for _ in 0..<samples {
             // Across and past the tables, the pixel's base near it or far from it.
             let x = Float.random(in: -22...12, using: &rng) - reference
@@ -538,8 +545,7 @@ enum MaskRender {
             inputs += [x, xb] + coverage
             var sum = LocalSliders.zero
             for (slot, mask) in masks.enumerated() { sum.add(sliders(mask), coverage: coverage[slot], amount: mask.amount) }
-            expected.append((scene.gain(x: x, xb: xb, sliders: sum, panel: panel),
-                             min(max(sum.exposureEV, -LocalScene.exposureLimit), LocalScene.exposureLimit)))
+            sums.append((x, xb, sum))
         }
         let device = gpu.device
         let input = try #require(device.makeBuffer(bytes: inputs, length: inputs.count * 4, options: .storageModeShared))
@@ -564,9 +570,12 @@ enum MaskRender {
         commandBuffer.waitUntilCompleted()
         let values = output.contents().bindMemory(to: Float.self, capacity: samples * 2)
         var result: (t: Float, exposure: Float) = (0, 0)
-        for i in 0..<samples {
-            result.t = max(result.t, abs(values[i * 2] - expected[i].t))
-            result.exposure = max(result.exposure, abs(values[i * 2 + 1] - expected[i].exposure))
+        for (i, sample) in sums.enumerated() {
+            var sliders = sample.sliders
+            let exposure = min(max(sliders.exposureEV, -LocalScene.exposureLimit), LocalScene.exposureLimit)
+            result.exposure = max(result.exposure, abs(values[i * 2 + 1] - exposure))
+            sliders.exposureEV = values[i * 2 + 1]
+            result.t = max(result.t, abs(values[i * 2] - scene.gain(x: sample.x, xb: sample.xb, sliders: sliders, panel: panel)))
         }
         return result
     }
