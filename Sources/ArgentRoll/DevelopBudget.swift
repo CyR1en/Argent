@@ -107,6 +107,21 @@ public enum DevelopBudget {
 
     /// The spec's "under 2 GB by default", in the footprint's megabytes.
     public static let specTarget = 2000 << 20
+    /// The memory target at and above which RAW 9 develops in `largeLearnedDecodeTile`-pixel tiles
+    /// instead of 1024-pixel tiles (owner's decision, 2026-11-23).
+    public static let largeLearnedTileTarget = 3000 << 20
+    /// RAW 9's develop tile size at `largeLearnedTileTarget` and above: 2048 pixels. On 60 lossless L
+    /// frames on the M5 Pro (2026-11-22), 2048-pixel tiles raised throughput at 3000 MiB from
+    /// 0.76 / 0.70 / 0.70 to 0.85 / 0.80 / 0.80 frames a second (JPEG / HEIC / 16-bit TIFF) and at
+    /// 4000 MiB from 0.76 / 0.69 / 0.69 to 0.86 / 0.77 / 0.77, while losing 5 to 10 percent on HEIC
+    /// and 16-bit TIFF at the 2000 MiB default.
+    public static let largeLearnedDecodeTile = 2048
+
+    /// RAW 9's develop tile size for a develop whose memory target is `bytes`: 1024 pixels below
+    /// 3000 MiB, 2048 pixels at 3000 MiB or more. RAW 8 keeps `RollDeveloper.decodeTile` (768).
+    public static func learnedDecodeTile(forMemoryTarget bytes: Int) -> Int {
+        bytes >= largeLearnedTileTarget ? largeLearnedDecodeTile : (RollDeveloper.learnedDecodeTile ?? 1024)
+    }
     /// Kept below the target when a frame is let in, for what the frames already in flight add after:
     /// their film passes' second frame and their pictures. A lower ceiling, 1750 MB, did not lower the
     /// peaks of HEIC develops and cost speed (measured, docs/M2-shell.md section 10).

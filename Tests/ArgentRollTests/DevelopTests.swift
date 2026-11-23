@@ -936,6 +936,81 @@ extension DevelopSampleTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: again.path).sorted()
                 == stopped.compactMap(\.file).map(\.lastPathComponent).sorted())
     }
+
+    /// A develop at 3000 MiB or above decodes RAW 9 in 2048-pixel tiles, weighs the frame at 2048 in
+    /// the memory gate, records 2048 in the receipt's decode pins and reports it on the developer;
+    /// an explicit tile at init still wins, RAW 8 keeps 768, and a tile change never redoes a file
+    /// already developed.
+    @Test(.enabled(if: DevelopSampleTests.hasSamples))
+    func aRaisedTargetDevelopsRAW9At2048WeighsAt2048AndRecordsIt() async throws {
+        let large = "ILCE-7M4_DSC06674_FullFrame-LossLess-Compressed-Large.ARW"
+        let small = "ILCE-7M4_DSC06676_FullFrame-LossLess-Compressed-Small.ARW"
+        let (roll, root) = try await roll([large, small])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let raw9Frame = try #require(roll.frames.first { $0.name.contains("Large") })
+        let raw8Frame = try #require(roll.frames.first { $0.name.contains("Small") })
+        let stock = try toyStock()
+        let library = root.appendingPathComponent("library")
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let developer = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: 2000 << 20, recipeWriter: writer)
+        let output = OutputSettings(size: .longEdge2048)
+
+        func makeJob(_ frame: Frame) throws -> RollDeveloper.Job {
+            RollDeveloper.Job(frame: frame, recipe: try Recipe.make(
+                frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: stock.digest,
+                roll: RollControls(), own: FrameControls(), grain: output.grain, sharpen: true,
+                editRevision: 1, editLineage: "tile-test"))
+        }
+
+        // Default target (2000 MiB): RAW 9 decodes and weighs at 1024 and records 1024 in the receipt.
+        let outDefault = root.appendingPathComponent("out-2000")
+        let defaultOutcomes = await developer.develop([try makeJob(raw9Frame)], to: outDefault, output: output, memoryTarget: 2000 << 20)
+        guard case .developed(let defaultFile) = defaultOutcomes[0] else { Issue.record("\(defaultOutcomes)"); return }
+        let raw9Size = RollDeveloper.pixelSize(of: raw9Frame.url)
+        #expect(developer.lastMemoryTarget == 2000 << 20)
+        #expect(developer.lastLearnedDecodeTile == 1024)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 1024))
+        let receipt2000 = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(receipt2000.develops.last?.decode?.tileSize == 1024)
+
+        // Files already developed at 1024 are skipped at 3000 MiB: changing the tile never redoes them.
+        let skipped = await developer.develop([RollDeveloper.Job(frame: raw9Frame, recipe: receipt2000)],
+                                              to: outDefault, output: output, memoryTarget: 3000 << 20)
+        #expect(skipped == [.alreadyDeveloped(defaultFile)])
+
+        // Raised target (3000 MiB) into a new folder on the same developer: RAW 9 decodes and weighs at 2048 and records 2048.
+        let outRaised = root.appendingPathComponent("out-3000")
+        let raisedOutcomes = await developer.develop([try makeJob(raw9Frame)], to: outRaised, output: output, memoryTarget: 3000 << 20)
+        guard case .developed = raisedOutcomes[0] else { Issue.record("\(raisedOutcomes)"); return }
+        #expect(developer.lastMemoryTarget == 3000 << 20)
+        #expect(developer.lastLearnedDecodeTile == 2048)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 2048))
+        let receipt3000 = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(receipt3000.develops.last?.decode?.tileSize == 2048)
+
+        // RAW 8 keeps its 768-pixel tile even when the develop's target is raised.
+        let raw8Outcomes = await developer.develop([try makeJob(raw8Frame)], to: outRaised, output: output, memoryTarget: 3000 << 20)
+        guard case .developed = raw8Outcomes[0] else { Issue.record("\(raw8Outcomes)"); return }
+        let raw8Size = RollDeveloper.pixelSize(of: raw8Frame.url)
+        #expect(developer.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw8Size.width, height: raw8Size.height, decoder: .apple, tile: 768))
+        let raw8Receipt = try #require(try await writer.load(for: raw8Frame, library: library))
+        #expect(raw8Receipt.develops.last?.decode?.tileSize == 768)
+
+        // An explicit tile at init still wins over the target's rule.
+        let pinned = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                       digests: digests, learnedDecodeTile: 1536, memoryTarget: 2000 << 20, recipeWriter: writer)
+        let outPinned = root.appendingPathComponent("out-pinned")
+        let pinnedOutcomes = await pinned.develop([try makeJob(raw9Frame)], to: outPinned, output: output, memoryTarget: 4000 << 20)
+        guard case .developed = pinnedOutcomes[0] else { Issue.record("\(pinnedOutcomes)"); return }
+        #expect(pinned.lastLearnedDecodeTile == 1536)
+        #expect(pinned.lastWeighedDecodeCost == DevelopBudget.decodeCost(width: raw9Size.width, height: raw9Size.height, decoder: .raw9, tile: 1536))
+        let pinnedReceipt = try #require(try await writer.load(for: raw9Frame, library: library))
+        #expect(pinnedReceipt.develops.last?.decode?.tileSize == 1536)
+        developer.trim()
+        pinned.trim()
+    }
 }
 
 private final class InFlight: @unchecked Sendable {
@@ -1065,6 +1140,64 @@ private final class InFlight: @unchecked Sendable {
         _ = await developer.develop([job], to: outDir, output: OutputSettings())
         #expect(developer.lastMemoryTarget == defaultTarget)
         #expect(developer.lastGateCeiling == defaultTarget - DevelopBudget.margin)
+    }
+
+    @Test func raw9TileFollowsTheMemoryTarget() {
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 1999 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 2000 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 2999 << 20) == 1024)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 3000 << 20) == 2048)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 4000 << 20) == 2048)
+        #expect(DevelopBudget.learnedDecodeTile(forMemoryTarget: 6000 << 20) == 2048)
+        #expect(RollDeveloper.decodeTile == 768)
+        #expect(RollDeveloper.learnedDecodeTile == 1024)
+    }
+
+    @Test func aDevelopPicksRAW9sTileFromItsTargetAndAnExplicitTileStillWins() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("argent-develop-tile-\(UUID().uuidString)")
+        let rollDir = root.appendingPathComponent("roll"), outDir = root.appendingPathComponent("out")
+        let library = root.appendingPathComponent("library")
+        try FileManager.default.createDirectory(at: rollDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let rawURL = rollDir.appendingPathComponent("DSC00601.ARW")
+        try Data("not a real raw".utf8).write(to: rawURL)
+        let stock = try toyStock()
+        let digests = SourceDigests(settle: 0)
+        let writer = RecipeWriter(digests: digests)
+        let item = frame("DSC00601.ARW", in: rollDir)
+        let recipe = Recipe(frame: item, byteCount: RecipeStore.byteCount(of: rawURL), stock: stock,
+                            stockDigest: stock.digest, roll: RollControls(), own: FrameControls(),
+                            editRevision: 1, editLineage: "tile-unit")
+        let job = RollDeveloper.Job(frame: item, recipe: recipe)
+
+        let automatic = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                          digests: digests, memoryTarget: 2000 << 20, recipeWriter: writer)
+        #expect(automatic.lastLearnedDecodeTile == nil)
+        #expect(automatic.learnedDecodeTile == 1024)
+
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 2999 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 1024)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 3000 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 2048)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 6000 << 20)
+        #expect(automatic.lastLearnedDecodeTile == 2048)
+        _ = await automatic.develop([job], to: outDir, output: OutputSettings())
+        #expect(automatic.lastLearnedDecodeTile == 1024)
+
+        let fixed = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                      digests: digests, learnedDecodeTile: 1536, memoryTarget: 2000 << 20, recipeWriter: writer)
+        #expect(fixed.learnedDecodeTile == 1536)
+        _ = await fixed.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 2000 << 20)
+        #expect(fixed.lastLearnedDecodeTile == 1536)
+        _ = await fixed.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(fixed.lastLearnedDecodeTile == 1536)
+
+        let whole = try RollDeveloper(stocks: [stock], software: "Argent test", library: library,
+                                      digests: digests, learnedDecodeTile: .some(nil), memoryTarget: 4000 << 20, recipeWriter: writer)
+        #expect(whole.learnedDecodeTile == nil)
+        _ = await whole.develop([job], to: outDir, output: OutputSettings(), memoryTarget: 4000 << 20)
+        #expect(whole.lastLearnedDecodeTile == nil)
     }
 
     @Test func aDecodeAddsItsFrameAndItsDecodersWorkingMemory() {
