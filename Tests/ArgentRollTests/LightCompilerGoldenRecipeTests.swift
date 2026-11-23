@@ -10,6 +10,12 @@ import Testing
 /// before `2026-11-06-1` (research R6's `golden-v5.txt`, and this suite on main at 3f67969).
 @Suite struct LightCompilerGoldenRecipeTests {
     private struct Scene {
+        /// The render graph the golden recipes' receipts were written under (`main` 3f67969, before
+        /// scene gamut compression moved `RenderGraph.version` to `2026-11-19-1`). Fixing only the
+        /// leading base version keeps the fixture's bytes independent of later render changes while
+        /// still checking the compiler and feature suffixes `RenderGraph.version(for:)` appends.
+        static let recordedRenderGraph = "2026-10-09-1"
+
         let root: URL
         let frame: Frame
         let stock: Stock
@@ -42,10 +48,13 @@ import Testing
                                          analysis: ExposureAnalysis(meanStops: -0.3, validWeight: 1), aim: override ?? aim, grain: .off,
                                          manual: manual, editRevision: 12, editLineage: "golden-lineage", heldManual: held)
             recipe.raw.sha256 = sha
+            let fullVersion = RenderGraph.version(for: recipe.render.settings)
+            try #require(fullVersion.hasPrefix(RenderGraph.version))
+            let renderVersion = Self.recordedRenderGraph + fullVersion.dropFirst(RenderGraph.version.count)
             for i in 0..<receipts {
                 recipe.develops.append(Recipe.Develop(date: Date(timeIntervalSince1970: 3000 + Double(i)), software: "Argent test", output: OutputSettings(),
                     file: "/tmp/out/frame\(i).jpg", width: 40, height: 20, render: recipe.render, decode: nil, readback: nil,
-                    stockDigest: stock.digest, renderVersion: RenderGraph.version(for: recipe.render.settings)))
+                    stockDigest: stock.digest, renderVersion: renderVersion))
             }
             return recipe
         }
