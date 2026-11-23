@@ -72,15 +72,29 @@ import Testing
         "712fa666980b0174": "1e250e6d55bb53e201de3e30968738fdb645558928984285184a5e117b05bc5c", // kodak-vision3-500t-cinema
     ]
 
+    /// The toy stock and every baked stock in `build/stocks` hold their recorded digests. A fresh checkout with no
+    /// `build/stocks` checks the toy stock alone; when baked stocks are present, one with no recorded digest fails and is
+    /// named, as in `LightCompilerBaselineTests`, so a bake change cannot quietly leave the baked stocks unchecked.
     @Test func thePanelsTablesStayBitIdentical() throws {
-        var stocks = [LightCompilerBaselineTests.toyStock()]
-        for url in LightCompilerBaselineTests.bakedStocks { stocks.append(try Stock.load(from: url)) }
-        var checked = 0
-        for stock in stocks {
-            guard let expected = Self.recorded[LightCompilerBaselineTests.fingerprint(stock)] else { continue }
+        let toy = LightCompilerBaselineTests.toyStock()
+        let toyExpected = try #require(Self.recorded[LightCompilerBaselineTests.fingerprint(toy)],
+                                       "missing recorded digest for \(toy.id) (\(LightCompilerBaselineTests.fingerprint(toy)))")
+        #expect(try Self.digest(toy) == toyExpected, "\(toy.id)")
+
+        var unrecorded: [String] = []
+        for url in LightCompilerBaselineTests.bakedStocks {
+            let stock = try Stock.load(from: url)
+            let fingerprint = LightCompilerBaselineTests.fingerprint(stock)
+            guard let expected = Self.recorded[fingerprint] else {
+                unrecorded.append("\(stock.id) (\(fingerprint))")
+                continue
+            }
             #expect(try Self.digest(stock) == expected, "\(stock.id)")
-            checked += 1
         }
-        #expect(checked >= 1)
+        #expect(unrecorded.isEmpty, """
+                Baked stocks have no recorded table digest: \(unrecorded.joined(separator: ", ")). \
+                Record them in ManualToneTablesBaselineTests.recorded after an intended change of the bake, \
+                or re-bake build/stocks if this checkout's bake is out of date.
+                """)
     }
 }
