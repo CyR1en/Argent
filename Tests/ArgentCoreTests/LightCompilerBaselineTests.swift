@@ -6,9 +6,11 @@ import Testing
 
 /// Recorded compilers stay as they rendered before a later one joined them: the GPU's bytes for a
 /// fixed frame and fixed edits, through the toy stock and each baked stock, against digests taken
-/// from main before any change for the later compiler. 2026-10-09-1's are from 81e029d, before
-/// 2026-10-29-1. 2026-10-29-1's, and a frame's with no edit, are from 3f67969, before 2026-11-06-1. A
-/// re-baked stock has another digest and is skipped; the toy stock is built in code and always checked.
+/// from main before any change for the later compiler. Originally taken at 81e029d (2026-10-09-1)
+/// and 3f67969 (2026-10-29-1 and no edit); re-recorded for the toy stock and the 14 baked stocks
+/// on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut compression,
+/// `RenderGraph.version` 2026-11-19-1. A re-baked stock has another digest and is skipped; the toy
+/// stock is built in code and always checked.
 @Suite struct LightCompilerBaselineTests {
     static let width = 64, height = 48
 
@@ -135,54 +137,109 @@ import Testing
         return hash.finalize().prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Output digests by stock fingerprint, recorded on main at 81e029d.
+    /// Output digests for `edits()` (compiler `2026-10-09-1`) by stock fingerprint, recorded on `main`
+    /// at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut compression,
+    /// `RenderGraph.version` 2026-11-19-1.
     static let recorded: [String: String] = [
-        "c57831f42cf2fff7": "62d6ef1d8e4cf711040c7b331d9adc32a0ca395872897311a3b81f1f57ddcad8", // light-toy
-        "283c7d2116353dcc": "0873e7df5e9b63208fadea5e48a81a2afa47fdfede8e93dd4de49414879d0a0a", // kodak-ektar-100
-        "97b86033aaefe487": "f450a25e619d1e6d2d11171cac4b4bd509c4540f80156fd65824c6cf7ff61ff4", // kodak-gold-200
-        "04984bdf6c444942": "1d2df9594cca77ea5c8aecef776c4bad43d1cc6444199d7b8c05097681b7d0de", // kodak-portra-160
-        "d32896bc5189e32c": "2ebc8e2d1d6a4f3e4098bed7b9f832b6c70e13b6615da21cba7b32a6ceef52a9", // kodak-portra-400
-        "af8472bc46ac6b41": "74046211e5515dfa402ad82947ed6969280dc5a9ae26c67fbc91d2f43000f4d2", // kodak-portra-800
-        "11ba69882c255851": "a2fddc350eee989164488ccd6d8fb533ee1c8ecdcfd0b3b6b40bc847c6ee38bf", // kodak-ultramax-400
+        "c57831f42cf2fff7": "9d5bc606d360bcc3a1c61216d705edc2f85d96bb5566513fedd02d0a66c8cf2e", // light-toy
+        "949d6164d3351a62": "6fb78014f9135c562cf2a4a83015df270c2f38b6380bc5cd6b0cbf0eb3b6db3b", // cinestill-800t
+        "a6da1896b2b4f9b5": "60f8157ffbe5d729f86ab12f037a99fc46016a54249dcae6d1a04dfddbbb36ff", // fujifilm-c200
+        "ab3fc45ad153d406": "edbc4e0ba18af384c84c4cb8fe4eabbb109655f2e478e0f7f1d3ce9c95ab1797", // fujifilm-pro-400h
+        "034d966e7021564d": "60bf1d9765215192d448aaa00e8e6f5940d55d0c487563d3723854b5760f43a5", // fujifilm-superia-400
+        "99e292f723e67e6c": "11515b04e1ef0288495d167b3b74babe9a1bbe3a9be812b92a1011d5941cd321", // kodak-colorplus-200
+        "41dd35cf8baec974": "bed448318b5dba374cfa445ba335b83147f2f8b7b653a4a0593101e1ec14ae9c", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "406d2cc4a8b1cbf8465d0c2b35f80ab96298bc438e6393cdbf47d72adada87d0", // kodak-gold-200
+        "ef2f5ccafa11838d": "d20a6f852ba68af5a74005940925fa3c50c05c419f97b1ccd2ad7b2b0e5c0fd2", // kodak-portra-160
+        "e92abdcb666a21d9": "150d39cfc0e60b219d3f9141ef1cc63df69886b4a9cd29d765d40d5987bb8f31", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "4e04d30a88c1ac7bc7b03527734112956806afa1cfbb8655d0d216b2bd3db9b4", // kodak-portra-400
+        "fdfd3cce8c35fb37": "ca36a70cefc4b683ac54852ba73a2f6cd9e3aea220493c07d1a1864257551dac", // kodak-portra-800
+        "46b68f5377170d20": "800baad5d2e070117b9bcbf5b971ff425edf1ae6fa764085f88369acb567dbc5", // kodak-ultramax-400
+        "d0334068916dcff7": "8df9faad3e573389f05597436b945bb68bef2d1f3f664f15b383b438fcd62901", // kodak-vision3-500t
+        "712fa666980b0174": "30b44bd864823ca29a344e76521f5d365361594222768c3cbcbe28c3cd3e4601", // kodak-vision3-500t-cinema
     ]
 
-    /// `exposedBaseEdits()`'s digests by stock fingerprint, without the tone step and with `toneStep`, and
-    /// the digests of a frame with no edit, recorded on main at 3f67969.
+    /// Output digests for `exposedBaseEdits()` (compiler `2026-10-29-1`) without the tone step by stock
+    /// fingerprint, recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after
+    /// scene gamut compression, `RenderGraph.version` 2026-11-19-1.
     static let recordedExposedBase: [String: String] = [
-        "c57831f42cf2fff7": "183100f05f928c2d40179aae7988bf87a98718e519beb4368d4688aefcab1c39", // light-toy
-        "283c7d2116353dcc": "90a1b177b57c37d462ee49fc29ebf42df568d47ada6a7461f79bd3b11f3fdc9c", // kodak-ektar-100
-        "97b86033aaefe487": "fad1b80353133c0c999b380c3075febe8f9e9c62d9ad5605448ced33a6aadf28", // kodak-gold-200
-        "04984bdf6c444942": "a356f3d7ea9fb02deb73169e2cdbe285ca614b6828079a5374f9f31221732f7e", // kodak-portra-160
-        "d32896bc5189e32c": "97245ad5b70329331c897148a9a0561bbc543aa5144299e90db819e3b8d9a200", // kodak-portra-400
-        "af8472bc46ac6b41": "2a0793af02e042ee4264a429eec56fe72d619acb7f8b6ffa61d092d95748ffda", // kodak-portra-800
-        "11ba69882c255851": "3afbaa03340130d753a727ca813ea0a2923b04c23f12204ae94919cb20b5be13", // kodak-ultramax-400
+        "c57831f42cf2fff7": "d945764d7355cc3147352f73e2c508085c63d855eaaf7bf8bce2cc9b8df80e0d", // light-toy
+        "949d6164d3351a62": "d0e3c5ed89c38e92cde87b58e702b5abe8b00f4d950a941b3febf5f0e0c972a5", // cinestill-800t
+        "a6da1896b2b4f9b5": "16c0d1174b7a91ba8a7e66189b9b323a041fdefe475b5916f709d6688032cc6a", // fujifilm-c200
+        "ab3fc45ad153d406": "43bdf542815fe527ddcc80d772073f9e99b0243ed662baf85ccea2c6061e68c8", // fujifilm-pro-400h
+        "034d966e7021564d": "f49a217f0a4019f1df34c1c9d28ca7da6855bfb2426cd97b3bbf60fae755c23a", // fujifilm-superia-400
+        "99e292f723e67e6c": "2d64b577e163f7580157dccdebe40b4740eae7bc878059117e2cb480e9d281d6", // kodak-colorplus-200
+        "41dd35cf8baec974": "8c887f1ed64fdd8198811dcf5316304a929b4c8c424ae447ab15d507cd5223ff", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "175ed62e8979cd3d71488ff73b7176b6fa80f163e39b0916065ba48af83fc918", // kodak-gold-200
+        "ef2f5ccafa11838d": "e4d949d651c26203c86a104c993017e003a3dfee9b5e21994ca743b588811bde", // kodak-portra-160
+        "e92abdcb666a21d9": "4955248a1317aa3dd1056ee4cd0be512f7a1aab633071a74b12a97e8cdb8c340", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "b09151c2fa70c30f9d5a699c6a49bb62ccd507b4bd511d02618765b8c2e2ef51", // kodak-portra-400
+        "fdfd3cce8c35fb37": "30242e5357455631168b0f9d11f929ecb020b7bcd93951c388eb656f4285d898", // kodak-portra-800
+        "46b68f5377170d20": "cd6857b4e78c59bb38f238983c6ae82919163e3e445b50e593352366c07665e7", // kodak-ultramax-400
+        "d0334068916dcff7": "51f5b7689349bf19a1d8ec34369ae2f00b9a7f88d1792c3d85bfac16d94fad31", // kodak-vision3-500t
+        "712fa666980b0174": "9a297c57770a7f83deb50ab892f0f754c7dda5e516cd9d94dcfac73ed68bf52b", // kodak-vision3-500t-cinema
     ]
+
+    /// Output digests for `exposedBaseEdits()` (compiler `2026-10-29-1`) with `toneStep` by stock
+    /// fingerprint, recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after
+    /// scene gamut compression, `RenderGraph.version` 2026-11-19-1.
     static let recordedExposedBaseWithToneStep: [String: String] = [
-        "c57831f42cf2fff7": "d25d67c4321cd13d451f2b470d675dcb7c3316197e53803a142436fe4c0cb01d", // light-toy
-        "283c7d2116353dcc": "603f2fd1422360f7edf1fe3498903f37eed8f55e0324a0a40416e7462504d65f", // kodak-ektar-100
-        "97b86033aaefe487": "562a9d6e0d71663fcc9117ca5d5e97ef563c82abf3b5785a215b404b18d4fcba", // kodak-gold-200
-        "04984bdf6c444942": "f87b7d31bfe73634b1fe7008708b755c52d100e3c7d4436499f513d4b6c38920", // kodak-portra-160
-        "d32896bc5189e32c": "495e4e493481215d1492adfccc02c9ee45113bc96f2c5d5de8e6ded055011e51", // kodak-portra-400
-        "af8472bc46ac6b41": "f2c497c7ace548c701379f4c7eda479eb5ebb5efcd6e4312b7d7c95f8bf6a780", // kodak-portra-800
-        "11ba69882c255851": "5349e7e330004ad33f1cb33e2df39aadd3a11d247d39caa14df6f9654ddc2341", // kodak-ultramax-400
+        "c57831f42cf2fff7": "0ac03155db114803c3f52b3562b4faa488e919a4f87e29ca1d28cfa87697ec4e", // light-toy
+        "949d6164d3351a62": "540e4da31f3152efd47057258a68a9feaa825219f4bd80cb915c6e56344e5e28", // cinestill-800t
+        "a6da1896b2b4f9b5": "83bacf4936f98c0b7a6f94e14f5172deeddce0f194547f98b32801faa52ed97a", // fujifilm-c200
+        "ab3fc45ad153d406": "6f5a97be8a19d44ec54abade2236b7723eb6797160998828c9ae3b36b879194c", // fujifilm-pro-400h
+        "034d966e7021564d": "f96341df8f84bab8749cd7b7c6085e9e8cbae63d5b3ac6dc37e376096b05a62a", // fujifilm-superia-400
+        "99e292f723e67e6c": "b6034edb16fb994d5abae4f3c1da41dc79973bba37d6cccfa6bc4b1c0e8912d3", // kodak-colorplus-200
+        "41dd35cf8baec974": "2f77d916e74b9e67d955b496884b0f13f9485f0c49af724353bde64ef8fd5fbd", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "07091907ed5203277b6eec13bf8c645753a3ddffa4ff601be5ad2c642180ddea", // kodak-gold-200
+        "ef2f5ccafa11838d": "dfb0188330b33d1f942dc7c7d58719293a63391b9c7838776199793202e21f5a", // kodak-portra-160
+        "e92abdcb666a21d9": "592edb79e0e1ae90756fd32d0ed1bf670c97b080f44d9cb431f8b93b5eba0d4c", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "6fda60b93b8a0e9bf4adcd1d9b1d60a9fd90c6a4f8c367fdd755b369766cec79", // kodak-portra-400
+        "fdfd3cce8c35fb37": "4c53490b2b47b868de30734b9e9995a04bf124052459252540071a51b0557d8a", // kodak-portra-800
+        "46b68f5377170d20": "ecd55518e40be7929ecad3491845b481c3ba8df0bdf08e772dadd6a569871ff7", // kodak-ultramax-400
+        "d0334068916dcff7": "3fa634f8fba2fbe99a1b534397df804fc4f997c8a597a7de8f23bba7a1ce2649", // kodak-vision3-500t
+        "712fa666980b0174": "1c2189af5dbdf4bb632b8a594af5ee4664912a275c588de6289aea87e57f8a91", // kodak-vision3-500t-cinema
     ]
+
+    /// Output digests for a frame with no edit (`.identity`) without the tone step by stock fingerprint,
+    /// recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut
+    /// compression, `RenderGraph.version` 2026-11-19-1.
     static let recordedNoEdit: [String: String] = [
-        "c57831f42cf2fff7": "c9073d9c35e1fa5dafe904633ca25c353b6bebec2d6660d3bdb3f4115a47e83d", // light-toy
-        "283c7d2116353dcc": "8b1d520f855a69a0ccc4ee3d4816fbc7d21100c2204682b4ad5323645b399bd8", // kodak-ektar-100
-        "97b86033aaefe487": "8911e951c4ae79ff8b1dc202800ddf37f37cb5ac904ac5a03b8738d7e5548d72", // kodak-gold-200
-        "04984bdf6c444942": "00cf76b0b86c712711f656082e0c2f2cec85096946eb038911085e84b9b107bd", // kodak-portra-160
-        "d32896bc5189e32c": "f06ae63f3313d39d8060cb835dd6979b5c3ef9525f21250f1f495ce4d86aae1b", // kodak-portra-400
-        "af8472bc46ac6b41": "099d15b5881f24051f0c5c867ff31c5ee790526aeb1411e64b85960be1272f86", // kodak-portra-800
-        "11ba69882c255851": "9203f8f4ba583c62b75a5a6693fe77b40483e4248cc2803e502a05c548e85876", // kodak-ultramax-400
+        "c57831f42cf2fff7": "4aef9fea6862a349d52a527d8d077a07a4a40480abed138caf0ee26da79a23e1", // light-toy
+        "949d6164d3351a62": "c35913735486376cbcb3eb6eaa7b4a01d8b77a6b236338b59c26c40fd1228657", // cinestill-800t
+        "a6da1896b2b4f9b5": "da45f8ea218c25c64626140a05d1105338de8097231be0b389fb4495687a6c21", // fujifilm-c200
+        "ab3fc45ad153d406": "4da2182c999dd79a3b44a60cc8801fbb81efe613bdbc618089349c7ea411100e", // fujifilm-pro-400h
+        "034d966e7021564d": "050bafc243036da4d166b73e3a5e1322f4c7012095d3254f5602418ffc795a38", // fujifilm-superia-400
+        "99e292f723e67e6c": "2521467049de0d6b899fe54cd4db01aea8f20b72eaee4e1a5f402c27c23fcf6c", // kodak-colorplus-200
+        "41dd35cf8baec974": "899b9f92f129322b6d878471c5fd6538d60a8d84a049fdea495e389850c83f00", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "2fe4f97813aecb56ecbc30e12ace0971f8889cbbea854ed654e4d65f45551df9", // kodak-gold-200
+        "ef2f5ccafa11838d": "94b0474eac86aba1e71dc1cafabe36125ff4b4f451ac1e91d135e085f084802c", // kodak-portra-160
+        "e92abdcb666a21d9": "955fc9d406a2537683e6cf64ca410fe16cb100ba3149b54c948ebda4ed99d80d", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "5bfeb591425eee0fdbac0017f085716d4279f74fc393e0c030e6d5ad1cbaa58a", // kodak-portra-400
+        "fdfd3cce8c35fb37": "0a2e11934b993ce3ba5cb91ed1c18774b320a2fb318171cdcddfbf826de408c1", // kodak-portra-800
+        "46b68f5377170d20": "7df152bb56b537730a598505ab125a0e6b3aea17031742d73292f41fab741f6a", // kodak-ultramax-400
+        "d0334068916dcff7": "78479d7ac8bacb64b27511e1d80b3285f495c31ad6932faf6a4f3e3c6b8bb15e", // kodak-vision3-500t
+        "712fa666980b0174": "ace8b5354592f4ad179050cb7e688e5653daa5f39ca276f34e6dca3e85e48b85", // kodak-vision3-500t-cinema
     ]
+
+    /// Output digests for a frame with no edit (`.identity`) with `toneStep` by stock fingerprint,
+    /// recorded on `main` at `e5bca7c7` on 2026-11-23 (macOS 27.2 build 26B123), after scene gamut
+    /// compression, `RenderGraph.version` 2026-11-19-1.
     static let recordedNoEditWithToneStep: [String: String] = [
-        "c57831f42cf2fff7": "a04058c8ae3592870b621141b97e8296626690bca8957d8817f4f7deca5d62fd", // light-toy
-        "283c7d2116353dcc": "10d33e3f7c863c22fcd49cc16e38b3af7ea1443487003f75b964c3b675683927", // kodak-ektar-100
-        "97b86033aaefe487": "e3ecc3ffbf16df952c4d882f9064201c2c340c881381c5cd9e6e001fdf5ae089", // kodak-gold-200
-        "04984bdf6c444942": "7c52376f84e6d09cd8587116711c2667f957dca0504baa9ecd2da436ef403e37", // kodak-portra-160
-        "d32896bc5189e32c": "66a1b6a207b90bb01e2773bdf0b99566d25ef769f09b1e1d3d7765fbf76dac51", // kodak-portra-400
-        "af8472bc46ac6b41": "e9f627825775ba1b457b0ddd52af36a02b18412f710e75deba6a81fc49de4c78", // kodak-portra-800
-        "11ba69882c255851": "04b8a2851ae0e272c25fd83128244c792b35542e0459789cb2ebee391e5404d3", // kodak-ultramax-400
+        "c57831f42cf2fff7": "d43ee5ca8ce83830af7031cd165f787d7498bef52bbe9f05f0148cb84276cb56", // light-toy
+        "949d6164d3351a62": "7c6d6b0d05544381722f2373f5c907791df40287c06e23fa090fc934961fac0e", // cinestill-800t
+        "a6da1896b2b4f9b5": "3961080f41523f26ba6095b0fe879fb726c6e835721d03dd31a6243df9d13a65", // fujifilm-c200
+        "ab3fc45ad153d406": "3fbabdf6d1623dbcb249778aa07b4ecd905f71ea27651e734e2d454b43b4319d", // fujifilm-pro-400h
+        "034d966e7021564d": "d562a546f22e0f82af9214735ddd3ae018db8266d05e4ff2a85cd903fad460e1", // fujifilm-superia-400
+        "99e292f723e67e6c": "21dc55e43eb816e718b507c95a733364def775a580cc80d68642a5a36257ffe9", // kodak-colorplus-200
+        "41dd35cf8baec974": "cadca5aef04168745c44f93ab7d1f6412b4ebd6f5e4569b294fb026dbf2df2bb", // kodak-ektar-100
+        "b4fa9fe6f7e0e06f": "8458a11f9f8eb44c6b5d95aac02cd313ae86f86fb4dc2dc209359e94dbf9d683", // kodak-gold-200
+        "ef2f5ccafa11838d": "9ddc2abcc80b6dd19f257361139ee88bd076a9fd9f776c908b3cfe5d7ff8e759", // kodak-portra-160
+        "e92abdcb666a21d9": "ceebffc2f5bd25a582241ab546fe87efb86404677cc2199e4d8bacdd8400e106", // kodak-portra-160-natural
+        "fc81ea0b270e96f3": "06abd911df41c053108bd54a167f2033b80f19b87e95f43535dd6235874d04a8", // kodak-portra-400
+        "fdfd3cce8c35fb37": "6422ee47cabc4ea41912183dd14a67c606b269dc68260777e96ee730803ac6a3", // kodak-portra-800
+        "46b68f5377170d20": "d8b12655e10ef9456ca8c74291682861bd528bb9e1e652ae262583f50c0a52da", // kodak-ultramax-400
+        "d0334068916dcff7": "8e1c838b45780c68b4ec156e57456603f0d8732c1a7e3ea41f3766b1b47eb740", // kodak-vision3-500t
+        "712fa666980b0174": "6659018f6a2b5f62df04d136a980ee8170ad20ef5d3c6c7c66d232b8a31de767", // kodak-vision3-500t-cinema
     ]
 
     @Test func recordedCompilerRendersTheBytesItRenderedBefore() throws {
