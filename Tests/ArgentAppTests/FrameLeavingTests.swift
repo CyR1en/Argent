@@ -244,7 +244,12 @@ import Testing
     }
 
     /// Closes the open frame, scrolls the sheet a tenth of a second later as `scroll` does, and says how much of the
-    /// frame view, still in the window, is drawn then. Tried again if the frame view had gone by then; `nil` after three.
+    /// frame view, still in the window, is drawn once the sheet has moved: nothing, or what it was when it left. Tried
+    /// again if the frame view had gone by then; `nil` after three.
+    ///
+    /// Waited for, not timed: the sheet scrolled by the keys moves on an animation whose first step comes after the model
+    /// has heard of the scroll, 12 ms on an idle Mac and more than the 50 ms this once waited on a busy one, and SwiftUI
+    /// draws the frame view clear in a later turn than a wheel's scroll moves the sheet in.
     private func opacityOnceScrolled(_ model: RollModel, _ host: NSView, scroll: @MainActor (NSScrollView) throws -> Void) async throws -> CGFloat? {
         for _ in 0..<3 {
             model.openFrame()
@@ -255,15 +260,19 @@ import Testing
             let before = frameViewOpacity(host)
             let sheet = try sheetScroller(host), from = sheet.contentView.bounds.minY
             try scroll(sheet)
-            try await Task.sleep(for: .milliseconds(50))
-            // Only a frame view there before the scroll and after it has been asked anything.
-            let after = before == 1 && hasFrameView(host) ? frameViewOpacity(host) : nil
-            let moved = sheet.contentView.bounds.minY != from
-            try #require(try await wait(for: false, in: host, atMost: 6) != nil)
-            if let after {
-                #expect(moved)
-                return after
+            var moved = false, after: CGFloat?
+            let start = CACurrentMediaTime()
+            while CACurrentMediaTime() - start < 6 {
+                moved = moved || sheet.contentView.bounds.minY != from
+                let there = hasFrameView(host)
+                if moved, there { after = frameViewOpacity(host) }
+                if moved, !there || after == 0 { break }
+                try await Task.sleep(for: .milliseconds(5))
             }
+            #expect(moved, "The sheet did not move in six seconds")
+            try #require(try await wait(for: false, in: host, atMost: 6) != nil)
+            // Only a frame view drawn whole before the scroll and still there once the sheet had moved has been asked anything.
+            if before == 1, let after { return after }
         }
         return nil
     }
