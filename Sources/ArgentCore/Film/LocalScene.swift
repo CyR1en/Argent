@@ -41,7 +41,8 @@ public struct LocalSliders: Sendable, Equatable, Hashable {
 
     /// The sum over `masks`. Two masks in either order give the same bits, since addition commutes;
     /// three or more can differ by an ulp of the sum between orders, here and in the kernel, since it
-    /// does not associate (measured: at most 1e-4 stops over sixteen masks, far under what a print shows).
+    /// does not associate (measured: at most 1e-4 stops over sixteen masks, far under what a print shows; more where the map is
+    /// steep in stops past the print's white, 2026-11-23 2.1e-4 stops from two ulps of a summed Exposure of 9.4, as many L*).
     public init(summing masks: [(mask: LocalSliders, coverage: Float, amount: Float)]) {
         self.init()
         for entry in masks { add(entry.mask, coverage: entry.coverage, amount: entry.amount) }

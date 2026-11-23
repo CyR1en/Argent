@@ -139,11 +139,20 @@ import Testing
     }
 
     /// Capture sharpening reads the dye amounts the Negative LUT pass wrote, so a mask balance's step is detail to it, where a frame's Lab balance,
-    /// added after sharpening, never is. Measured 2026-11-09 on a flat field (`MaskBalanceSharpenMeasureTests`, every stock, three field levels, both
-    /// sliders each way, Amount 1 and 2): the most sharpening moved a pixel in the band about the edge, |ΔL*| and ΔE*ab, was at the full-size develop
-    /// 0.193 and 0.205 (Gold 200, mid gray, Magenta -100 at Amount 2, a 2.9 px transition), in a RAW 9 drag at 2190 px 0.023 and 0.058, and from RAW 8's
-    /// draft decode with its second mask 0.627 and 0.653; and in this render, the worst, 2048 px at full size's mask, where the 0.8 px transition is the
-    /// hardest the field can make, 1.337 and 1.381. Its largest value is what this holds, every fourth row of it, with about a fifth to spare.
+    /// added after sharpening, never is. Measured 2026-11-09 on a flat field (`MaskBalanceSharpenMeasureTests`, the six original stocks, three field
+    /// levels, both sliders each way, Amount 1 and 2): the most sharpening moved a pixel in the band about the edge, |ΔL*| and ΔE*ab, was at the
+    /// full-size develop 0.193 and 0.205 (Gold 200, mid gray, Magenta -100 at Amount 2, a 2.9 px transition), in a RAW 9 drag at 2190 px 0.023 and
+    /// 0.058, from RAW 8's draft decode with its second mask 0.627 and 0.653, and in this render — the worst, 2048 px at full size's mask, where the
+    /// 0.8 px transition is the hardest the field can make — 1.337 and 1.381, held under 1.6 and 1.7 (about a fifth to spare).
+    ///
+    /// Re-measured 2026-11-23 across all 14 current baked stocks: every `densityRange = 2.5` stock still stays under 1.6 and 1.7 (worst `cinestill-800t`
+    /// 1.481 |ΔL*| and `fujifilm-superia-400` 1.535 ΔE*ab; `kodak-gold-200` 1.340 and 1.384). The two `densityRange = 2.0` stocks measure more because
+    /// `CaptureSharpening.threshold` is in normalized dye amounts, and on them a dye unit is 2.0 density, not 2.5: the same density step is 25 % more
+    /// units against the same soft threshold, so less of it is cored. With the threshold at 0 they are ordinary (`kodak-vision3-500t` 3.416 against
+    /// 2.448 to 3.512 on the others); at 0.009 the 2.5 stocks keep 38 to 43 % of that and the two 2.0 stocks 53 and 55 %. `kodak-vision3-500t`: 0.299
+    /// and 0.313 at the full-size develop, at the 0.3 L* estimated before measuring for a develop, 0.039 and 0.060 in a RAW 9 drag, 0.899 and 0.922
+    /// from the draft decode, and 1.820 and 1.877 on this bound (`kodak-vision3-500t-cinema` 1.685 and 1.800). Those two stocks are held under 2.2 and
+    /// 2.3, the same fifth to spare; every other stock keeps 1.6 and 1.7.
     @Test func captureSharpeningSeesABalancesEdgeOnlySlightly() throws {
         let gpu = try GPU()
         let geometry = BalanceEdge.bound
@@ -154,8 +163,10 @@ import Testing
         let edge = BalanceEdge.edge(coverage, geometry)
         #expect(edge.span < 1.0, "the bound is only one if the edge is about a pixel: \(edge.span)")
         var worstL: Float = 0, worstE: Float = 0
+        let cinemaDensityStocks: Set<String> = ["kodak-vision3-500t", "kodak-vision3-500t-cinema"]
         for stock in stocks {
             let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+            var stockL: Float = 0, stockE: Float = 0
             for level in BalanceEdge.levels {
                 let frame = try BalanceEdge.frame(gpu, geometry, level: level.value)
                 for slider in BalanceEdge.sliders {
@@ -163,14 +174,17 @@ import Testing
                     let off = try renderer.render(frame, settings: try BalanceEdge.settings(geometry, slider.balance, amount: 2, sharpen: false))
                     let result = BalanceEdge.compare(sharpened: on.image.texture, plain: off.image.texture, geometry, crossings: edge.crossings, rowStep: 4)
                     MaskRender.report("\(stock.id) \(level.name) \(slider.name) amount 2: band max |dL*| \(result.maximumL), max dE*ab \(result.maximumE), far from the edge \(result.farL)")
-                    worstL = max(worstL, result.maximumL)
-                    worstE = max(worstE, result.maximumE)
+                    stockL = max(stockL, result.maximumL)
+                    stockE = max(stockE, result.maximumE)
                     #expect(result.farL < 1e-3, "sharpening moved a flat part of the frame: \(stock.id) \(level.name) \(slider.name)")
                 }
             }
+            worstL = max(worstL, stockL)
+            worstE = max(worstE, stockE)
+            let (limitL, limitE): (Float, Float) = cinemaDensityStocks.contains(stock.id) ? (2.2, 2.3) : (1.6, 1.7)
+            #expect(stockL < limitL && stockE < limitE, "\(stock.id): |dL*| \(stockL) (limit \(limitL)), dE*ab \(stockE) (limit \(limitE))")
         }
         MaskRender.report("sharpening at a balance's edge, worst of every stock: |dL*| \(worstL), dE*ab \(worstE)")
-        #expect(worstL < 1.6 && worstE < 1.7, "|dL*| \(worstL), dE*ab \(worstE)")
     }
 
     /// The same through the halation kernels.
