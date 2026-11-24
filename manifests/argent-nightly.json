@@ -1,15 +1,15 @@
 {
-  "build_number": "1180",
+  "build_number": "1220",
   "channel": "nightly",
-  "commit": "85d0299",
-  "ed_signature": "6Q995ZDs6wuNS9+2rbsLu50wfnLAlzz6Z4I3XRvdbc7jKtQ3s0RmVuOwXvZBDrbO9uX78uJMiguSQJhCZ4uzCw==",
+  "commit": "503df1a",
+  "ed_signature": "g3LwfbdzrpbimVQemJPgLJ6cz8ggqye3sLZ4rbTtD/7+5P8UYstLbYEftmhae7P5Z1gFXEPGBbLvOKefJFEwBA==",
   "kind": "nightly",
-  "length": 82874679,
+  "length": 82981175,
   "min_system_version": "27.0",
-  "pub_date": "Tue, 24 Nov 2026 03:25:44 +0000",
+  "pub_date": "Tue, 24 Nov 2026 04:18:55 +0000",
   "release_notes_url": "https://github.com/CyR1en/Argent/releases/tag/nightly",
-  "short_version": "0.1.0 nightly (85d0299)",
-  "title": "Nightly 2026-11-24 (85d0299)",
+  "short_version": "0.1.0 nightly (503df1a)",
+  "title": "Nightly 2026-11-24 (503df1a)",
   "url": "https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg",
   "version": "0.1.0"
 }
