@@ -404,6 +404,7 @@ extension RollModel {
         maskEditor.finishPress()
         let urls = Set(frames.map(\.url))
         if maskEditor.isAdjusting, let shown = shownFrame, urls.contains(shown.url) { endMaskAdjusting(for: shown) }
+        if case .frame(let url) = halationAdjusting, urls.contains(url) { suspendHalationAdjusting(writing: true) }
         let light = suspendLightAdjusting(on: urls)
         for frame in frames where manualGestures[frame.url] != nil { endManualGesture(for: frame) }
         if resumingLight { resumeLightAdjusting(on: light) }

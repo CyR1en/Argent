@@ -240,6 +240,22 @@ final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
         }
     }
 
+    /// A frame's own Halation alone is something to copy: the film part is offered for it, and carries it.
+    @Test func aFramesOwnHalationAloneIsCarriedByTheFilmPart() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let roll = try await open(fixture)
+            defer { AutoDecisionStateTests.close(roll.model, roll.gate) }
+            let model = roll.model, source = roll.frames[0], frame = roll.frames[1]
+            let halation = model.output.halation == 150 ? 50 : 150
+            model.setHalation(halation, for: source)
+            model.copyAdjustments(from: source)
+            #expect(model.adjustmentsClipboard?.parts == [.film])
+            #expect(model.canPasteAdjustments(to: frame, parts: .film))
+            try await paste(model, to: frame, .film)
+            #expect(model.frameControls(frame) == FrameControls(halation: halation))
+        }
+    }
+
     /// Paste Only keeps an older Light compiler, as a slider moved by hand keeps it; Paste Adjustments, a new edit, takes the current.
     @Test func pasteOnlyKeepsAnOlderLightCompiler() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in

@@ -542,10 +542,17 @@ public struct Recipe: Sendable, Equatable, Codable {
                                       : requiredVersion == 4 ? "an Original starting point requires recipe version 4"
                                       : "curve refinements require recipe version 3")
         }
+        // Halation inside the control's range: a frame's own, and every amount a render records, which is that range over 100.
+        let range = OutputSettings.halationRange
+        let amounts = ([render] + develops.map(\.render) + [manual, heldManual].compactMap { $0?.baseline.baseRender })
+            .compactMap(\.halationAmount)
+        let most = OutputSettings.halationAmount(range.upperBound)
+        guard frame.halation.map(range.contains) ?? true, amounts.allSatisfy({ $0 >= 0 && $0 <= most }) else {
+            throw ReadFailure.invalid("Halation must be from \(range.lowerBound) to \(range.upperBound)")
+        }
         func valid(_ render: Render) -> Bool {
             render.labBalance.count == 3 && render.labBalance.allSatisfy(\.isFinite)
                 && render.printExposure.isFinite && (render.ratedAt.map { $0.isFinite && $0 > 0 } ?? true)
-                && (render.halationAmount.map { $0.isFinite && $0 >= 0 } ?? true)
         }
         guard valid(render), develops.allSatisfy({ valid($0.render) }) else { throw ReadFailure.invalid("non-finite render values") }
         // Only a receipt may hold a digest: what the frame renders now keeps its masks in full.
@@ -577,11 +584,12 @@ public struct Recipe: Sendable, Equatable, Codable {
     /// included, requires v7, ahead of masks. A frame's own stock or grain requires v13: an older build would
     /// develop it through the roll's, reopen the roll on the frame's stock, and save the frame back without either.
     /// A frame's own Halation, or a render at any amount but the stock's own, a receipt's included, requires v14: an
-    /// older build would print it at the stock's, and take a file developed at another amount for the one it makes.
+    /// older build would print it at the stock's, and take a file developed at another amount for the one it makes. An
+    /// amount written out as 1 is the stock's own, and requires nothing.
     public var requiredVersion: Int {
         let renders = [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 }
             + develops.map(\.render)
-        if frame.halation != nil || renders.contains(where: { $0.halationAmount != nil }) { return 14 }
+        if frame.halation != nil || renders.contains(where: { ($0.halationAmount ?? 1) != 1 }) { return 14 }
         if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let lenses = [manual?.adjustments.lens, heldManual?.adjustments.lens].compactMap { $0 }
             + renders.compactMap { $0.manual?.adjustments.lens }

@@ -452,6 +452,8 @@ extension RollModel {
         let frames = states.compactMap { state in current[state.frame].map { (state, $0) } }
         guard !frames.isEmpty else { return }
         maskEditor.cancelPress()
+        // The undo puts back each frame's own controls: a Halation gesture still open is written first, so its end does not write over them.
+        suspendHalationAdjusting(writing: true)
         // A Light drag still held on a frame the undo writes, or on any when it opens its frame, is taken back as an edit's undo takes it.
         let held = suspendLightAdjusting(on: reveal ? Set(current.keys) : Set(frames.map(\.1.url)), writing: false)
         defer { resumeLightAdjusting(on: held) }
@@ -648,6 +650,8 @@ extension RollModel {
     }
 
     func clearManualSession() {
+        // A Halation gesture does not outlive the roll it began on.
+        suspendHalationAdjusting(writing: false)
         manualRestoreTask?.cancel()
         manualRestoreTask = nil
         manualGeneration = UUID()

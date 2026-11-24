@@ -19,6 +19,7 @@ final class RollModel {
     private(set) var picked = MultiSelection<Frame.ID>() {
         didSet {
             if picked.lead != oldValue.lead {
+                if case .frame = halationAdjusting { suspendHalationAdjusting(writing: true) }
                 curveGraphFocusRequest = nil
                 if inspectorNavigation.destination != nil { inspectorNavigation.clearDestination() }
                 if frameZoom != FrameZoom() { frameZoom = FrameZoom() }
@@ -613,34 +614,70 @@ final class RollModel {
 
     // MARK: The Halation row's gesture
 
-    /// Halation as its row's gesture has moved it, the roll's (`frame` nil) or a frame's own, until the gesture ends. A write to
-    /// the roll's or to a frame's saves every frame's choices (`settingsChanged`), so a drag's steps are kept here and written
-    /// once (`endHalationAdjusting`), as a Light row's are (`printedLight`). The frame view's print follows its frame's meanwhile
-    /// (`printSettings`); the sheet, the strip and the stock panel take the value as the gesture ends.
+    /// Whose Halation its row moves: the roll's, or a frame's own.
+    enum HalationTarget: Equatable {
+        case roll
+        case frame(URL)
+    }
+
+    /// Halation as its row's gesture has moved it, until the gesture ends. A write to the roll's or to a frame's saves every
+    /// frame's choices (`settingsChanged`), so a gesture's steps are kept here and written once (`endHalationAdjusting`), as a
+    /// Light row's are (`printedLight`). The frame view's print follows its frame's meanwhile (`printSettings`); the sheet, the
+    /// strip and the stock panel take the value as the gesture ends.
     struct PrintedHalation: Equatable {
-        let frame: URL?
+        let target: HalationTarget
         var value: Int
     }
 
     private(set) var printedHalation: PrintedHalation?
+    /// Whose Halation row's gesture is open, from `beginHalationAdjusting` to its end.
+    @ObservationIgnored private(set) var halationAdjusting: HalationTarget?
 
-    /// A step of the Halation row's gesture: `frame`'s own, or for `nil` the roll's.
+    /// The Halation row's gesture began, on `frame`'s own or for `nil` the roll's: its steps go to the print alone
+    /// (`moveHalation`). One left open is written first.
+    func beginHalationAdjusting(for frame: Frame?) {
+        suspendHalationAdjusting(writing: true)
+        halationAdjusting = frame.map { .frame($0.url) } ?? .roll
+    }
+
+    /// Halation from its row: `frame`'s own, or for `nil` the roll's. Inside the row's gesture, to the print alone
+    /// (`printedHalation`); outside one, written at once. A drag's last write is held back a moment and can come after its
+    /// gesture has ended (`AdjustmentSlider.Coordinator`): kept then, it would stay, with no gesture left to end it.
     func moveHalation(_ value: Int, for frame: Frame?) {
-        let range = OutputSettings.halationRange
-        let moved = PrintedHalation(frame: frame?.url, value: min(max(value, range.lowerBound), range.upperBound))
+        let range = OutputSettings.halationRange, target = frame.map { HalationTarget.frame($0.url) } ?? .roll
+        let value = min(max(value, range.lowerBound), range.upperBound)
+        guard halationAdjusting == target else {
+            writeHalation(value, to: target)
+            return
+        }
+        let moved = PrintedHalation(target: target, value: value)
         if printedHalation != moved { printedHalation = moved }
     }
 
     /// The Halation row's gesture ended: the frame or the roll takes what it moved to, in one write, and none where it moved
     /// nothing.
-    func endHalationAdjusting() {
-        guard let moved = printedHalation else { return }
-        printedHalation = nil
-        if let url = moved.frame {
-            guard let frame = roll?.frames.first(where: { $0.url == url }), halation(for: frame) != moved.value else { return }
-            setHalation(moved.value, for: frame)
-        } else if output.halation != moved.value {
-            output.halation = moved.value
+    func endHalationAdjusting() { suspendHalationAdjusting(writing: true) }
+
+    /// Ends the Halation row's gesture, if one is open, before a write that replaces what it moves or as its session ends: its
+    /// steps written first (`writing`), so the write after them wins, or let go unwritten.
+    func suspendHalationAdjusting(writing: Bool) {
+        let moved = printedHalation
+        halationAdjusting = nil
+        if moved != nil { printedHalation = nil }
+        if writing, let moved { writeHalation(moved.value, to: moved.target) }
+    }
+
+    /// Writes Halation to the roll or to a frame, and only where that changes what is there. A frame given the roll's value
+    /// follows the roll again (`FrameControls.setHalation`), also one whose own stood at that value already.
+    private func writeHalation(_ value: Int, to target: HalationTarget) {
+        switch target {
+        case .roll:
+            if output.halation != value { output.halation = value }
+        case .frame(let url):
+            guard let frame = roll?.frames.first(where: { $0.url == url }) else { return }
+            var own = frameControls(frame)
+            own.setHalation(value, roll: output.halation)
+            if own != frameControls(frame) { overrides[url] = own.isEmpty ? nil : own }
         }
     }
 
@@ -672,6 +709,8 @@ final class RollModel {
 
     /// Makes `frame` follow the roll in every control: stock, Rated at, Lab balance, grain and halation.
     func clearOverrides(for frame: Frame) {
+        // A Halation gesture open on the frame is let go, so its end does not give the frame its own again.
+        if halationAdjusting == .frame(frame.url) { suspendHalationAdjusting(writing: false) }
         overrides[frame.url] = nil
     }
 
@@ -686,7 +725,7 @@ final class RollModel {
     /// So too the Halation its row's gesture has moved the frame's to (`printedHalation`), on a stock that has halation.
     func printSettings(for frame: Frame, stock: Int) -> DevelopSettings {
         var settings = settings(for: frame, stock: stock, manual: printedEdit(for: frame))
-        if let moved = printedHalation, moved.frame == frame.url, settings.halation {
+        if let moved = printedHalation, moved.target == .frame(frame.url), settings.halation {
             settings.halationAmount = OutputSettings.halationAmount(moved.value)
         }
         return settings
@@ -815,8 +854,9 @@ final class RollModel {
         var settings = controls(for: frame).settings(for: selectedStock, aim: printAim(for: frame))
         settings.grain = grain(for: frame).amount
         settings.grainSeed = frame.grainSeed
-        settings.halation = true
-        settings.halationAmount = OutputSettings.halationAmount(halation(for: frame))
+        // As the resolver has them: a stock without halation takes none of the control.
+        settings.halation = selectedStock.halation != nil
+        settings.halationAmount = settings.halation ? OutputSettings.halationAmount(halation(for: frame)) : 1
         settings.sharpen = true
         return settings
     }

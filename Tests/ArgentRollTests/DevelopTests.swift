@@ -585,6 +585,90 @@ private func pins() -> DecodePins {
         again = recipe(own: FrameControls(), roll: 60, previous: follows)
         #expect(again.render != follows.render)
         #expect(!again.lastDevelopMatches(file: file, output: output(again, roll: 60)))
+
+        // A frame on a stock without halation: its develop records the stock's own whatever the roll's is, and writes none of
+        // it, so the roll's moving leaves its file.
+        let plain = try toyStock()
+        func without(roll halation: Int, own: FrameControls = FrameControls(), previous: Recipe? = nil) -> Recipe {
+            Recipe(frame: frame(), byteCount: 1, stock: plain, stockDigest: plain.digest, roll: RollControls(), own: own,
+                   grain: .natural, halation: halation, previous: previous)
+        }
+        var first = without(roll: 150)
+        let recorded = output(first, roll: 150)
+        #expect(recorded.halation == 100 && output(without(roll: 150, own: FrameControls(halation: 40)), roll: 150).halation == 100)
+        #expect(try !String(decoding: JSONEncoder().encode(recorded), as: UTF8.self).contains("halation"))
+        first.develops.append(.init(date: Date(), software: "Argent", output: recorded, file: file.path, width: 10, height: 10,
+                                    render: first.render, decode: pins(), readback: nil, stockDigest: plain.digest,
+                                    renderVersion: RenderGraph.version(for: first.render.settings)))
+        let next = without(roll: 60, previous: first)
+        #expect(next.requiredVersion < 13 && next.lastDevelopMatches(file: file, output: output(next, roll: 60)))
+    }
+
+    /// Halation read from a recipe is held to the control's range: a frame's own outside it, or a recorded amount outside it or
+    /// not a number, is refused. An amount written out as 1 is the stock's own and requires nothing, and a recipe back at 100
+    /// that still holds a develop at another amount still requires version 14.
+    @Test func halationOutsideItsRangeIsRefusedAndAReceiptsAmountStillRequiresVersion14() throws {
+        let stock = try halatingStock(), a = frame("DSC00601.ARW")
+        func recipe(own: FrameControls = FrameControls(), halation: Int = 100, previous: Recipe? = nil) throws -> Recipe {
+            try Recipe.make(frame: a, byteCount: 1, stock: stock, stockDigest: stock.digest, roll: RollControls(), own: own,
+                            grain: .natural, halation: halation, previous: previous)
+        }
+        let refused = Recipe.ReadFailure.invalid("Halation must be from 0 to 200")
+        for own in [500, -50] {
+            var record = try recipe(own: FrameControls(halation: 150))
+            try record.validate()
+            record.frame.halation = own
+            #expect(throws: refused) { try record.validate() }
+        }
+        for amount: Float in [3, -0.5, .nan, .infinity] {
+            var record = try recipe(halation: 150)
+            record.render.halationAmount = amount
+            #expect(throws: refused) { try record.validate() }
+        }
+        // A develop at 150, then the control back at 100: the frame's render records nothing, and its receipt still does.
+        var developed = try recipe(halation: 150)
+        developed.develops.append(.init(date: Date(), software: "Argent", output: OutputSettings(halation: 150), file: "/tmp/out/DSC00601.jpg",
+                                        width: 10, height: 10, render: developed.render, decode: pins(), readback: nil,
+                                        stockDigest: stock.digest, renderVersion: RenderGraph.version(for: developed.render.settings)))
+        var back = try recipe(previous: developed)
+        #expect(back.render.halationAmount == nil && back.develops.count == 1 && back.requiredVersion == 14 && back.version == 14)
+        try back.validate()
+        back.develops[0].render.halationAmount = 9
+        #expect(throws: refused) { try back.validate() }
+        // Written out as 1, as a hand could: the stock's own, equal to none, and no newer version.
+        var written = try recipe()
+        let unwritten = written.render
+        written.render.halationAmount = 1
+        #expect(written.requiredVersion < 13 && written.render == unwritten)
+        try written.validate()
+        // A frame's own is held to the range as it is set.
+        var own = FrameControls()
+        own.setHalation(900, roll: 100)
+        #expect(own.halation == 200)
+        own.setHalation(900, roll: 200)
+        #expect(own.halation == nil)
+        own.setHalation(-5, roll: 100)
+        #expect(own.halation == 0)
+    }
+
+    /// Halation stays live under a pin, as grain does: the resolver gives a pinned frame the amount asked now, on a stock with
+    /// halation, and none of it on a stock without.
+    @Test func halationStaysLiveUnderAPin() throws {
+        let stock = try halatingStock(), plain = try toyStock()
+        func pinned(_ stock: Stock, halation: Float) throws -> DevelopSettings {
+            let base = try DevelopmentResolver.resolve(stock: stock, stockDigest: stock.digest, controls: RollControls(), aim: PrintAim(),
+                                                       manual: nil, grain: 1, halation: 1.5, grainSeed: 7)
+            let baseline = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: stock.id, stockDigest: stock.digest,
+                                             controls: RollControls(), aim: PrintAim(), analysisVersion: ExposureAnalysis.currentVersion,
+                                             baseRender: Recipe.Render(settings: base, grain: .natural))
+            let edit = ManualEdit(adjustments: try ManualAdjustments(exposureEV: 0.5), baseline: baseline)
+            return try DevelopmentResolver.resolve(stock: stock, stockDigest: stock.digest, controls: RollControls(), aim: PrintAim(),
+                                                   manual: edit, grain: 1, halation: halation, grainSeed: 7)
+        }
+        let lighter = try pinned(stock, halation: 0.4), own = try pinned(stock, halation: 1)
+        #expect(lighter.halation && lighter.halationAmount == 0.4 && own.halationAmount == 1)
+        let without = try pinned(plain, halation: 0.4)
+        #expect(!without.halation && without.halationAmount == 1)
     }
 
     /// A destination that cannot be written fails every frame at once, before any decode,

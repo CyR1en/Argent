@@ -129,24 +129,71 @@ import Testing
             #expect(!plain.halation && plain.halationAmount == 1)
 
             // A frame's gesture: its steps to the frame view's print, and the last to the frame as it ends.
+            model.beginHalationAdjusting(for: frames[2])
             model.moveHalation(120, for: frames[2])
             model.moveHalation(180, for: frames[2])
             #expect(model.printSettings(for: frames[2], stock: stock).halationAmount == 1.8)
             #expect(model.printSettings(for: frames[0], stock: stock).halationAmount == 0.6)
             #expect(model.settings(for: frames[2], stock: stock).halationAmount == 0.6 && model.frameControls(frames[2]).isEmpty)
             model.endHalationAdjusting()
-            #expect(model.printedHalation == nil && model.frameControls(frames[2]) == FrameControls(halation: 180))
+            #expect(model.printedHalation == nil && model.halationAdjusting == nil)
+            #expect(model.frameControls(frames[2]) == FrameControls(halation: 180))
             // The roll's gesture: nothing takes it until it ends, and a frame with its own keeps it.
+            model.beginHalationAdjusting(for: nil)
             model.moveHalation(90, for: nil)
             #expect(model.output.halation == 60 && model.printSettings(for: frames[0], stock: stock).halationAmount == 0.6)
             model.endHalationAdjusting()
             #expect(model.output.halation == 90 && model.halation(for: frames[0]) == 90 && model.halation(for: frames[2]) == 180)
             // Past the range, the range's end; and a gesture back to the roll's value follows the roll.
+            model.beginHalationAdjusting(for: frames[2])
             model.moveHalation(900, for: frames[2])
             #expect(model.printedHalation?.value == 200)
             model.moveHalation(90, for: frames[2])
             model.endHalationAdjusting()
             #expect(model.frameControls(frames[2]).isEmpty)
+
+            // A step outside a gesture is written at once and nothing is held: a drag's last write can come after its gesture
+            // has ended, and held then it would stay, on the print and for the next gesture to write.
+            model.beginHalationAdjusting(for: frames[2])
+            model.moveHalation(130, for: frames[2])
+            model.endHalationAdjusting()
+            model.moveHalation(140, for: frames[2])
+            #expect(model.printedHalation == nil && model.frameControls(frames[2]) == FrameControls(halation: 140))
+            // So a gesture on another frame that moves nothing writes nothing, to it or to the first.
+            model.beginHalationAdjusting(for: frames[3])
+            model.endHalationAdjusting()
+            #expect(model.frameControls(frames[3]).isEmpty && model.frameControls(frames[2]) == FrameControls(halation: 140))
+            // A step for another target than the open gesture's is written at once too.
+            model.beginHalationAdjusting(for: frames[3])
+            model.moveHalation(70, for: frames[2])
+            #expect(model.printedHalation == nil && model.frameControls(frames[2]) == FrameControls(halation: 70))
+            model.endHalationAdjusting()
+
+            // A frame's own at the roll's value, which it keeps when the roll comes to it, is cleared by a gesture that ends
+            // there, by the row's Same as roll, and by Same as roll for the whole frame under a gesture still open.
+            model.setHalation(150, for: frames[2])
+            model.output.halation = 150
+            #expect(model.frameControls(frames[2]) == FrameControls(halation: 150))
+            model.beginHalationAdjusting(for: frames[2])
+            model.moveHalation(120, for: frames[2])
+            model.moveHalation(150, for: frames[2])
+            model.endHalationAdjusting()
+            #expect(model.frameControls(frames[2]).isEmpty)
+            model.setRestoredFrameControls(FrameControls(halation: 150), url: frames[2].url)
+            let entry = HalationControl.sameAsRoll(frames[2], roll: 150, isOwn: true, model: model)
+            #expect(entry.title == "Same as roll, 150" && entry.isEnabled)
+            #expect(!HalationControl.sameAsRoll(frames[3], roll: 150, isOwn: false, model: model).isEnabled)
+            if case .action(let run) = entry.kind { run() }
+            #expect(model.frameControls(frames[2]).isEmpty)
+            model.setHalation(40, for: frames[2])
+            model.beginHalationAdjusting(for: frames[2])
+            model.moveHalation(80, for: frames[2])
+            model.clearOverrides(for: frames[2])
+            model.endHalationAdjusting()
+            #expect(model.frameControls(frames[2]).isEmpty && model.printedHalation == nil)
+            // A value past the range, as a recipe written by hand could hold, is held to it.
+            model.setHalation(900, for: frames[2])
+            #expect(model.frameControls(frames[2]) == FrameControls(halation: 200))
         }
     }
 
@@ -162,7 +209,14 @@ import Testing
             let frames = try #require(model.roll?.frames)
             model.output.halation = 100
             #expect(frames.allSatisfy { model.manualRecipes[$0.url] == nil && model.manualEdits[$0.url] == nil })
-            model.setHalation(150, for: frames[1])
+            // The gesture's steps save nothing; its end saves the frame, once.
+            let revision = model.editRevision
+            model.beginHalationAdjusting(for: frames[1])
+            model.moveHalation(120, for: frames[1])
+            model.moveHalation(150, for: frames[1])
+            #expect(model.editRevision == revision && model.manualSaveTasks.isEmpty && model.overrides.isEmpty)
+            model.endHalationAdjusting()
+            #expect(model.editRevision == revision &+ 1 && model.manualSaveTasks[frames[1].url] != nil)
             try await model.flushManualSaves()
             AutoDecisionStateTests.close(model, gate)
 
@@ -258,18 +312,35 @@ import Testing
         }
     }
 
-    /// So too a frame's own Halation: the roll's moving to it keeps the frame's check, and takes that of a frame following the roll.
-    @Test func theRollsHalationLeavesTheCheckOfAFrameWithItsOwn() async throws {
-        try await QuickDevelopStateTests.withModel { model, frames, _ in
+    /// So too a frame's own Halation: the roll's moving to it keeps the frame's check, and takes that of a frame following the
+    /// roll. A frame on a stock without halation keeps its check whatever the roll's does, since its file is the same.
+    @Test func theRollsHalationLeavesTheCheckOfAFrameWithItsOwnOrWithoutHalation() async throws {
+        let stored = UserDefaults.standard.data(forKey: "outputSettings")
+        defer { UserDefaults.standard.set(stored, forKey: "outputSettings") }
+        try await AutoDecisionStateTests.withRoll { fixture in
+            try Self.giveHalation("toy", in: fixture.stocks)
+            try AutoDecisionStateTests.writeToyStock("alternate", in: fixture.stocks)
+            let model = fixture.model()
+            await model.open(fixture.roll)
+            let frames = try #require(model.roll?.frames)
+            let stock = try #require(model.films?.stocks.firstIndex { $0.halation != nil }), without = 1 - stock
+            model.selectStock(stock)
+            try #require(model.stockIndex == stock)
+            model.developFolder.usesSubfolder = false
+            model.chooseDestination(fixture.folder.appendingPathComponent("Export"))
             let folder = try #require(model.developDestination)
             model.output.halation = 100
             model.setHalation(150, for: frames[0])
-            let developed = [frames[0], frames[1]]
+            model.setStock(without, for: frames[2])
+            #expect(model.hasHalation(stockIndex: stock, own: model.overrides[frames[1].url]))
+            #expect(!model.hasHalation(stockIndex: stock, own: model.overrides[frames[2].url]))
+            let developed = [frames[0], frames[1], frames[2]]
             model.noteDeveloped(developed, developed.map { .developed(folder.appendingPathComponent($0.name + ".jpg")) },
                                 destination: folder, inputs: DevelopInputs(model, frames: developed.map(\.url)))
-            #expect(model.developMarks[frames[0].url] == .developed && model.developMarks[frames[1].url] == .developed)
+            #expect(developed.allSatisfy { model.developMarks[$0.url] == .developed })
             model.output.halation = 150
             #expect(model.developMarks[frames[0].url] == .developed && model.developMarks[frames[1].url] == nil)
+            #expect(model.developMarks[frames[2].url] == .developed)
         }
     }
 }

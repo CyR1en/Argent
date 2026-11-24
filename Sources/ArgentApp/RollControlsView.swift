@@ -303,7 +303,8 @@ struct GrainControl: View {
 /// halation, on the inspector's slider row, which names itself. A gesture's steps go to the frame view's print alone, and the
 /// roll or the frame takes the value as it ends (`RollModel.printedHalation`), since each write saves every frame's choices.
 /// With a frame the row's reset is "same as roll": the roll's value is its default, and the frame's own stands off it on the
-/// track. Disabled where the stock has no halation.
+/// track. A frame's own at the roll's value has no reset to take, so the row's menu has "Same as roll" as the other three
+/// settings' menus do. Disabled where the stock has no halation, and while no stock is loaded.
 struct HalationControl: View {
     let frame: Frame?
     @Environment(RollModel.self) private var model
@@ -314,18 +315,26 @@ struct HalationControl: View {
         let own = frame.map { model.frameControls($0).halation != nil } ?? false
         // The stock the control acts on: the frame's, its own or the roll's, or on the sheet the roll's.
         let stock = if let frame { model.stock(for: frame) } else { model.currentStock }
+        let unavailable = stock.map { $0.halation == nil ? "\($0.displayName) has no halation." : nil } ?? "No stock is loaded."
         var spec = AdjustmentSliderSpec.halation
         if frame != nil { spec.defaultValue = Float(roll) }
-        return ManualAdjustmentRow(spec: spec, help: help(roll: roll, own: own, without: stock?.halation == nil ? stock?.displayName : nil),
+        spec.spokenNote = RollControlsView.ownership(ControlsScope(frame: frame), isOwn: own)
+        return ManualAdjustmentRow(spec: spec, help: unavailable ?? help(roll: roll, own: own),
                                    value: Binding(get: { Float(value) }, set: { model.moveHalation(Int($0.rounded()), for: frame) }),
-                                   snapshot: frame?.url, beginGesture: {}, endGesture: { model.endHalationAdjusting() })
-            .disabled(stock?.halation == nil)
+                                   snapshot: frame?.url, beginGesture: { model.beginHalationAdjusting(for: frame) },
+                                   endGesture: { model.endHalationAdjusting() },
+                                   menuSwitch: frame.map { frame in { Self.sameAsRoll(frame, roll: roll, isOwn: own, model: model) } })
+            .disabled(unavailable != nil)
             .modifier(FrameOverrideIndicator(isOwn: own))
     }
 
-    /// `without` is the stock's name where it has no halation.
-    private func help(roll: Int, own: Bool, without: String?) -> String {
-        if let without { return "\(without) has no halation." }
+    /// The row's menu's way back to the roll's value, off while the frame follows the roll already.
+    @MainActor static func sameAsRoll(_ frame: Frame, roll: Int, isOwn: Bool, model: RollModel) -> MenuEntry {
+        .action("film.halationSameAsRoll", RollControlsView.sameAsRollItem(AdjustmentSliderSpec.halation.formatted(Float(roll))),
+                isEnabled: isOwn) { model.setHalation(nil, for: frame) }
+    }
+
+    private func help(roll: Int, own: Bool) -> String {
         let scale = "The glow around bright lights: 100 is the stock's own, 0 none and 200 twice as much."
         guard frame != nil else { return "The roll's Halation. \(scale) Every frame without its own develops with it." }
         return own ? "This frame's own Halation. \(scale) The roll's is \(roll)."

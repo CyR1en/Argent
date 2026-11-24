@@ -68,6 +68,8 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     /// laid one over the other on a track their row draws (`LensHueRow`), each draws its knob alone, and a press goes to the
     /// one whose knob is nearer (`AdjustmentSliderControl.mouseDown`).
     var trackPartner: Int?
+    /// Said after the value and its unit when VoiceOver reads it out, as whose a film setting is (`RollControlsView.ownership`).
+    var spokenNote = ""
 
     /// One end of a Defringe hue range, Low or High: read on the whole strip, 0 to 100, so the two knobs stand where their
     /// hues are, though Low ends at 90 and High begins at 10 (`Defringe.hueLowRange`); its row keeps each ten short of the
@@ -155,7 +157,7 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     }
 
     /// `value` as VoiceOver reads it.
-    func spoken(_ value: Float) -> String { formatted(value) + unit }
+    func spoken(_ value: Float) -> String { formatted(value) + unit + spokenNote }
 
     /// How far along the track `value` stands, 0 to 1.
     func fraction(of value: Float) -> CGFloat {

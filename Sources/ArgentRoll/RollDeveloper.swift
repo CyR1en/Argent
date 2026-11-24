@@ -311,13 +311,18 @@ public final class RollDeveloper: @unchecked Sendable {
     }
 
     /// The output `job` develops with: `output` with the frame's own grain and halation (`FrameControls.grain`, `.halation`),
-    /// which its render has, in place of the roll's. Its receipt records that, and the next develop compares it, so a change to the
-    /// roll's grain or halation does not make again a frame whose own it does not reach. A frame that follows the roll develops with
-    /// `output` as it is.
+    /// which its render has, in place of the roll's, and halation at the stock's own (`OutputSettings.defaultHalation`) where
+    /// the frame's stock has none (`render.halation != "on"`). Its receipt records that, and the next develop compares it, so a
+    /// change to the roll's grain or halation does not make again a frame whose own it does not reach, nor one on a stock
+    /// without halation.
     static func output(_ output: OutputSettings, for job: Job) -> OutputSettings {
         var own = output
         if let grain = job.recipe.frame.grain { own.grain = grain }
-        if let halation = job.recipe.frame.halation { own.halation = halation }
+        if job.recipe.render.halation == "on" {
+            if let halation = job.recipe.frame.halation { own.halation = halation }
+        } else {
+            own.halation = OutputSettings.defaultHalation
+        }
         return own
     }
 

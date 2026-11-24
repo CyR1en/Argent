@@ -313,6 +313,13 @@ import Testing
         let values = read(output.texture)
         #expect(values.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
         #expect(values[32 * 64 + 32].x > 1000)
+        // The strongest stock at the Halation control's most, 0.14 twice over: the halo passes a half float, and is held at
+        // its largest, where an infinite texel would make the pixels beside it NaN in the Negative LUT pass.
+        let strongest = try field.field(for: source, exposureStops: 2,
+            halation: Stock.Halation(strength: 0.28, greenShare: 0.06, radiusMicrometres: 270), manual: manual)
+        let most = read(strongest.texture)
+        #expect(most.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
+        #expect(most[32 * 64 + 32].x == 65504)
     }
 
     @Test func inPlaceAndSeparateOutputsMatchWithAllFilmStages() throws {

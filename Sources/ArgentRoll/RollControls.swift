@@ -414,9 +414,11 @@ public struct FrameControls: Sendable, Equatable, Hashable, Codable {
         grain = value == roll ? nil : value
     }
 
-    /// Gives the frame its own Halation, or follows the roll for `nil` or the roll's value.
+    /// Gives the frame its own Halation, held to `OutputSettings.halationRange`, or follows the roll for `nil` or the roll's value.
     public mutating func setHalation(_ value: Int?, roll: Int) {
-        halation = value == roll ? nil : value
+        let range = OutputSettings.halationRange
+        let held = value.map { min(max($0, range.lowerBound), range.upperBound) }
+        halation = held == roll ? nil : held
     }
 
     /// What the frame develops with on a roll set to `roll`.

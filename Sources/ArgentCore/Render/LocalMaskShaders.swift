@@ -89,10 +89,10 @@ extension ShaderSource {
                     ("out.write(half4(float4(averaged, 1.0f)), gid);",
                      "out.write(half4(float4(min(averaged, float3(\(halfLargest))), 1.0f)), gid);")]
         case "halation_mix":
-            // Summed masks can raise the halo past a half float, which is white on any stock. An infinite texel in the field would then
-            // meet a sampler's zero weight in the Negative LUT pass and make a pixel beside it NaN.
-            return [("out.write(half4(float4(sum.r * p.red, sum.g * p.green, 0.0f, 1.0f)), gid);",
-                     "out.write(half4(float4(min(sum.r * p.red, \(halfLargest)), min(sum.g * p.green, \(halfLargest)), 0.0f, 1.0f)), gid);")]
+            // Plain `halation_mix` already caps at the largest finite half float, which summed masks need too; keep the line
+            // checked so an edit that drops the cap fails here.
+            let capped = "out.write(half4(float4(min(sum.r * p.red, \(halfLargest)), min(sum.g * p.green, \(halfLargest)), 0.0f, 1.0f)), gid);"
+            return [(capped, capped)]
         default:
             // The balance joins the dye amounts the print pass shifts by Lab balance, so it is the same move, in the same units, per pixel. It
             // is skipped altogether while no mask carries one, so a mask without one keeps its bits.
