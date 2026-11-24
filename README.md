@@ -6,7 +6,7 @@
 <p align="center"><strong>A digital roll. A film finish.</strong></p>
 
 <p align="center">
-  Native RAW development for Sony a7 IV.<br>
+  Native development for Sony RAW files.<br>
   Modelled colour negative and print. Made for Mac.
 </p>
 
@@ -42,7 +42,7 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
 
 ## The workflow
 
-1. **Bring in a roll.** Use File › Add Existing Folder (⌘O) to keep a folder of Sony a7 IV
+1. **Bring in a roll.** Use File › Add Existing Folder (⌘O) to keep a folder of Sony
    `.ARW` files where it is, or File › Import Roll (⌘I) to copy frames from a card or folder
    into a new roll. Review the contact sheet in capture order, flag the frames to keep in view,
    and work with one frame or a selection.
@@ -53,6 +53,9 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
 3. **Develop.** Open the Develop page (⌘D), choose a destination, and write the frames shown
    to JPEG, HEIC or 16-bit TIFF in sRGB, Display P3 or Adobe RGB. Output retains EXIF, GPS and
    XMP metadata from the source. Recipes keep the settings; a stopped develop can resume.
+
+Argent decodes with macOS's own RAW support. A roll shows the `.ARW` files in its folder
+whichever camera made them, but Argent can develop only those macOS can open.
 
 Edits leave the source RAW data untouched, and image processing stays on the Mac. Auto is a
 starting point, not a guarantee of identical brightness across reframings.
