@@ -1,3 +1,4 @@
+import AppKit
 import ArgentRoll
 import SwiftUI
 
@@ -40,6 +41,9 @@ struct RollControlsView: View {
                 setting("Rated at") { RatedAtControl(frame: frame) }
                 setting("Lab balance") { LabBalanceControl(frame: frame) }
                 setting("Grain") { GrainControl(frame: frame) }
+                SectionDivider()
+                    .padding(.top, 2)
+                    .padding(.bottom, 1)
                 HalationControl(frame: frame)
             }
             .accessibilityElement(children: .contain)
@@ -300,11 +304,11 @@ struct GrainControl: View {
 }
 
 /// Halation: the roll's, kept for every roll as Grain is, or with a frame its own. 0 to 200, where 100 is the stock's own
-/// halation, on the inspector's slider row, which names itself. A gesture's steps go to the frame view's print alone, and the
-/// roll or the frame takes the value as it ends (`RollModel.printedHalation`), since each write saves every frame's choices.
-/// With a frame the row's reset is "same as roll": the roll's value is its default, and the frame's own stands off it on the
-/// track. A frame's own at the roll's value has no reset to take, so the row's menu has "Same as roll" as the other three
-/// settings' menus do. Disabled where the stock has no halation, and while no stock is loaded.
+/// halation, in a recessed Liquid Glass scrubber bar matching the menus above it. A gesture's steps go to the frame view's
+/// print alone, and the roll or the frame takes the value as it ends (`RollModel.printedHalation`), since each write saves
+/// every frame's choices. With a frame, the bar's default detent and reset are "same as roll", and an inline dock-accent dot,
+/// tint and readout mark a frame override without wrapping the row in a box. Disabled where the stock has no halation, and
+/// while no stock is loaded.
 struct HalationControl: View {
     let frame: Frame?
     @Environment(RollModel.self) private var model
@@ -316,16 +320,38 @@ struct HalationControl: View {
         // The stock the control acts on: the frame's, its own or the roll's, or on the sheet the roll's.
         let stock = if let frame { model.stock(for: frame) } else { model.currentStock }
         let unavailable = stock.map { $0.halation == nil ? "\($0.displayName) has no halation." : nil } ?? "No stock is loaded."
+        let defaultValue = frame != nil ? roll : OutputSettings.defaultHalation
         var spec = AdjustmentSliderSpec.halation
         if frame != nil { spec.defaultValue = Float(roll) }
         spec.spokenNote = RollControlsView.ownership(ControlsScope(frame: frame), isOwn: own)
-        return ManualAdjustmentRow(spec: spec, help: unavailable ?? help(roll: roll, own: own),
-                                   value: Binding(get: { Float(value) }, set: { model.moveHalation(Int($0.rounded()), for: frame) }),
-                                   snapshot: frame?.url, beginGesture: { model.beginHalationAdjusting(for: frame) },
-                                   endGesture: { model.endHalationAdjusting() },
-                                   menuSwitch: frame.map { frame in { Self.sameAsRoll(frame, roll: roll, isOwn: own, isAvailable: unavailable == nil, model: model) } })
-            .disabled(unavailable != nil)
-            .modifier(FrameOverrideIndicator(isOwn: own))
+        let resetAction: @MainActor () -> Void = {
+            if let frame {
+                model.setHalation(nil, for: frame)
+            } else {
+                model.beginHalationAdjusting(for: nil)
+                model.moveHalation(OutputSettings.defaultHalation, for: nil)
+                model.endHalationAdjusting()
+            }
+        }
+        return HalationScrubberBar(
+            spec: spec,
+            value: value,
+            defaultValue: defaultValue,
+            isFrame: frame != nil,
+            isOwn: own,
+            isAvailable: unavailable == nil,
+            help: unavailable ?? help(roll: roll, own: own),
+            snapshot: frame.map { .frame($0.url) } ?? .roll,
+            beginGesture: { model.beginHalationAdjusting(for: frame) },
+            moveValue: { model.moveHalation($0, for: frame) },
+            endGesture: { model.endHalationAdjusting() },
+            resetValue: resetAction,
+            menuEntries: { isDragging in
+                Self.menuEntries(frame: frame, roll: roll, value: value, isOwn: own,
+                                 isAvailable: unavailable == nil, isDragging: isDragging,
+                                 model: model, reset: resetAction)
+            }
+        )
     }
 
     /// The row's menu's way back to the roll's value, off while the frame follows the roll already, and while the row is
@@ -336,11 +362,531 @@ struct HalationControl: View {
                 isEnabled: isOwn && isAvailable) { model.setHalation(nil, for: frame) }
     }
 
+    /// The bar's context menu: "Same as roll" for a frame, then "Reset Halation".
+    @MainActor static func menuEntries(frame: Frame?, roll: Int, value: Int, isOwn: Bool, isAvailable: Bool,
+                                       isDragging: Bool, model: RollModel,
+                                       reset: @escaping @MainActor () -> Void) -> [MenuEntry] {
+        let sameAsRoll = frame.map { frame in
+            [Self.sameAsRoll(frame, roll: roll, isOwn: isOwn, isAvailable: isAvailable && !isDragging, model: model)]
+        } ?? []
+        let target = frame != nil ? roll : OutputSettings.defaultHalation
+        let resetRow = InspectorMenus.sliderRow(title: AdjustmentSliderSpec.halation.title,
+                                                isChanged: value != target,
+                                                isEnabled: isAvailable && !isDragging,
+                                                reset: reset)
+        return MenuEntry.sections([sameAsRoll, resetRow])
+    }
+
+    /// Maps a horizontal pointer coordinate along the bar's width to a clamped Halation integer (0...200).
+    static func value(at x: CGFloat, width: CGFloat, range: ClosedRange<Int> = OutputSettings.halationRange) -> Int {
+        guard width > 0 else { return OutputSettings.defaultHalation }
+        let fraction = min(1, max(0, x / width))
+        let span = CGFloat(range.upperBound - range.lowerBound)
+        return min(range.upperBound, max(range.lowerBound, range.lowerBound + Int((fraction * span).rounded())))
+    }
+
     private func help(roll: Int, own: Bool) -> String {
         let scale = "The glow around bright lights: 100 is the stock's own, 0 none and 200 twice as much."
         guard frame != nil else { return "The roll's Halation. \(scale) Every frame without its own develops with it." }
         return own ? "This frame's own Halation. \(scale) The roll's is \(roll)."
             : "This frame's Halation, the same as the roll's. \(scale) Changing it gives the frame its own."
+    }
+}
+
+/// Coalesces high-rate pointer drags to `AdjustmentSlider.dragWriteInterval`, flushing the final value on release.
+@MainActor
+private final class HalationDragThrottle {
+    private var pending: Int?
+    private var lastWrite: CFTimeInterval = 0
+    private var task: Task<Void, Never>?
+
+    func push(_ value: Int, write: @escaping @MainActor (Int) -> Void) {
+        pending = value
+        let now = CACurrentMediaTime()
+        let wait = AdjustmentSlider.dragWriteInterval - (now - lastWrite)
+        if wait <= 0 {
+            flush(write: write)
+        } else if task == nil {
+            task = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(wait))
+                guard let self, !Task.isCancelled else { return }
+                self.task = nil
+                self.flush(write: write)
+            }
+        }
+    }
+
+    func flush(write: @MainActor (Int) -> Void) {
+        let value = pending
+        cancel()
+        guard let value else { return }
+        lastWrite = CACurrentMediaTime()
+        write(value)
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+        pending = nil
+    }
+}
+
+/// Identifies the editing target for typed Halation input, so a non-optional value distinguishes roll edits from nil.
+private enum HalationSnapshot: Equatable, Sendable {
+    case roll
+    case frame(URL)
+}
+
+/// Recessed Liquid Glass horizontal scrubber bar for Film settings' Halation control.
+private struct HalationScrubberBar: View {
+    let spec: AdjustmentSliderSpec
+    let value: Int
+    let defaultValue: Int
+    let isFrame: Bool
+    let isOwn: Bool
+    let isAvailable: Bool
+    let help: String
+    let snapshot: HalationSnapshot
+    let beginGesture: @MainActor () -> Void
+    let moveValue: @MainActor (Int) -> Void
+    let endGesture: @MainActor () -> Void
+    let resetValue: @MainActor () -> Void
+    let menuEntries: @MainActor (Bool) -> [MenuEntry]
+
+    private static let height: CGFloat = 30
+    private static let cornerRadius: CGFloat = Graphite.Metric.actionRadius
+    private static let barSpace = "halationScrubberBar"
+
+    @Environment(\.isEnabled) private var environmentEnabled
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var live: Int?
+    @State private var isDragging = false
+    @State private var suppressDrag = false
+    @State private var barWidth: CGFloat = 228
+    @State private var spot = PointerSpot()
+    @State private var resetHovered = false
+    @State private var number = ""
+    @State private var numberSnapshot: HalationSnapshot?
+    @State private var validationMessage: String?
+    @State private var written: Int?
+    @State private var arrivals = ValueArrivals()
+    @State private var throttle = HalationDragThrottle()
+    @State private var showsKeyboardFocus = false
+
+    @FocusState private var barFocused: Bool
+    @FocusState private var numberFocused: Bool
+
+    private var isActive: Bool { isAvailable && environmentEnabled }
+    private var isHovered: Bool { spot.isInside && isActive }
+    private var current: Int { live ?? value }
+    private var isChanged: Bool { current != defaultValue }
+    private var canReset: Bool { isActive && (isChanged || isOwn) }
+    private var isOwnValue: Bool { isDragging || written == current }
+
+    var body: some View {
+        let glides = !reduceMotion && arrivals.glides(to: Float(current), isOwn: isOwnValue)
+        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        let showsTint = isFrame && (isOwn || (isDragging && current != defaultValue))
+
+        VStack(alignment: .leading, spacing: 4) {
+            ZStack {
+                // Interactive track layer: well, animated fill, default detent pips, and leading edge needle.
+                Animated(value: CGFloat(current)) { animatedValue in
+                    trackSurface(for: animatedValue, shape: shape, showsTint: showsTint)
+                        .transaction { $0.animation = nil }
+                }
+                .animation(glides ? Graphite.Motion.value : nil, value: current)
+                .contentShape(shape)
+                .pointerStyle(isActive && !numberFocused ? .columnResize : nil)
+                .gesture(barDrag, isEnabled: isActive && !numberFocused)
+
+                // Foreground labels and trailing controls.
+                HStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(verbatim: spec.title)
+                            .font(Graphite.Typeface.label)
+                            .foregroundStyle(Graphite.text)
+                            .lineLimit(1)
+                        if showsTint {
+                            Circle()
+                                .fill(Graphite.dockAccent)
+                                .frame(width: 5, height: 5)
+                                .transition(reduceMotion ? .identity : .scale(scale: 0.4).combined(with: .opacity))
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .allowsHitTesting(false)
+
+                    Spacer(minLength: 4)
+                        .allowsHitTesting(false)
+
+                    HStack(spacing: 3) {
+                        if canReset {
+                            resetButton
+                        }
+                        valueReadout(glides: glides, showsTint: showsTint)
+                    }
+                    .opacity(numberFocused ? 0 : 1)
+                    .allowsHitTesting(!numberFocused)
+                }
+                .padding(.leading, 11)
+                .padding(.trailing, 6)
+
+                // Kept mounted so clicking the value focuses it on the first click without shifting the reset button.
+                inlineNumberField
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 6)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.height)
+            .coordinateSpace(name: Self.barSpace)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+            .overlay {
+                borderOverlay(shape: shape)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                if isActive {
+                    PointerLight(spot: spot, shape: shape, isPressed: isDragging, reach: 75, bloom: 32)
+                }
+            }
+            .opacity(isActive ? 1 : 0.42)
+            .onContinuousHover { spot.follow($0) }
+            .contextMenu(entries: { menuEntries(isDragging) })
+            .help(isActive ? spec.sliderHelp(help) : help)
+            .focusable(isActive && !numberFocused)
+            .focused($barFocused)
+            .focusEffectDisabled()
+            .onChange(of: barFocused) { _, focused in
+                if focused {
+                    let type = NSApp.currentEvent?.type
+                    showsKeyboardFocus = type != .leftMouseDown && type != .leftMouseUp && type != .leftMouseDragged
+                } else {
+                    showsKeyboardFocus = false
+                }
+            }
+            .onKeyPress(phases: .down) { key in
+                guard isActive, !numberFocused else { return .ignored }
+                return handleKey(key)
+            }
+            .animation(reduceMotion ? nil : Graphite.Motion.quick, value: isHovered)
+            .animation(reduceMotion ? nil : Graphite.Motion.quick, value: showsTint)
+            .accessibilityElement(children: numberFocused ? .contain : .ignore)
+            .accessibilityLabel(spec.title)
+            .accessibilityValue(spec.spoken(Float(current)))
+            .accessibilityHint(help)
+            .accessibilityAdjustableAction { direction in
+                guard isActive else { return }
+                let delta = direction == .increment ? 1 : -1
+                stepValue(to: current + delta)
+            }
+            .accessibilityAction(named: isFrame ? "Same as roll" : "Reset halation") {
+                guard canReset else { return }
+                performReset()
+            }
+
+            if let validationMessage {
+                Text(verbatim: validationMessage)
+                    .font(Graphite.Typeface.caption)
+                    .foregroundStyle(Graphite.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onAppear { number = spec.formatted(Float(value)) }
+        .onChange(of: value) { _, new in
+            if written != nil, written != new { written = nil }
+        }
+        .onChange(of: snapshot) { _, updated in
+            if numberFocused, updated != numberSnapshot { numberFocused = false }
+            if !numberFocused { validationMessage = nil }
+        }
+        .onChange(of: numberFocused) { _, focused in
+            if focused {
+                number = spec.formatted(Float(value))
+                numberSnapshot = snapshot
+                validationMessage = nil
+            } else {
+                commitNumber()
+                numberSnapshot = nil
+            }
+        }
+        .onDisappear {
+            if numberFocused { commitNumber() }
+            if isDragging { finishDrag() } else { throttle.cancel() }
+        }
+    }
+
+    @ViewBuilder
+    private func trackSurface(for animatedValue: CGFloat, shape: RoundedRectangle, showsTint: Bool) -> some View {
+        let lower = CGFloat(OutputSettings.halationRange.lowerBound)
+        let span = CGFloat(OutputSettings.halationRange.upperBound - OutputSettings.halationRange.lowerBound)
+        let fraction = span > 0 ? min(1, max(0, (animatedValue - lower) / span)) : 0
+        let defaultFraction = spec.fraction(of: Float(defaultValue))
+        let isDark = Graphite.isDark
+
+        GeometryReader { proxy in
+            let size = proxy.size
+            let fillWidth = fraction * size.width
+            let needleWidth: CGFloat = (isHovered || isDragging) ? 3 : 2.5
+
+            ZStack(alignment: .leading) {
+                // Recessed well + subtle top depth shadow.
+                shape.fill(Graphite.ink(isDark ? 0.055 : 0.045))
+                LinearGradient(
+                    colors: [Color.black.opacity(isDark ? 0.22 : 0.06), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 4)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                // Luminous translucent glass fill.
+                if fillWidth > 0.5 {
+                    ZStack(alignment: .top) {
+                        LinearGradient(
+                            colors: showsTint
+                                ? [Graphite.dockAccent.opacity(isDark ? 0.21 : 0.17),
+                                   Graphite.dockAccent.opacity(isDark ? 0.12 : 0.10)]
+                                : [Graphite.ink(isDark ? 0.18 : 0.12),
+                                   Graphite.ink(isDark ? 0.11 : 0.08)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        Rectangle()
+                            .fill(Color.white.opacity(isDark ? 0.08 : 0.38))
+                            .frame(height: 1)
+                    }
+                    .frame(width: fillWidth, height: size.height)
+                }
+
+                // Top and bottom edge pips at the default/roll value (e.g. 100).
+                if defaultFraction > 0.02 && defaultFraction < 0.98 {
+                    let detentX = defaultFraction * size.width
+                    VStack(spacing: 0) {
+                        Rectangle().fill(Graphite.tertiaryText.opacity(0.55)).frame(width: 1, height: 4)
+                        Spacer(minLength: 0)
+                        Rectangle().fill(Graphite.tertiaryText.opacity(0.55)).frame(width: 1, height: 4)
+                    }
+                    .padding(.vertical, 1)
+                    .frame(width: 1, height: size.height)
+                    .position(x: detentX, y: size.height / 2)
+                }
+
+                // Leading edge needle.
+                if fraction > 0.001 {
+                    let needleX = min(size.width - 1 - needleWidth / 2,
+                                      max(1 + needleWidth / 2, fillWidth - needleWidth / 2))
+                    Capsule()
+                        .fill(showsTint ? Graphite.dockAccent : Graphite.selection)
+                        .opacity(isHovered || isDragging ? 1 : (showsTint ? 0.92 : 0.70))
+                        .frame(width: needleWidth, height: max(0, size.height - 10))
+                        .position(x: needleX, y: size.height / 2)
+                }
+            }
+            .clipShape(shape)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func borderOverlay(shape: RoundedRectangle) -> some View {
+        let strokeColor: Color = if showsKeyboardFocus {
+            Graphite.dockAccent.opacity(0.85)
+        } else if contrast == .increased {
+            Graphite.strongBorder
+        } else if isHovered || isDragging {
+            Graphite.ink(Graphite.isDark ? 0.22 : 0.20)
+        } else {
+            Graphite.border
+        }
+        return shape.strokeBorder(strokeColor, lineWidth: showsKeyboardFocus ? 1.5 : 1)
+    }
+
+    private var resetButton: some View {
+        Button(action: performReset) {
+            Image(systemName: "arrow.counterclockwise")
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(resetHovered ? Graphite.text : Graphite.secondaryText)
+                .frame(width: 18, height: 18)
+                .background {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(resetHovered ? Graphite.hoverFill : .clear)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(resetHovered ? 1 : (isHovered || isDragging || showsKeyboardFocus ? 0.92 : 0.42))
+        .pointerStyle(.default)
+        .onHover { resetHovered = $0 }
+        .help(isFrame ? "Same as roll (\(defaultValue)). You can also double-click the bar."
+              : "Reset halation to \(defaultValue). You can also double-click the bar.")
+        .accessibilityLabel(isFrame ? "Same as roll" : "Reset halation")
+    }
+
+    private var inlineNumberField: some View {
+        let fieldShape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+        return TextField(spec.title, text: $number)
+            .textFieldStyle(.plain)
+            .font(Graphite.Typeface.number.weight(.medium))
+            .multilineTextAlignment(.trailing)
+            .foregroundStyle(Graphite.text)
+            .padding(.horizontal, 5)
+            .frame(width: 40, height: 20)
+            .background(fieldShape.fill(Graphite.control))
+            .overlay { fieldShape.strokeBorder(Graphite.dockAccent.opacity(0.75), lineWidth: 1) }
+            .focused($numberFocused)
+            .opacity(numberFocused ? 1 : 0)
+            .allowsHitTesting(numberFocused)
+            .accessibilityHidden(!numberFocused)
+            .onSubmit { commitNumber(); numberFocused = false }
+            .onKeyPress(.escape) {
+                number = spec.formatted(Float(value))
+                validationMessage = nil
+                numberFocused = false
+                return .handled
+            }
+    }
+
+    private func valueReadout(glides: Bool, showsTint: Bool) -> some View {
+        let textColor: Color = showsTint ? Graphite.dockAccent
+            : (isDragging || isHovered ? Graphite.text : Graphite.secondaryText)
+        return Animated(value: CGFloat(current)) { counted in
+            Text(verbatim: spec.formatted(spec.snapped(Float(counted))))
+                .font(Graphite.Typeface.number.weight(.medium))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+                .transaction { $0.animation = nil }
+        }
+        .animation(glides ? Graphite.Motion.value : nil, value: current)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .gesture(valueClickOrDrag, isEnabled: isActive)
+    }
+
+    // MARK: Gestures & Keyboard
+
+    private var barDrag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.barSpace))
+            .onChanged { gesture in
+                if !isDragging && !suppressDrag {
+                    if NSApp.currentEvent?.clickCount == 2 {
+                        suppressDrag = true
+                        performReset()
+                        return
+                    }
+                    beginDrag()
+                }
+                guard !suppressDrag else { return }
+                updateDrag(at: gesture.location.x)
+            }
+            .onEnded { _ in
+                if suppressDrag {
+                    suppressDrag = false
+                    return
+                }
+                if isDragging { finishDrag() }
+            }
+    }
+
+    /// Click on the number edits it inline; dragging past 3 pt seamlessly scrubs the bar.
+    private var valueClickOrDrag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.barSpace))
+            .onChanged { gesture in
+                if !isDragging {
+                    guard abs(gesture.translation.width) >= ValueScrubView.dragThreshold else { return }
+                    beginDrag()
+                }
+                updateDrag(at: gesture.location.x)
+            }
+            .onEnded { _ in
+                if isDragging {
+                    finishDrag()
+                } else if NSApp.currentEvent?.clickCount == 2 {
+                    performReset()
+                } else {
+                    numberFocused = true
+                }
+            }
+    }
+
+    private func beginDrag() {
+        if numberFocused { commitNumber(); numberFocused = false }
+        isDragging = true
+        beginGesture()
+    }
+
+    private func updateDrag(at x: CGFloat) {
+        let next = HalationControl.value(at: x, width: barWidth)
+        guard next != current else { return }
+        live = next
+        written = next
+        throttle.push(next, write: moveValue)
+    }
+
+    private func finishDrag() {
+        throttle.flush(write: moveValue)
+        isDragging = false
+        endGesture()
+        live = nil
+    }
+
+    private func performReset() {
+        numberFocused = false
+        validationMessage = nil
+        written = nil
+        resetValue()
+    }
+
+    private func stepValue(to target: Int) {
+        let range = OutputSettings.halationRange
+        let clamped = min(range.upperBound, max(range.lowerBound, target))
+        guard clamped != value else { return }
+        written = clamped
+        beginGesture()
+        moveValue(clamped)
+        endGesture()
+    }
+
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        let delta = press.modifiers.contains(.shift) ? 10 : 1
+        switch press.key {
+        case .leftArrow, .downArrow:
+            stepValue(to: current - delta)
+            return .handled
+        case .rightArrow, .upArrow:
+            stepValue(to: current + delta)
+            return .handled
+        case .home:
+            stepValue(to: OutputSettings.halationRange.lowerBound)
+            return .handled
+        case .end:
+            stepValue(to: OutputSettings.halationRange.upperBound)
+            return .handled
+        default:
+            return .ignored
+        }
+    }
+
+    private func commitNumber() {
+        switch ManualAdjustmentNumberInput.resolve(number, spec: spec, startingAt: numberSnapshot, current: snapshot) {
+        case .value(let stepped):
+            let clamped = Int(stepped.rounded())
+            if clamped != value {
+                written = nil
+                beginGesture()
+                moveValue(clamped)
+                endGesture()
+            }
+            number = spec.formatted(Float(clamped))
+            validationMessage = nil
+        case .invalid:
+            validationMessage = spec.entryLimits
+        case .superseded:
+            number = spec.formatted(Float(value))
+            validationMessage = nil
+        }
     }
 }
 

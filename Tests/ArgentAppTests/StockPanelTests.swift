@@ -111,6 +111,15 @@ import Testing
         #expect(narrow.offset(revealing: 5, from: 0) == narrow.maximumOffset)
     }
 
+    @Test func halationBarMapsPointerCoordinatesAcrossTheRange() {
+        #expect(HalationControl.value(at: -20, width: 228) == 0)
+        #expect(HalationControl.value(at: 0, width: 228) == 0)
+        #expect(HalationControl.value(at: 114, width: 228) == 100)
+        #expect(HalationControl.value(at: 228, width: 228) == 200)
+        #expect(HalationControl.value(at: 300, width: 228) == 200)
+        #expect(HalationControl.value(at: 50, width: 0) == OutputSettings.defaultHalation)
+    }
+
     @Test func emptyAndTinyShelvesHaveFiniteScrollTargets() {
         let empty = StockShelfLayout(width: 346, count: 0)
         #expect(!empty.showsPaging && empty.contentWidth == 0 && empty.maximumOffset == 0)
