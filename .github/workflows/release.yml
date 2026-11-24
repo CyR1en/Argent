@@ -277,8 +277,11 @@ jobs:
           }, indent=2))
           PY
 
-          # Exercise update-appcast.py on every signed build (including PR checks).
-          python3 scripts/update-appcast.py --appcast "$RUNNER_TEMP/test-appcast.xml" --manifest dist/update-manifest.json
+          # Exercise update-appcast.py (manifest dir + XML rebuild) on every signed build, including PR checks.
+          python3 scripts/update-appcast.py \
+            --manifests-dir "$RUNNER_TEMP/test-manifests" \
+            --manifest dist/update-manifest.json \
+            --appcast "$RUNNER_TEMP/test-appcast.xml"
           echo "Sparkle update signed and manifest validated (channel=$channel, build=$build_number, length=$length)"
           echo "has_manifest=true" >> "$GITHUB_OUTPUT"
 
@@ -294,7 +297,7 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
           rm -rf "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
-            "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/test-appcast.xml"
+            "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/test-appcast.xml" "$RUNNER_TEMP/test-manifests"
 
   publish:
     needs: build
@@ -316,6 +319,10 @@ jobs:
       VERSION: ${{ needs.build.outputs.version }}
       PREVIOUS_TAG: ${{ needs.build.outputs.previous_tag }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          path: repo
+
       - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.artifact }}
@@ -389,44 +396,82 @@ jobs:
           fi
           echo "published=true" >> "$GITHUB_OUTPUT"
 
-  appcast:
+      # Record this release's manifest on gh-pages and deterministically rebuild appcast.xml from all stored
+      # manifests. Runs inside per-ref publish (never dropped by a global concurrency queue) with fetch/reset
+      # retries so simultaneous main + tag releases merge cleanly before deploy_pages publishes the site.
+      - name: Record manifest and update appcast on gh-pages
+        if: needs.build.outputs.has_manifest == 'true' && (steps.nightly.outputs.published == 'true' || steps.release.outputs.published == 'true')
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+
+      - name: Commit manifest and appcast to gh-pages
+        if: needs.build.outputs.has_manifest == 'true' && (steps.nightly.outputs.published == 'true' || steps.release.outputs.published == 'true')
+        run: |
+          cd pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch origin gh-pages
+            git reset --hard origin/gh-pages
+            python3 ../repo/scripts/update-appcast.py \
+              --manifests-dir manifests \
+              --manifest ../dist/update-manifest.json \
+              --appcast appcast.xml
+            if git status --porcelain -- manifests appcast.xml | grep -q .; then
+              git add manifests appcast.xml
+              git commit -m "Update appcast for $KIND $VERSION (${GITHUB_SHA::7})"
+              if git push origin gh-pages; then
+                exit 0
+              fi
+              echo "gh-pages push raced (attempt $attempt/5); retrying against updated origin/gh-pages..."
+              sleep "$(( attempt * 2 ))"
+            else
+              echo "appcast.xml and manifests unchanged"
+              exit 0
+            fi
+          done
+          echo "::error::failed to push updated appcast to gh-pages after 5 attempts"
+          exit 1
+
+  deploy_pages:
     needs: [build, publish]
     if: needs.build.outputs.kind != 'check' && needs.build.outputs.has_manifest == 'true' && needs.publish.outputs.published == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
-      # Serialize every appcast update across main nightlies and v* tag releases so gh-pages never races.
-      group: appcast
+      # Always deploys the newest gh-pages HEAD (which already contains every committed release manifest),
+      # so even if multiple queued Pages deploys coalesce, no published release is ever dropped.
+      group: pages
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
-        with:
-          path: repo
-
       - uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: pages
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ needs.build.outputs.artifact }}
-          path: dist
-
-      - name: Update and publish appcast.xml
+      - name: Stage public Pages files
         run: |
-          python3 repo/scripts/update-appcast.py \
-            --appcast pages/appcast.xml \
-            --manifest dist/update-manifest.json
-          cd pages
-          if git diff --quiet appcast.xml; then
-            echo "appcast.xml unchanged"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
-          git commit -m "Update appcast for ${{ needs.build.outputs.kind }} ${{ needs.build.outputs.version }} (${GITHUB_SHA::7})"
-          git push origin gh-pages
+          mkdir -p _site
+          cp pages/appcast.xml _site/appcast.xml
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

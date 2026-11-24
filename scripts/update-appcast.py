@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Updates Argent's Sparkle 2 appcast.xml from a build's JSON update manifest.
+"""Updates Argent's Sparkle 2 appcast.xml from per-release JSON manifests.
 
 Two-channel model:
   - Stable releases (vN.N.N): default channel (no <sparkle:channel> element), keyed by
     guid `argent-release-<version>`, keeping the newest `--keep-stable` releases.
   - Nightly builds (main pushes) and pre-release tags (vN.N.N-suffix): `<sparkle:channel>nightly</sparkle:channel>`.
-    The rolling nightly is keyed by guid `argent-nightly` and replaced on each publish; pre-release
-    tags use `argent-release-<version>` and keep the newest `--keep-prerelease` items.
+    The rolling nightly is keyed by guid `argent-nightly` and replaced when a build is at least
+    as new as the recorded one; pre-release tags use `argent-release-<version>` and keep the newest
+    `--keep-prerelease` items.
+
+When `--manifests-dir` is given, every published release's manifest is stored as
+`<manifests-dir>/<guid>.json` and `appcast.xml` is rebuilt deterministically from all stored
+manifests, so concurrent publishes on different refs never overwrite each other's XML edits.
 
 Usage:
+    python3 scripts/update-appcast.py --manifests-dir pages/manifests --manifest dist/update-manifest.json --appcast pages/appcast.xml
     python3 scripts/update-appcast.py --appcast pages/appcast.xml --manifest dist/update-manifest.json
 """
 
@@ -73,14 +79,7 @@ def validate_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     return manifest
 
 
-def load_or_create_tree(appcast_path: Path) -> ET.ElementTree:
-    if appcast_path.exists() and appcast_path.read_text(encoding="utf-8").strip():
-        tree = ET.parse(appcast_path)
-        root = tree.getroot()
-        if root.tag != "rss" or root.find("channel") is None:
-            raise ValueError(f"{appcast_path} is not a valid RSS appcast")
-        return tree
-
+def create_empty_tree() -> ET.ElementTree:
     rss = ET.Element("rss", {"version": "2.0"})
     channel = ET.SubElement(rss, "channel")
     ET.SubElement(channel, "title").text = "Argent"
@@ -88,6 +87,16 @@ def load_or_create_tree(appcast_path: Path) -> ET.ElementTree:
     ET.SubElement(channel, "description").text = "Updates for Argent."
     ET.SubElement(channel, "language").text = "en"
     return ET.ElementTree(rss)
+
+
+def load_or_create_tree(appcast_path: Path) -> ET.ElementTree:
+    if appcast_path.exists() and appcast_path.read_text(encoding="utf-8").strip():
+        tree = ET.parse(appcast_path)
+        root = tree.getroot()
+        if root.tag != "rss" or root.find("channel") is None:
+            raise ValueError(f"{appcast_path} is not a valid RSS appcast")
+        return tree
+    return create_empty_tree()
 
 
 def guid_for(manifest: dict[str, Any]) -> str:
@@ -141,35 +150,16 @@ def item_channel(item: ET.Element) -> str:
     return item.findtext(_sp("channel")) or "stable"
 
 
-def update_appcast(
-    appcast_path: Path,
-    manifest: dict[str, Any],
-    keep_stable: int = 20,
-    keep_prerelease: int = 10,
-) -> None:
-    validate_manifest(manifest)
-    tree = load_or_create_tree(appcast_path)
+def _write_tree(appcast_path: Path, tree: ET.ElementTree, items: list[ET.Element], keep_stable: int, keep_prerelease: int) -> None:
     channel_el = tree.getroot().find("channel")
     assert channel_el is not None
-
-    target_guid = guid_for(manifest)
-    existing_items = list(channel_el.findall("item"))
-    if manifest["kind"] == "nightly":
-        incoming_build = int(str(manifest["build_number"]))
-        for item in existing_items:
-            if (item.findtext("guid") or "") == target_guid and item_version_key(item) > incoming_build:
-                return
-
-    for item in existing_items:
+    for item in list(channel_el.findall("item")):
         channel_el.remove(item)
 
-    kept: list[ET.Element] = [item for item in existing_items if (item.findtext("guid") or "") != target_guid]
-    kept.append(build_item(manifest))
-
-    stable_items = [i for i in kept if item_channel(i) == "stable"]
-    rolling_nightly = [i for i in kept if (i.findtext("guid") or "") == "argent-nightly"]
+    stable_items = [i for i in items if item_channel(i) == "stable"]
+    rolling_nightly = [i for i in items if (i.findtext("guid") or "") == "argent-nightly"]
     prerelease_items = [
-        i for i in kept if item_channel(i) != "stable" and (i.findtext("guid") or "") != "argent-nightly"
+        i for i in items if item_channel(i) != "stable" and (i.findtext("guid") or "") != "argent-nightly"
     ]
 
     stable_items.sort(key=item_version_key, reverse=True)
@@ -190,16 +180,82 @@ def update_appcast(
     appcast_path.write_bytes(xml_bytes + b"\n")
 
 
+def update_appcast(
+    appcast_path: Path,
+    manifest: dict[str, Any],
+    keep_stable: int = 20,
+    keep_prerelease: int = 10,
+) -> None:
+    validate_manifest(manifest)
+    tree = load_or_create_tree(appcast_path)
+    channel_el = tree.getroot().find("channel")
+    assert channel_el is not None
+
+    target_guid = guid_for(manifest)
+    existing_items = list(channel_el.findall("item"))
+    if manifest["kind"] == "nightly":
+        incoming_build = int(str(manifest["build_number"]))
+        for item in existing_items:
+            if (item.findtext("guid") or "") == target_guid and item_version_key(item) > incoming_build:
+                return
+
+    kept = [item for item in existing_items if (item.findtext("guid") or "") != target_guid]
+    kept.append(build_item(manifest))
+    _write_tree(appcast_path, tree, kept, keep_stable=keep_stable, keep_prerelease=keep_prerelease)
+
+
+def upsert_manifest_and_rebuild(
+    manifests_dir: Path,
+    appcast_path: Path,
+    manifest: dict[str, Any] | None = None,
+    keep_stable: int = 20,
+    keep_prerelease: int = 10,
+) -> None:
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    if manifest is not None:
+        validate_manifest(manifest)
+        guid = guid_for(manifest)
+        dest = manifests_dir / f"{guid}.json"
+        write_manifest = True
+        if manifest["kind"] == "nightly" and dest.exists():
+            current = validate_manifest(json.loads(dest.read_text(encoding="utf-8")))
+            if int(str(current["build_number"])) > int(str(manifest["build_number"])):
+                write_manifest = False
+        if write_manifest:
+            dest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    items: list[ET.Element] = []
+    for path in sorted(manifests_dir.glob("*.json")):
+        entry = validate_manifest(json.loads(path.read_text(encoding="utf-8")))
+        items.append(build_item(entry))
+
+    _write_tree(appcast_path, create_empty_tree(), items, keep_stable=keep_stable, keep_prerelease=keep_prerelease)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Update Argent's Sparkle 2 appcast.xml")
     parser.add_argument("--appcast", required=True, type=Path, help="Path to appcast.xml")
-    parser.add_argument("--manifest", required=True, type=Path, help="Path to update-manifest.json")
+    parser.add_argument("--manifest", type=Path, help="Path to update-manifest.json to upsert")
+    parser.add_argument("--manifests-dir", type=Path, help="Directory of per-release JSON manifests")
     parser.add_argument("--keep-stable", type=int, default=20, help="Max stable items to keep")
     parser.add_argument("--keep-prerelease", type=int, default=10, help="Max prerelease items to keep")
     args = parser.parse_args(argv)
 
-    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-    update_appcast(args.appcast, manifest, keep_stable=args.keep_stable, keep_prerelease=args.keep_prerelease)
+    if args.manifests_dir is None and args.manifest is None:
+        parser.error("at least one of --manifest or --manifests-dir is required")
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8")) if args.manifest else None
+    if args.manifests_dir is not None:
+        upsert_manifest_and_rebuild(
+            args.manifests_dir,
+            args.appcast,
+            manifest=manifest,
+            keep_stable=args.keep_stable,
+            keep_prerelease=args.keep_prerelease,
+        )
+    else:
+        assert manifest is not None
+        update_appcast(args.appcast, manifest, keep_stable=args.keep_stable, keep_prerelease=args.keep_prerelease)
     return 0
 
 

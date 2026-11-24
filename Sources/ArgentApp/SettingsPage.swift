@@ -367,7 +367,7 @@ private struct UpdatesCard: View {
                 .disabled(!updates.isAvailable || !updates.allowsAutomaticUpdates)
             }
             SectionDivider()
-            SettingsRow(title: "Channel", note: updates.channel.note) {
+            SettingsRow(title: "Channel", note: updates.channelNote) {
                 GraphiteSegmented(
                     selection: channel,
                     segments: UpdateChannel.allCases.map { item in

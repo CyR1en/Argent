@@ -125,15 +125,55 @@ import Testing
         #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: false, isDownloadingModels: true, isMovingFrames: false) == "downloading the Subject models")
         #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: false, isDownloadingModels: false, isMovingFrames: false) == nil)
 
-        var busy = true
-        var installed = false
-        controller.deferRelaunchUntilIdle(isBusy: { busy }, installHandler: { installed = true })
+        @MainActor final class FlagBox { var busy = true; var installed = false }
+        let state = FlagBox()
+        controller.deferRelaunchUntilIdle(isBusy: { state.busy }, installHandler: { state.installed = true })
         try await Task.sleep(for: .milliseconds(50))
-        #expect(!installed)
-        busy = false
-        for _ in 0..<20 where !installed {
+        #expect(!state.installed)
+        state.busy = false
+        for _ in 0..<20 where !state.installed {
             try await Task.sleep(for: .milliseconds(50))
         }
-        #expect(installed)
+        #expect(state.installed)
+    }
+
+    @MainActor @Test func switchingToStableDisclosesAndConfirmsStagedNightlyInstall() throws {
+        let suiteName = "camera.argent.Argent.tests.updates.staged.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let controller = UpdateController(defaults: defaults, bundleChannel: "nightly")
+        #expect(controller.channel == .nightly)
+
+        // When a nightly is already staged to install on quit, canceling keeps Nightly selected.
+        @MainActor final class PromptBox { var prompted: UpdateController.PendingQuitUpdate?; var shouldConfirm = false }
+        let prompt = PromptBox()
+        controller.confirmChannelSwitchWithPendingNightly = { pending in
+            prompt.prompted = pending
+            return prompt.shouldConfirm
+        }
+        let stagedNightly = UpdateController.PendingQuitUpdate(version: "0.2.0 nightly (abc1234)", isNightly: true)
+        controller.notePendingQuitUpdate(stagedNightly)
+
+        controller.setChannel(.stable)
+        #expect(prompt.prompted == stagedNightly)
+        #expect(controller.channel == .nightly)
+        #expect(controller.channelNote == UpdateChannel.nightly.note)
+
+        // Confirming switches to Stable and keeps the disclosure note visible.
+        prompt.shouldConfirm = true
+        controller.setChannel(.stable)
+        #expect(controller.channel == .stable)
+        #expect(controller.channelNote.contains("0.2.0 nightly (abc1234)"))
+        #expect(controller.channelNote.contains("subsequent updates"))
+
+        // Switching when a stable update (not nightly) is staged does not prompt.
+        prompt.prompted = nil
+        controller.setChannel(.nightly)
+        controller.notePendingQuitUpdate(UpdateController.PendingQuitUpdate(version: "0.2.0", isNightly: false))
+        controller.setChannel(.stable)
+        #expect(prompt.prompted == nil)
+        #expect(controller.channel == .stable)
+        #expect(controller.channelNote == UpdateChannel.stable.note)
     }
 }

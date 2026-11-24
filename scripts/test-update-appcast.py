@@ -164,6 +164,98 @@ class UpdateAppcastTests(unittest.TestCase):
             self.assertEqual(len(items), 1)
             self.assertEqual(items[0].findtext(f"{SP}version"), "140")
 
+    def test_manifests_dir_rebuilds_from_all_releases_and_preserves_same_commit_promotion_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            manifests = Path(tmp) / "manifests"
+            appcast = Path(tmp) / "appcast.xml"
+            # Same commit (412): nightly (4120) -> beta (4121) -> stable (4122) -> next commit nightly (4130).
+            MOD.upsert_manifest_and_rebuild(
+                manifests,
+                appcast,
+                make_manifest(
+                    kind="nightly",
+                    version="0.1.0",
+                    short_version="0.1.0 nightly (aaa1111)",
+                    build_number="4120",
+                    channel="nightly",
+                    title="Nightly 412",
+                    url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg",
+                ),
+            )
+            MOD.upsert_manifest_and_rebuild(
+                manifests,
+                appcast,
+                make_manifest(
+                    kind="release",
+                    version="0.2.0-beta.1",
+                    short_version="0.2.0-beta.1",
+                    build_number="4121",
+                    channel="nightly",
+                    title="Argent 0.2.0-beta.1",
+                    url="https://github.com/CyR1en/Argent/releases/download/v0.2.0-beta.1/Argent-0.2.0-beta.1.dmg",
+                ),
+            )
+            MOD.upsert_manifest_and_rebuild(
+                manifests,
+                appcast,
+                make_manifest(
+                    kind="release",
+                    version="0.2.0",
+                    short_version="0.2.0",
+                    build_number="4122",
+                    channel="stable",
+                    title="Argent 0.2.0",
+                    url="https://github.com/CyR1en/Argent/releases/download/v0.2.0/Argent-0.2.0.dmg",
+                ),
+            )
+            items = ET.parse(appcast).getroot().findall("channel/item")
+            # Stable 4122 strictly beats same-commit beta 4121 and nightly 4120.
+            self.assertEqual(
+                [(i.findtext("guid"), i.findtext(f"{SP}version"), i.findtext(f"{SP}channel")) for i in items],
+                [
+                    ("argent-release-0.2.0", "4122", None),
+                    ("argent-release-0.2.0-beta.1", "4121", "nightly"),
+                    ("argent-nightly", "4120", "nightly"),
+                ],
+            )
+            # Next commit on main advances nightly to 4130, strictly above 4122.
+            MOD.upsert_manifest_and_rebuild(
+                manifests,
+                appcast,
+                make_manifest(
+                    kind="nightly",
+                    version="0.2.0",
+                    short_version="0.2.0 nightly (bbb2222)",
+                    build_number="4130",
+                    channel="nightly",
+                    title="Nightly 413",
+                    url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg",
+                ),
+            )
+            # Older nightly rerun must not downgrade 4130 back to 4120.
+            MOD.upsert_manifest_and_rebuild(
+                manifests,
+                appcast,
+                make_manifest(
+                    kind="nightly",
+                    version="0.1.0",
+                    short_version="0.1.0 nightly (aaa1111)",
+                    build_number="4120",
+                    channel="nightly",
+                    title="Nightly 412",
+                    url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg",
+                ),
+            )
+            items = ET.parse(appcast).getroot().findall("channel/item")
+            self.assertEqual(
+                [(i.findtext("guid"), i.findtext(f"{SP}version"), i.findtext(f"{SP}channel")) for i in items],
+                [
+                    ("argent-nightly", "4130", "nightly"),
+                    ("argent-release-0.2.0", "4122", None),
+                    ("argent-release-0.2.0-beta.1", "4121", "nightly"),
+                ],
+            )
+
     def test_rejects_invalid_manifests(self):
         with tempfile.TemporaryDirectory() as tmp:
             appcast = Path(tmp) / "appcast.xml"

@@ -51,6 +51,12 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
     nonisolated static let expectedBundleIdentifier = "camera.argent.Argent"
     private static let logger = Logger(subsystem: expectedBundleIdentifier, category: "updates")
 
+    /// An update Sparkle has already downloaded in the background and staged to install on quit.
+    struct PendingQuitUpdate: Equatable, Sendable {
+        var version: String
+        var isNightly: Bool
+    }
+
     /// Whether Sparkle started in this build (false in tests, swift run, lanes, and unconfigured builds).
     private(set) var isAvailable = false
     /// Observed from `SPUUpdater.canCheckForUpdates` so the menu bar and Settings button stay in sync.
@@ -60,7 +66,12 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
     private(set) var allowsAutomaticUpdates = false
     private(set) var lastUpdateCheckDate: Date?
     private(set) var channel: UpdateChannel
+    /// Populated when Sparkle's automatic background updater stages an update to install on quit.
+    private(set) var pendingQuitUpdate: PendingQuitUpdate?
 
+    /// Prompts before switching from Nightly to Stable while a nightly install is already staged on quit.
+    /// Injected so tests can drive both confirmation and cancellation without presenting an alert.
+    @ObservationIgnored var confirmChannelSwitchWithPendingNightly: @MainActor (PendingQuitUpdate) -> Bool = UpdateController.askAboutPendingNightlySwitch
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
@@ -147,11 +158,37 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
         controller?.updater.automaticallyDownloadsUpdates = enabled
     }
 
+    /// Row subtitle for Settings › Updates › Channel: discloses when a previously staged nightly will
+    /// still install on quit even though Stable is now selected for subsequent updates.
+    var channelNote: String {
+        if channel == .stable, let pending = pendingQuitUpdate, pending.isNightly {
+            return "Nightly \(pending.version) will still install on quit; Stable applies to subsequent updates"
+        }
+        return channel.note
+    }
+
+    func notePendingQuitUpdate(_ update: PendingQuitUpdate?) {
+        pendingQuitUpdate = update
+    }
+
     func setChannel(_ newChannel: UpdateChannel) {
         guard channel != newChannel else { return }
+        if channel == .nightly, newChannel == .stable, let pending = pendingQuitUpdate, pending.isNightly {
+            guard confirmChannelSwitchWithPendingNightly(pending) else { return }
+        }
         channel = newChannel
         defaults.set(newChannel.rawValue, forKey: Self.channelDefaultsKey)
         controller?.updater.resetUpdateCycleAfterShortDelay()
+    }
+
+    private static func askAboutPendingNightlySwitch(_ pending: PendingQuitUpdate) -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Nightly \(pending.version) is already staged to install on quit."
+        alert.informativeText = "Sparkle cannot cancel an update already staged in the background. Switching to Stable will apply to subsequent updates after this install finishes."
+        alert.addButton(withTitle: "Switch to Stable")
+        alert.addButton(withTitle: "Keep Nightly")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Human-readable description of active long-running work that should not be interrupted silently
@@ -239,6 +276,11 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         lastUpdateCheckDate = updater.lastUpdateCheckDate
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        notePendingQuitUpdate(PendingQuitUpdate(version: item.displayVersionString, isNightly: item.channel != nil))
+        return false
     }
 
     func updater(_ updater: SPUUpdater, shouldPostponeRelaunchForUpdate item: SUAppcastItem, untilInvokingBlock installHandler: @escaping () -> Void) -> Bool {
