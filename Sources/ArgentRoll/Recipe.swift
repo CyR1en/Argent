@@ -2,7 +2,7 @@ import ArgentCore
 import CryptoKit
 import Foundation
 
-/// How a roll is developed to files: the format, its quality, the colour space and grain.
+/// How a roll is developed to files: the format, its quality, the colour space, grain and halation.
 public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
     public enum Format: String, Sendable, Codable, CaseIterable {
         case jpeg
@@ -61,22 +61,36 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
     /// The quality a new develop starts from, JPEG's former 92.
     public static let defaultQuality = 92
     public static let qualityRange = 0...100
+    /// Halation as the stock has it, the middle of the control's range.
+    public static let defaultHalation = 100
+    public static let halationRange = 0...200
+
+    /// The render's multiple of the stock's halation for the control at `value`: 1 at 100.
+    public static func halationAmount(_ value: Int) -> Float {
+        Float(min(max(value, halationRange.lowerBound), halationRange.upperBound)) / 100
+    }
 
     public var format: Format
     public var size: Size
     public var space: OutputSpace
     public var grain: Grain
+    /// Halation, 0 to 200: 100 is the stock's own, 0 none and 200 twice as much. Like grain it is every frame's,
+    /// its preview's and its develop's, unless a frame has its own (`FrameControls.halation`).
+    public var halation: Int {
+        didSet { halation = min(max(halation, Self.halationRange.lowerBound), Self.halationRange.upperBound) }
+    }
     /// JPEG and HEIC quality, 0 to 100 as Lightroom's; the uncompressed TIFF ignores it.
     public var quality: Int {
         didSet { quality = min(max(quality, Self.qualityRange.lowerBound), Self.qualityRange.upperBound) }
     }
 
     public init(format: Format = .jpeg, size: Size = .full, space: OutputSpace = .sRGB, grain: Grain = .natural,
-                quality: Int = OutputSettings.defaultQuality) {
+                quality: Int = OutputSettings.defaultQuality, halation: Int = OutputSettings.defaultHalation) {
         self.format = format
         self.size = size
         self.space = space
         self.grain = grain
+        self.halation = min(max(halation, Self.halationRange.lowerBound), Self.halationRange.upperBound)
         self.quality = min(max(quality, Self.qualityRange.lowerBound), Self.qualityRange.upperBound)
     }
 
@@ -92,7 +106,7 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
         return mine == theirs
     }
 
-    private enum CodingKeys: String, CodingKey { case format, size, space, grain, quality }
+    private enum CodingKeys: String, CodingKey { case format, size, space, grain, quality, halation }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -104,6 +118,21 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
         // Develops and settings recorded before the slider were at the format's fixed quality.
         let quality = try container.decodeIfPresent(Int.self, forKey: .quality) ?? format.formerQuality
         self.quality = min(max(quality, Self.qualityRange.lowerBound), Self.qualityRange.upperBound)
+        // Develops and settings recorded before the control had the stock's own halation.
+        let halation = try container.decodeIfPresent(Int.self, forKey: .halation) ?? Self.defaultHalation
+        self.halation = min(max(halation, Self.halationRange.lowerBound), Self.halationRange.upperBound)
+    }
+
+    /// Halation is written only off the stock's own, so a develop's record at it keeps the bytes it had before the control
+    /// existed, which the golden recipes hold (`LightCompilerGoldenRecipeTests`, `MaskRecipeBytesTests`).
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(format, forKey: .format)
+        try container.encode(size, forKey: .size)
+        try container.encode(space, forKey: .space)
+        try container.encode(grain, forKey: .grain)
+        try container.encode(quality, forKey: .quality)
+        if halation != Self.defaultHalation { try container.encode(halation, forKey: .halation) }
     }
 }
 
@@ -113,7 +142,7 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
 public struct Recipe: Sendable, Equatable, Codable {
     public static let fileExtension = "argent"
     public static let formatName = "camera.argent.recipe"
-    public static let currentVersion = 13
+    public static let currentVersion = 14
     /// Develops kept in the record, newest last.
     public static let keptDevelops = 20
 
@@ -147,6 +176,9 @@ public struct Recipe: Sendable, Equatable, Codable {
         /// "natural" or "off".
         public var grain: String
         public var halation: String
+        /// The multiple of the stock's halation the frame was given (`DevelopSettings.halationAmount`); absent at 1,
+        /// the stock's own, as every render had before the Halation control existed.
+        public var halationAmount: Float?
         /// Which grain the frame gets, from its name and capture time.
         public var grainSeed: UInt32?
         /// Capture sharpening: "on", or absent for a develop made without it, as every develop
@@ -158,13 +190,14 @@ public struct Recipe: Sendable, Equatable, Codable {
         public var tone: PrintTone?
 
         public init(ratedAt: Float?, labBalance: [Float], printExposure: Float, grain: String,
-                    halation: String, grainSeed: UInt32? = nil, sharpen: String? = nil,
+                    halation: String, halationAmount: Float? = nil, grainSeed: UInt32? = nil, sharpen: String? = nil,
                     manual: ManualRenderSettings? = nil, tone: PrintTone? = nil) {
             self.ratedAt = ratedAt
             self.labBalance = labBalance
             self.printExposure = printExposure
             self.grain = grain
             self.halation = halation
+            self.halationAmount = halationAmount == 1 ? nil : halationAmount
             self.grainSeed = grainSeed
             self.sharpen = sharpen
             self.manual = manual?.adjustments.isIdentity == true ? nil : manual
@@ -175,14 +208,16 @@ public struct Recipe: Sendable, Equatable, Codable {
             self.init(ratedAt: settings.ratedAt,
                       labBalance: [settings.labBalance.x, settings.labBalance.y, settings.labBalance.z],
                       printExposure: settings.printExposure, grain: grain.rawValue,
-                      halation: settings.halation ? "on" : "off", grainSeed: grain == .off ? nil : settings.grainSeed,
+                      halation: settings.halation ? "on" : "off", halationAmount: settings.halation ? settings.halationAmount : nil,
+                      grainSeed: grain == .off ? nil : settings.grainSeed,
                       sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone)
         }
 
         public static func == (lhs: Render, rhs: Render) -> Bool {
             lhs.ratedAt == rhs.ratedAt && lhs.labBalance == rhs.labBalance
                 && lhs.printExposure == rhs.printExposure && lhs.grain == rhs.grain
-                && lhs.halation == rhs.halation && lhs.grainSeed == rhs.grainSeed && lhs.sharpen == rhs.sharpen
+                && lhs.halation == rhs.halation && (lhs.halationAmount ?? 1) == (rhs.halationAmount ?? 1)
+                && lhs.grainSeed == rhs.grainSeed && lhs.sharpen == rhs.sharpen
                 && (lhs.manual ?? .identity) == (rhs.manual ?? .identity) && lhs.tone == rhs.tone
         }
 
@@ -198,8 +233,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                             labBalance: labBalance.count == 3 ? SIMD3(labBalance[0], labBalance[1], labBalance[2]) : .zero,
                             printExposure: printExposure,
                             grain: OutputSettings.Grain(rawValue: grain)?.amount ?? 0, grainSeed: grainSeed ?? 0,
-                            halation: halation == "on", sharpen: sharpen == "on", manual: manual ?? .identity,
-                            tone: tone ?? .identity)
+                            halation: halation == "on", halationAmount: halationAmount ?? 1, sharpen: sharpen == "on",
+                            manual: manual ?? .identity, tone: tone ?? .identity)
         }
     }
 
@@ -281,11 +316,11 @@ public struct Recipe: Sendable, Equatable, Codable {
     /// is capture sharpening, which the app's develops always have. Whether a raw of the same
     /// size is the same raw is for `RecipeStore.read(for:)` and the develop to tell, from its bytes.
     /// `stock` is the one the frame develops through, its own where it has one (`own.stock`), and
-    /// `rollStock` the roll's id, kept only then; `grain` is the roll's, which the frame's own replaces.
+    /// `rollStock` the roll's id, kept only then; `grain` and `halation` are the roll's, which the frame's own replace.
     public init(frame: Frame, byteCount: Int, stock: Stock, stockDigest: String, roll: RollControls,
                 own: FrameControls, rollStock: String? = nil, analysis: ExposureAnalysis? = nil, aim: PrintAim? = nil,
-                grain: OutputSettings.Grain = .off, sharpen: Bool = false, previous: Recipe? = nil,
-                manual: ManualEdit? = nil, editRevision: UInt64? = nil, editLineage: String? = nil,
+                grain: OutputSettings.Grain = .off, halation: Int = OutputSettings.defaultHalation, sharpen: Bool = false,
+                previous: Recipe? = nil, manual: ManualEdit? = nil, editRevision: UInt64? = nil, editLineage: String? = nil,
                 heldManual: ManualEdit? = nil, resolved: DevelopSettings? = nil) {
         let grain = own.grain ?? grain
         format = Self.formatName
@@ -309,6 +344,8 @@ public struct Recipe: Sendable, Equatable, Codable {
         recorded.grain = grain.amount
         recorded.grainSeed = frame.grainSeed
         recorded.halation = stock.halation != nil
+        // A stock without halation records none of the control, which does nothing to it.
+        recorded.halationAmount = recorded.halation ? OutputSettings.halationAmount(own.halation ?? halation) : 1
         recorded.sharpen = sharpen
         render = Render(settings: recorded, grain: grain)
         self.manual = manual
@@ -323,15 +360,17 @@ public struct Recipe: Sendable, Equatable, Codable {
     /// Builds the complete reproducible render, propagating incompatible baseline and curve errors.
     public static func make(frame: Frame, byteCount: Int, stock: Stock, stockDigest: String, roll: RollControls,
                             own: FrameControls, rollStock: String? = nil, analysis: ExposureAnalysis? = nil, aim: PrintAim? = nil,
-                            grain: OutputSettings.Grain = .off, sharpen: Bool = false, previous: Recipe? = nil,
+                            grain: OutputSettings.Grain = .off, halation: Int = OutputSettings.defaultHalation,
+                            sharpen: Bool = false, previous: Recipe? = nil,
                             manual: ManualEdit? = nil, editRevision: UInt64? = nil, editLineage: String? = nil,
                             heldManual: ManualEdit? = nil) throws -> Recipe {
         let aim = aim ?? AutoPrint.aim(analysis)
         let settings = try DevelopmentResolver.resolve(stock: stock, stockDigest: stockDigest,
             controls: own.applied(to: roll), aim: aim, manual: manual, grain: (own.grain ?? grain).amount,
-            grainSeed: frame.grainSeed, sharpen: sharpen)
+            halation: OutputSettings.halationAmount(own.halation ?? halation), grainSeed: frame.grainSeed, sharpen: sharpen)
         return Recipe(frame: frame, byteCount: byteCount, stock: stock, stockDigest: stockDigest, roll: roll,
-                      own: own, rollStock: rollStock, analysis: analysis, aim: aim, grain: grain, sharpen: sharpen, previous: previous,
+                      own: own, rollStock: rollStock, analysis: analysis, aim: aim, grain: grain, halation: halation,
+                      sharpen: sharpen, previous: previous,
                       manual: manual, editRevision: editRevision, editLineage: editLineage, heldManual: heldManual, resolved: settings)
     }
 
@@ -490,7 +529,8 @@ public struct Recipe: Sendable, Equatable, Codable {
         guard format == Self.formatName else { throw ReadFailure.wrongFormat }
         guard (1...Self.currentVersion).contains(version) else { throw ReadFailure.unsupportedVersion(version) }
         guard version >= requiredVersion || (version == 1 && requiredVersion == 2) else {
-            throw ReadFailure.invalid(requiredVersion == 13 ? "a frame's own stock or grain requires recipe version 13"
+            throw ReadFailure.invalid(requiredVersion == 14 ? "a Halation amount requires recipe version 14"
+                                      : requiredVersion == 13 ? "a frame's own stock or grain requires recipe version 13"
                                       : requiredVersion == 12 ? "a removal requires recipe version 12"
                                       : requiredVersion == 11 ? "Vignetting requires recipe version 11"
                                       : requiredVersion == 10 ? "Defringe requires recipe version 10"
@@ -501,6 +541,14 @@ public struct Recipe: Sendable, Equatable, Codable {
                                       : requiredVersion == 5 ? "a tone step requires recipe version 5"
                                       : requiredVersion == 4 ? "an Original starting point requires recipe version 4"
                                       : "curve refinements require recipe version 3")
+        }
+        // Halation inside the control's range: a frame's own, and every amount a render records, which is that range over 100.
+        let range = OutputSettings.halationRange
+        let amounts = ([render] + develops.map(\.render) + [manual, heldManual].compactMap { $0?.baseline.baseRender })
+            .compactMap(\.halationAmount)
+        let most = OutputSettings.halationAmount(range.upperBound)
+        guard frame.halation.map(range.contains) ?? true, amounts.allSatisfy({ $0 >= 0 && $0 <= most }) else {
+            throw ReadFailure.invalid("Halation must be from \(range.lowerBound) to \(range.upperBound)")
         }
         func valid(_ render: Render) -> Bool {
             render.labBalance.count == 3 && render.labBalance.allSatisfy(\.isFinite)
@@ -535,10 +583,14 @@ public struct Recipe: Sendable, Equatable, Codable {
     /// receipt's digest included, require v6; a record with none stays at the version it needed before. Presence anywhere, a receipt
     /// included, requires v7, ahead of masks. A frame's own stock or grain requires v13: an older build would
     /// develop it through the roll's, reopen the roll on the frame's stock, and save the frame back without either.
+    /// A frame's own Halation, or a render at any amount but the stock's own, a receipt's included, requires v14: an
+    /// older build would print it at the stock's, and take a file developed at another amount for the one it makes. An
+    /// amount written out as 1 is the stock's own, and requires nothing.
     public var requiredVersion: Int {
-        if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let renders = [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 }
             + develops.map(\.render)
+        if frame.halation != nil || renders.contains(where: { ($0.halationAmount ?? 1) != 1 }) { return 14 }
+        if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let lenses = [manual?.adjustments.lens, heldManual?.adjustments.lens].compactMap { $0 }
             + renders.compactMap { $0.manual?.adjustments.lens }
         // A build without Remove would print such a recipe with the object back in it, and could save it without its removals.

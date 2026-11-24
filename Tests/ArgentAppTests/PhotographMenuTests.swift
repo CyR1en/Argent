@@ -115,7 +115,7 @@ import Testing
                                     "Split Compare", "Zoom to Fit", "Actual Size", "—", "New Mask", "—", "Reset", "—",
                                     "Develop This Frame…", "Show RAW in Finder", "Show Developed File in Finder"])
             #expect(menu.entry("frame.pasteOnly")?.children.titles == ["Light", "Presence", "Curve", "Masks", "Lens", "Rated At and Lab Balance",
-                                                                         "Film Stock and Grain"])
+                                                                         "Film Stock, Grain and Halation"])
             #expect(menu.entry("photograph.newMask")?.children.titles == ["Brush", "Linear Gradient", "Radial Gradient", "—",
                                                                          "Subject", "Sky", "Person", "Background"])
             #expect(menu.entry("frame.reset")?.children.titles == ["Reset to Current Auto", "Reset to Original", "Same as Roll"])

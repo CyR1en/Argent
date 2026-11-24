@@ -68,6 +68,8 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     /// laid one over the other on a track their row draws (`LensHueRow`), each draws its knob alone, and a press goes to the
     /// one whose knob is nearer (`AdjustmentSliderControl.mouseDown`).
     var trackPartner: Int?
+    /// Said after the value and its unit when VoiceOver reads it out, as whose a film setting is (`RollControlsView.ownership`).
+    var spokenNote = ""
 
     /// One end of a Defringe hue range, Low or High: read on the whole strip, 0 to 100, so the two knobs stand where their
     /// hues are, though Low ends at 90 and High begins at 10 (`Defringe.hueLowRange`); its row keeps each ten short of the
@@ -113,6 +115,12 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     static let maskAmount = AdjustmentSliderSpec(title: "Amount", range: 0...200, step: 1, defaultValue: 100, polarity: .unipolar,
                                                  arrowStep: 1, smallKeyStep: 5, largeKeyStep: 20, group: .mask, order: -1)
 
+    /// Film settings' Halation, 0 to 200 with 100 the stock's own (`OutputSettings.halation`), as a mask's Amount reads. In no
+    /// group: it stands alone in its popover, and takes the arrows.
+    static let halation = AdjustmentSliderSpec(title: "Halation", range: Float(OutputSettings.halationRange.lowerBound)...Float(OutputSettings.halationRange.upperBound),
+                                               step: 1, defaultValue: Float(OutputSettings.defaultHalation), polarity: .unipolar,
+                                               arrowStep: 1, smallKeyStep: 5, largeKeyStep: 20)
+
     static func lensAmount(_ control: LensSettings.Control) -> AdjustmentSliderSpec {
         AdjustmentSliderSpec(title: control.title, range: control.range, step: 1, defaultValue: control.defaultValue,
                              polarity: control == .vignette ? .bipolar : .unipolar,
@@ -149,7 +157,7 @@ struct AdjustmentSliderSpec: Equatable, Sendable {
     }
 
     /// `value` as VoiceOver reads it.
-    func spoken(_ value: Float) -> String { formatted(value) + unit }
+    func spoken(_ value: Float) -> String { formatted(value) + unit + spokenNote }
 
     /// How far along the track `value` stands, 0 to 1.
     func fraction(of value: Float) -> CGFloat {

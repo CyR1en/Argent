@@ -40,6 +40,7 @@ struct RollControlsView: View {
                 setting("Rated at") { RatedAtControl(frame: frame) }
                 setting("Lab balance") { LabBalanceControl(frame: frame) }
                 setting("Grain") { GrainControl(frame: frame) }
+                HalationControl(frame: frame)
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(ControlsScope(frame: frame).title)
@@ -298,7 +299,52 @@ struct GrainControl: View {
     }
 }
 
-/// Clears a frame's own stock, Rated at, Lab balance and grain, so it follows the roll again (Frame >
+/// Halation: the roll's, kept for every roll as Grain is, or with a frame its own. 0 to 200, where 100 is the stock's own
+/// halation, on the inspector's slider row, which names itself. A gesture's steps go to the frame view's print alone, and the
+/// roll or the frame takes the value as it ends (`RollModel.printedHalation`), since each write saves every frame's choices.
+/// With a frame the row's reset is "same as roll": the roll's value is its default, and the frame's own stands off it on the
+/// track. A frame's own at the roll's value has no reset to take, so the row's menu has "Same as roll" as the other three
+/// settings' menus do. Disabled where the stock has no halation, and while no stock is loaded.
+struct HalationControl: View {
+    let frame: Frame?
+    @Environment(RollModel.self) private var model
+
+    var body: some View {
+        let roll = model.output.halation
+        let value = frame.map(model.halation(for:)) ?? roll
+        let own = frame.map { model.frameControls($0).halation != nil } ?? false
+        // The stock the control acts on: the frame's, its own or the roll's, or on the sheet the roll's.
+        let stock = if let frame { model.stock(for: frame) } else { model.currentStock }
+        let unavailable = stock.map { $0.halation == nil ? "\($0.displayName) has no halation." : nil } ?? "No stock is loaded."
+        var spec = AdjustmentSliderSpec.halation
+        if frame != nil { spec.defaultValue = Float(roll) }
+        spec.spokenNote = RollControlsView.ownership(ControlsScope(frame: frame), isOwn: own)
+        return ManualAdjustmentRow(spec: spec, help: unavailable ?? help(roll: roll, own: own),
+                                   value: Binding(get: { Float(value) }, set: { model.moveHalation(Int($0.rounded()), for: frame) }),
+                                   snapshot: frame?.url, beginGesture: { model.beginHalationAdjusting(for: frame) },
+                                   endGesture: { model.endHalationAdjusting() },
+                                   menuSwitch: frame.map { frame in { Self.sameAsRoll(frame, roll: roll, isOwn: own, isAvailable: unavailable == nil, model: model) } })
+            .disabled(unavailable != nil)
+            .modifier(FrameOverrideIndicator(isOwn: own))
+    }
+
+    /// The row's menu's way back to the roll's value, off while the frame follows the roll already, and while the row is
+    /// disabled (its stock has no halation), so a frame's own kept for its stock's return is not cleared from a disabled row.
+    @MainActor static func sameAsRoll(_ frame: Frame, roll: Int, isOwn: Bool, isAvailable: Bool = true,
+                                      model: RollModel) -> MenuEntry {
+        .action("film.halationSameAsRoll", RollControlsView.sameAsRollItem(AdjustmentSliderSpec.halation.formatted(Float(roll))),
+                isEnabled: isOwn && isAvailable) { model.setHalation(nil, for: frame) }
+    }
+
+    private func help(roll: Int, own: Bool) -> String {
+        let scale = "The glow around bright lights: 100 is the stock's own, 0 none and 200 twice as much."
+        guard frame != nil else { return "The roll's Halation. \(scale) Every frame without its own develops with it." }
+        return own ? "This frame's own Halation. \(scale) The roll's is \(roll)."
+            : "This frame's Halation, the same as the roll's. \(scale) Changing it gives the frame its own."
+    }
+}
+
+/// Clears a frame's own stock, Rated at, Lab balance, grain and halation, so it follows the roll again (Frame >
 /// Same as Roll); disabled while it has none.
 struct SameAsRollButton: View {
     let frame: Frame
@@ -308,6 +354,6 @@ struct SameAsRollButton: View {
         Button("Same as roll") { model.clearOverrides(for: frame) }
             .buttonStyle(.graphite(.quiet, size: .small))
             .disabled(model.frameControls(frame).isEmpty)
-            .help("Make this frame follow the roll's stock, Rated at, Lab balance and Grain")
+            .help("Make this frame follow the roll's stock, Rated at, Lab balance, Grain and Halation")
     }
 }

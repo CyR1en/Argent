@@ -374,7 +374,7 @@ public enum SkinBalance {
     }
 }
 
-/// A frame's own stock, Rated at, Lab balance and grain, set from the frame view.
+/// A frame's own stock, Rated at, Lab balance, grain and halation, set from the frame view.
 ///
 /// Each control is overridden on its own: `nil` means the frame follows the roll, so a frame
 /// given its own Lab balance still moves with the roll's Rated at. Choosing the roll's value
@@ -388,17 +388,21 @@ public struct FrameControls: Sendable, Equatable, Hashable, Codable {
     public var stock: String?
     /// The frame's own grain; `nil` takes the roll's, the Develop page's choice.
     public var grain: OutputSettings.Grain?
+    /// The frame's own Halation, 0 to 200 (`OutputSettings.halation`); `nil` takes the roll's. Absent from recipes
+    /// written before a frame could have one.
+    public var halation: Int?
 
     public init(ratedAt: RollControls.RatedAt? = nil, labBalance: RollControls.LabBalance? = nil,
-                stock: String? = nil, grain: OutputSettings.Grain? = nil) {
+                stock: String? = nil, grain: OutputSettings.Grain? = nil, halation: Int? = nil) {
         self.ratedAt = ratedAt
         self.labBalance = labBalance
         self.stock = stock
         self.grain = grain
+        self.halation = halation
     }
 
     /// True when the frame follows the roll in every control.
-    public var isEmpty: Bool { ratedAt == nil && labBalance == nil && stock == nil && grain == nil }
+    public var isEmpty: Bool { ratedAt == nil && labBalance == nil && stock == nil && grain == nil && halation == nil }
 
     /// Gives the frame its own stock, by id, or follows the roll for `nil` or the roll's stock.
     public mutating func setStock(_ id: String?, roll: String?) {
@@ -408,6 +412,13 @@ public struct FrameControls: Sendable, Equatable, Hashable, Codable {
     /// Gives the frame its own grain, or follows the roll for `nil` or the roll's grain.
     public mutating func setGrain(_ value: OutputSettings.Grain?, roll: OutputSettings.Grain) {
         grain = value == roll ? nil : value
+    }
+
+    /// Gives the frame its own Halation, held to `OutputSettings.halationRange`, or follows the roll for `nil` or the roll's value.
+    public mutating func setHalation(_ value: Int?, roll: Int) {
+        let range = OutputSettings.halationRange
+        let held = value.map { min(max($0, range.lowerBound), range.upperBound) }
+        halation = held == roll ? nil : held
     }
 
     /// What the frame develops with on a roll set to `roll`.

@@ -452,6 +452,8 @@ extension RollModel {
         let frames = states.compactMap { state in current[state.frame].map { (state, $0) } }
         guard !frames.isEmpty else { return }
         maskEditor.cancelPress()
+        // The undo puts back each frame's own controls: a Halation gesture still open is written first, so its end does not write over them.
+        suspendHalationAdjusting(writing: true)
         // A Light drag still held on a frame the undo writes, or on any when it opens its frame, is taken back as an edit's undo takes it.
         let held = suspendLightAdjusting(on: reveal ? Set(current.keys) : Set(frames.map(\.1.url)), writing: false)
         defer { resumeLightAdjusting(on: held) }
@@ -518,7 +520,7 @@ extension RollModel {
     }
 
     /// Whether saving the roll's choices saves the frame: its recipe was read, and it has an edit, a held one, its own controls
-    /// (stock, Rated at, Lab balance or grain), or a recipe, read or on its way from a save this session began. So a frame given
+    /// (stock, Rated at, Lab balance, grain or halation), or a recipe, read or on its way from a save this session began. So a frame given
     /// only its own stock has its first recipe saved, and one that follows the roll again before that save lands is saved again.
     private func savesWithChoices(_ url: URL) -> Bool {
         manualLoaded.contains(url) && (manualEdits[url] != nil || heldManualEdits[url] != nil || manualRecipes[url] != nil
@@ -548,7 +550,7 @@ extension RollModel {
                 do {
                     recipe = try Recipe.make(frame: frame, byteCount: RecipeStore.byteCount(of: frame.url),
                         stock: stock, stockDigest: digest, roll: rollControls, own: own, rollStock: rollStock, analysis: analysis, aim: aim,
-                        grain: output.grain, sharpen: true, previous: previous, manual: manual,
+                        grain: output.grain, halation: output.halation, sharpen: true, previous: previous, manual: manual,
                         editRevision: revision, editLineage: lineage, heldManual: held)
                 } catch {
                     // Preserve undo intent for an unavailable baseline without pretending it
@@ -564,7 +566,7 @@ extension RollModel {
                     recipe = Recipe(frame: frame, byteCount: RecipeStore.byteCount(of: frame.url),
                         stock: stock, stockDigest: digest, roll: rollControls, own: own, rollStock: rollStock, analysis: analysis,
                         aim: manual.baseline.aim,
-                        grain: output.grain, sharpen: true, previous: previous, manual: manual,
+                        grain: output.grain, halation: output.halation, sharpen: true, previous: previous, manual: manual,
                         editRevision: revision, editLineage: lineage, heldManual: held, resolved: recorded)
                 }
                 if let manual, manual.baseline.sourceSHA256 != verified.sha256 { throw ManualSaveError.sourceChanged }
@@ -648,6 +650,8 @@ extension RollModel {
     }
 
     func clearManualSession() {
+        // A Halation gesture does not outlive the roll it began on.
+        suspendHalationAdjusting(writing: false)
         manualRestoreTask?.cancel()
         manualRestoreTask = nil
         manualGeneration = UUID()

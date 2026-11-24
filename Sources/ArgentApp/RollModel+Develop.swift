@@ -55,18 +55,19 @@ struct DevelopedFrame: Equatable {
     var destination: URL
     var stockIndex: Int
     var controls: RollControls
-    /// The output choices, with the frame's own grain where it has one, as its develop recorded them (`RollDeveloper.output`).
+    /// The output choices, with the frame's own grain and halation where it has them, as its develop recorded them
+    /// (`RollDeveloper.output`).
     var output: OutputSettings
     var autoRevision: String?
     var own: FrameControls?
     var edit: ManualEdit?
     var source: SourceStamp?
 
-    init(_ inputs: DevelopInputs, frame raw: URL, destination: URL) {
+    init(_ inputs: DevelopInputs, frame raw: URL, destination: URL, hasHalation: Bool) {
         self.destination = destination
         stockIndex = inputs.stockIndex
         controls = inputs.controls
-        output = inputs.output.grain(inputs.overrides[raw]?.grain)
+        output = inputs.output.with(inputs.overrides[raw], hasHalation: hasHalation)
         autoRevision = inputs.autoRevision
         own = inputs.overrides[raw]
         edit = inputs.manualEdits[raw]
@@ -79,6 +80,14 @@ extension OutputSettings {
     func grain(_ own: Grain?) -> OutputSettings {
         var settings = self
         settings.grain = own ?? grain
+        return settings
+    }
+
+    /// These choices with a frame's own grain and halation, `own`'s, in place of the roll's, and halation at the stock's own
+    /// (`defaultHalation`) when the frame's stock has none (`hasHalation` false), matching `RollDeveloper.output`.
+    func with(_ own: FrameControls?, hasHalation: Bool) -> OutputSettings {
+        var settings = grain(own?.grain)
+        settings.halation = hasHalation ? (own?.halation ?? halation) : Self.defaultHalation
         return settings
     }
 }
@@ -355,7 +364,7 @@ extension RollModel {
                         let recipe = try Recipe.make(
                             frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: digest,
                             roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock, analysis: analyses[frame.url],
-                            aim: aims[frame.url], grain: output.grain, sharpen: true,
+                            aim: aims[frame.url], grain: output.grain, halation: output.halation, sharpen: true,
                             previous: recipes[frame.url] ?? RecipeStore.checked(for: frame, library: library, check: .knownOnly)?.recipe,
                             manual: edits[frame.url], editRevision: revision, editLineage: recipes[frame.url]?.editLineage ?? lineages[frame.url] ?? lineage)
                         return RollDeveloper.Job(frame: frame, recipe: recipe, measuredFrom: sources[frame.url],
@@ -435,7 +444,8 @@ extension RollModel {
         for (frame, outcome) in zip(frames, outcomes) {
             switch outcome {
             case .developed, .alreadyDeveloped:
-                developedFrames[frame.url] = DevelopedFrame(inputs, frame: frame.url, destination: destination)
+                developedFrames[frame.url] = DevelopedFrame(inputs, frame: frame.url, destination: destination,
+                                                            hasHalation: hasHalation(stockIndex: inputs.stockIndex, own: inputs.overrides[frame.url]))
             case .failed: developedFrames[frame.url] = nil
             case .stopped: developedFrames[frame.url] = before[frame.url]
             }
@@ -479,9 +489,18 @@ extension RollModel {
         return shownFrames.contains { !chosen.contains($0.url) }
     }
 
+    /// Whether the stock a frame develops through has halation: its own (`own.stock`) where the library has it, else the roll's at
+    /// `stockIndex`. A stock without halation takes none of the Halation control, so what its develop records and compares is at
+    /// the stock's own (`OutputSettings.with`), and the roll's halation moving leaves its check.
+    func hasHalation(stockIndex: Int, own: FrameControls?) -> Bool {
+        let stocks = films?.stocks ?? []
+        let stock = own?.stock.flatMap { id in stocks.first { $0.id == id } } ?? stocks[safe: stockIndex]
+        return stock?.halation != nil
+    }
+
     /// The Develop page's mark on each frame, by file. A check on a frame a develop of this session has a file
     /// for, while a develop would still find that file and skip the frame: in the folder a develop goes to now,
-    /// and from the stock, roll controls, output choices (with the frame's own grain) and settled Auto it was made
+    /// and from the stock, roll controls, output choices (with the frame's own grain and halation) and settled Auto it was made
     /// from, with the frame's own controls, edit and raw unchanged. So another format or folder takes every check, an edit to one frame
     /// takes that frame's, and undoing either gives them back. The frames of a develop under way start with none
     /// and take theirs as each ends; a frame the last develop could not write is marked until the next one.
@@ -491,7 +510,8 @@ extension RollModel {
             let revision = isBalanced ? autoDecision?.revision : nil
             for (raw, made) in developedFrames
             where made.destination == folder && made.stockIndex == stockIndex && made.controls == controls
-                && made.output == output.grain(overrides[raw]?.grain) && made.autoRevision == revision && made.own == overrides[raw]
+                && made.output == output.with(overrides[raw], hasHalation: hasHalation(stockIndex: stockIndex, own: overrides[raw]))
+                && made.autoRevision == revision && made.own == overrides[raw]
                 && made.edit == manualEdits[raw] && made.source == sourceVersions[raw] {
                 marks[raw] = .developed
             }

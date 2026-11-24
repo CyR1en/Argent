@@ -56,7 +56,7 @@ import Testing
             #expect(FrameMenu.entries(for: frames[1], on: .photograph, model: model).titles
                     == Self.sheetRows.filter { $0 != "Open Frame" && $0 != "Paste to All Frames" })
             #expect(sheet.entry("frame.pasteOnly")?.children.titles == ["Light", "Presence", "Curve", "Masks", "Lens", "Rated At and Lab Balance",
-                                                                          "Film Stock and Grain"])
+                                                                          "Film Stock, Grain and Halation"])
             #expect(sheet.entry("frame.reset")?.children.titles == ["Reset to Current Auto", "Reset to Original", "Same as Roll"])
             // The menu bar's keys, shown beside its words.
             #expect(sheet.compactMap { $0.chord?.symbols } == ["⌘\u{F701}", "F", "⌥⌘C", "⌥⌘V", "⌥⇧⌘V", FrameKeys.remove.symbols])

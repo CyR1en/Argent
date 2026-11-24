@@ -55,6 +55,28 @@ import Testing
         #expect(sums(dim.texture).x == 0)
     }
 
+    /// The Halation control multiplies the stock's strength (`DevelopSettings.halationAmount`): twice a stock's halation is, to
+    /// the bit, the halation of a stock twice as strong, and none of it is the render without halation.
+    @Test func theControlScalesTheStocksStrength() throws {
+        let gpu = try GPU()
+        let scene = try frame(gpu, width: 1024, height: 682, side: 48, value: 0.18 * exp2(6), background: 0.02)
+        func printed(_ halation: Stock.Halation, _ settings: DevelopSettings) throws -> [Float16] {
+            let toy = ToyStock.make()
+            let stock = Stock(id: "halation-toy", displayName: "Halation", status: "synthetic", boxSpeed: toy.boxSpeed,
+                              densityRange: toy.densityRange, exposurePerUnit: toy.exposurePerUnit, negative: toy.negative,
+                              print: toy.print, halation: halation)
+            return ExposureAnalyzer.pixels(of: try FilmRenderer(gpu: gpu, stock: stock).render(scene, settings: settings).image.texture)
+        }
+        var doubled = halation
+        doubled.strength *= 2
+        let none = try printed(halation, DevelopSettings())
+        let own = try printed(halation, DevelopSettings(halation: true))
+        let twice = try printed(halation, DevelopSettings(halation: true, halationAmount: 2))
+        #expect(own != none && twice != own)
+        #expect(try twice == printed(doubled, DevelopSettings(halation: true)))
+        #expect(try none == printed(halation, DevelopSettings(halation: true, halationAmount: 0)))
+    }
+
     /// The halo falls off from its source over the stock's radius and, as the base's reflection
     /// geometry has it, is all but gone by 4a.
     @Test func fallsOffWithDistance() throws {

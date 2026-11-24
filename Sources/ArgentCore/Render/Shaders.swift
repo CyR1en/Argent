@@ -550,7 +550,10 @@ enum ShaderSource {
     }
 
     // The halo: the blurred sources summed with their weights, which already carry the
-    // strength, the channel shares and the inverse of the Rated at gain.
+    // strength, the channel shares and the inverse of the Rated at gain. Capped at the largest
+    // finite half float: strong halation (such as the control at 200) or bright exposure can raise
+    // the halo past half's range, which is white on any stock; an infinite texel in the field
+    // would meet a sampler's zero weight in the Negative LUT pass and make a pixel beside it NaN.
     struct HalationMixParams {
         float w0; float w1; float w2; float w3; float w4; float w5;
         float red; float green;
@@ -568,7 +571,7 @@ enum ShaderSource {
         if (gid.x >= out.get_width() || gid.y >= out.get_height()) { return; }
         float3 sum = p.w0 * b0.read(gid).rgb + p.w1 * b1.read(gid).rgb + p.w2 * b2.read(gid).rgb
                    + p.w3 * b3.read(gid).rgb + p.w4 * b4.read(gid).rgb + p.w5 * b5.read(gid).rgb;
-        out.write(half4(float4(sum.r * p.red, sum.g * p.green, 0.0f, 1.0f)), gid);
+        out.write(half4(float4(min(sum.r * p.red, 65504.0f), min(sum.g * p.green, 65504.0f), 0.0f, 1.0f)), gid);
     }
 
     // Area resize (AreaResize): the source mapped exactly onto the output, each output pixel

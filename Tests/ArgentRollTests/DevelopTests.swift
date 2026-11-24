@@ -502,6 +502,175 @@ private func pins() -> DecodePins {
         }
     }
 
+    /// `toyStock` with halation, which it has none of.
+    private func halatingStock() throws -> Stock {
+        let base = try toyStock()
+        return Stock(id: base.id, displayName: base.displayName, status: base.status, boxSpeed: base.boxSpeed,
+                     densityRange: base.densityRange, exposurePerUnit: base.exposurePerUnit, negative: base.negative,
+                     print: base.print, halation: Stock.Halation(strength: 0.015, greenShare: 0.25, radiusMicrometres: 180))
+    }
+
+    /// A Halation amount requires recipe version 14, a frame's own or a render at any amount but the stock's own, so a build
+    /// before the control refuses the record rather than printing it at the stock's. At 100 a record is the one it was, and a
+    /// stock without halation takes none of the control.
+    @Test func aHalationAmountRequiresVersion14() throws {
+        let stock = try halatingStock(), a = frame("DSC00601.ARW")
+        func recipe(_ stock: Stock, own: FrameControls = FrameControls(), halation: Int = 100) throws -> Recipe {
+            try Recipe.make(frame: a, byteCount: 1, stock: stock, stockDigest: stock.digest, roll: RollControls(), own: own,
+                            grain: .natural, halation: halation)
+        }
+        // The stock's own: no amount recorded, no newer version, and a build before the control reads the record.
+        let plain = try recipe(stock)
+        #expect(plain.render.halation == "on" && plain.render.halationAmount == nil && plain.render.settings.halationAmount == 1)
+        #expect(plain.requiredVersion < 13 && plain.version == plain.requiredVersion)
+        #expect(try Recipe.decodeStrict(plain.encoded(), readerVersion: 13) == plain)
+        // The roll's at another value, a frame's own, and a frame's own none.
+        let cases: [(FrameControls, Int, Float)] = [(FrameControls(), 150, 1.5), (FrameControls(halation: 40), 100, 0.4),
+                                                    (FrameControls(halation: 0), 150, 0)]
+        for (own, roll, amount) in cases {
+            var record = try recipe(stock, own: own, halation: roll)
+            #expect(record.render.halationAmount == amount && record.render.settings.halationAmount == amount)
+            #expect(record.render != plain.render)
+            #expect(record.requiredVersion == 14 && record.version == 14)
+            #expect(try Recipe.decodeStrict(record.encoded()) == record)
+            #expect(throws: Recipe.ReadFailure.unsupportedVersion(14)) { try Recipe.decodeStrict(record.encoded(), readerVersion: 13) }
+            record.version = 13
+            #expect(throws: Recipe.ReadFailure.invalid("a Halation amount requires recipe version 14")) { try record.validate() }
+        }
+        // A pin keeps none of the control, which stays live under it.
+        let pin = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: stock.id, stockDigest: stock.digest,
+                                    controls: RollControls(), aim: PrintAim(), analysisVersion: ExposureAnalysis.currentVersion,
+                                    baseRender: try recipe(stock, halation: 150).render)
+        #expect(pin.baseRender.halationAmount == nil && pin.baseRender == plain.render)
+        // A stock without halation: its render does not move with the control.
+        let base = try toyStock(), without = try recipe(base, halation: 150)
+        #expect(without.render.halation == "off" && without.render.halationAmount == nil && without.requiredVersion < 13)
+        #expect(without.render == (try recipe(base)).render)
+        // Output settings saved before the control are at the stock's own, and a value past the range is held to it.
+        let saved = try JSONDecoder().decode(OutputSettings.self, from: Data(#"{"grain":"off","size":0,"format":"jpeg","space":"sRGB"}"#.utf8))
+        #expect(saved.halation == 100 && OutputSettings(halation: 900).halation == 200 && OutputSettings.halationAmount(-5) == 0)
+        // And written only off it, so a record at the stock's own keeps its bytes.
+        let written = { try String(decoding: JSONEncoder().encode($0 as OutputSettings), as: UTF8.self) }
+        #expect(try !written(OutputSettings()).contains("halation") && written(OutputSettings(halation: 150)).contains(#""halation":150"#))
+        #expect(try JSONDecoder().decode(OutputSettings.self, from: JSONEncoder().encode(OutputSettings(halation: 150))).halation == 150)
+    }
+
+    /// A frame's own Halation is the one its develop records and the next develop compares, as its own grain is: a change of the
+    /// roll's makes again the frames that follow the roll, and skips one whose own it does not reach.
+    @Test func aFramesOwnHalationIsTheHalationItsDevelopRecordsAndCompares() throws {
+        let stock = try halatingStock(), file = URL(fileURLWithPath: "/tmp/out/DSC00601.jpg")
+        func recipe(own: FrameControls, roll halation: Int, previous: Recipe? = nil) -> Recipe {
+            Recipe(frame: frame(), byteCount: 1, stock: stock, stockDigest: stock.digest, roll: RollControls(), own: own,
+                   grain: .natural, halation: halation, previous: previous)
+        }
+        func output(_ recipe: Recipe, roll halation: Int) -> OutputSettings {
+            RollDeveloper.output(OutputSettings(halation: halation), for: RollDeveloper.Job(frame: frame(), recipe: recipe))
+        }
+        func developed(own: FrameControls, roll halation: Int) -> Recipe {
+            var made = recipe(own: own, roll: halation)
+            made.develops.append(.init(date: Date(), software: "Argent", output: output(made, roll: halation), file: file.path,
+                                       width: 10, height: 10, render: made.render, decode: pins(), readback: nil,
+                                       stockDigest: stock.digest, renderVersion: RenderGraph.version(for: made.render.settings)))
+            return made
+        }
+        // Its own 150, on a roll at 100: recorded at 150.
+        let own = developed(own: FrameControls(halation: 150), roll: 100)
+        #expect(own.develops.last?.output.halation == 150 && own.render.halationAmount == 1.5)
+        // The roll goes to 60: the frame's recipe is the same, and its file is skipped.
+        var again = recipe(own: FrameControls(halation: 150), roll: 60, previous: own)
+        #expect(again.render == own.render)
+        #expect(again.lastDevelopMatches(file: file, output: output(again, roll: 60)))
+        // A frame that follows the roll is made again.
+        let follows = developed(own: FrameControls(), roll: 100)
+        again = recipe(own: FrameControls(), roll: 60, previous: follows)
+        #expect(again.render != follows.render)
+        #expect(!again.lastDevelopMatches(file: file, output: output(again, roll: 60)))
+
+        // A frame on a stock without halation: its develop records the stock's own whatever the roll's is, and writes none of
+        // it, so the roll's moving leaves its file.
+        let plain = try toyStock()
+        func without(roll halation: Int, own: FrameControls = FrameControls(), previous: Recipe? = nil) -> Recipe {
+            Recipe(frame: frame(), byteCount: 1, stock: plain, stockDigest: plain.digest, roll: RollControls(), own: own,
+                   grain: .natural, halation: halation, previous: previous)
+        }
+        var first = without(roll: 150)
+        let recorded = output(first, roll: 150)
+        #expect(recorded.halation == 100 && output(without(roll: 150, own: FrameControls(halation: 40)), roll: 150).halation == 100)
+        #expect(try !String(decoding: JSONEncoder().encode(recorded), as: UTF8.self).contains("halation"))
+        first.develops.append(.init(date: Date(), software: "Argent", output: recorded, file: file.path, width: 10, height: 10,
+                                    render: first.render, decode: pins(), readback: nil, stockDigest: plain.digest,
+                                    renderVersion: RenderGraph.version(for: first.render.settings)))
+        let next = without(roll: 60, previous: first)
+        #expect(next.requiredVersion < 13 && next.lastDevelopMatches(file: file, output: output(next, roll: 60)))
+    }
+
+    /// Halation read from a recipe is held to the control's range: a frame's own outside it, or a recorded amount outside it or
+    /// not a number, is refused. An amount written out as 1 is the stock's own and requires nothing, and a recipe back at 100
+    /// that still holds a develop at another amount still requires version 14.
+    @Test func halationOutsideItsRangeIsRefusedAndAReceiptsAmountStillRequiresVersion14() throws {
+        let stock = try halatingStock(), a = frame("DSC00601.ARW")
+        func recipe(own: FrameControls = FrameControls(), halation: Int = 100, previous: Recipe? = nil) throws -> Recipe {
+            try Recipe.make(frame: a, byteCount: 1, stock: stock, stockDigest: stock.digest, roll: RollControls(), own: own,
+                            grain: .natural, halation: halation, previous: previous)
+        }
+        let refused = Recipe.ReadFailure.invalid("Halation must be from 0 to 200")
+        for own in [500, -50] {
+            var record = try recipe(own: FrameControls(halation: 150))
+            try record.validate()
+            record.frame.halation = own
+            #expect(throws: refused) { try record.validate() }
+        }
+        for amount: Float in [3, -0.5, .nan, .infinity] {
+            var record = try recipe(halation: 150)
+            record.render.halationAmount = amount
+            #expect(throws: refused) { try record.validate() }
+        }
+        // A develop at 150, then the control back at 100: the frame's render records nothing, and its receipt still does.
+        var developed = try recipe(halation: 150)
+        developed.develops.append(.init(date: Date(), software: "Argent", output: OutputSettings(halation: 150), file: "/tmp/out/DSC00601.jpg",
+                                        width: 10, height: 10, render: developed.render, decode: pins(), readback: nil,
+                                        stockDigest: stock.digest, renderVersion: RenderGraph.version(for: developed.render.settings)))
+        var back = try recipe(previous: developed)
+        #expect(back.render.halationAmount == nil && back.develops.count == 1 && back.requiredVersion == 14 && back.version == 14)
+        try back.validate()
+        back.develops[0].render.halationAmount = 9
+        #expect(throws: refused) { try back.validate() }
+        // Written out as 1, as a hand could: the stock's own, equal to none, and no newer version.
+        var written = try recipe()
+        let unwritten = written.render
+        written.render.halationAmount = 1
+        #expect(written.requiredVersion < 13 && written.render == unwritten)
+        try written.validate()
+        // A frame's own is held to the range as it is set.
+        var own = FrameControls()
+        own.setHalation(900, roll: 100)
+        #expect(own.halation == 200)
+        own.setHalation(900, roll: 200)
+        #expect(own.halation == nil)
+        own.setHalation(-5, roll: 100)
+        #expect(own.halation == 0)
+    }
+
+    /// Halation stays live under a pin, as grain does: the resolver gives a pinned frame the amount asked now, on a stock with
+    /// halation, and none of it on a stock without.
+    @Test func halationStaysLiveUnderAPin() throws {
+        let stock = try halatingStock(), plain = try toyStock()
+        func pinned(_ stock: Stock, halation: Float) throws -> DevelopSettings {
+            let base = try DevelopmentResolver.resolve(stock: stock, stockDigest: stock.digest, controls: RollControls(), aim: PrintAim(),
+                                                       manual: nil, grain: 1, halation: 1.5, grainSeed: 7)
+            let baseline = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: stock.id, stockDigest: stock.digest,
+                                             controls: RollControls(), aim: PrintAim(), analysisVersion: ExposureAnalysis.currentVersion,
+                                             baseRender: Recipe.Render(settings: base, grain: .natural))
+            let edit = ManualEdit(adjustments: try ManualAdjustments(exposureEV: 0.5), baseline: baseline)
+            return try DevelopmentResolver.resolve(stock: stock, stockDigest: stock.digest, controls: RollControls(), aim: PrintAim(),
+                                                   manual: edit, grain: 1, halation: halation, grainSeed: 7)
+        }
+        let lighter = try pinned(stock, halation: 0.4), own = try pinned(stock, halation: 1)
+        #expect(lighter.halation && lighter.halationAmount == 0.4 && own.halationAmount == 1)
+        let without = try pinned(plain, halation: 0.4)
+        #expect(!without.halation && without.halationAmount == 1)
+    }
+
     /// A destination that cannot be written fails every frame at once, before any decode,
     /// with a line that says so.
     @Test func refusesADestinationItCannotWriteBeforeDecoding() async throws {

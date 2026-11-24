@@ -185,7 +185,8 @@ final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
     // MARK: Rule 5: Paste Only
 
     /// Each part alone: it replaces that part and keeps the frame's others, its pin and its compiler. Rated At and Lab Balance
-    /// carries those two alone and leaves the frame's own stock and grain; Film Stock and Grain carries those and leaves the others.
+    /// carries those two alone and leaves the frame's own stock, grain and halation; Film Stock, Grain and Halation carries those
+    /// and leaves the others.
     @Test(arguments: AdjustmentParts.each)
     func eachPartAloneKeepsTheOthersAndThePin(part: AdjustmentParts) async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
@@ -203,6 +204,8 @@ final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
             model.setRatedAt(.oneStopOver, for: source)
             let grain: OutputSettings.Grain = model.output.grain == .natural ? .off : .natural
             model.setGrain(grain, for: source)
+            let halation = model.output.halation == 150 ? 50 : 150
+            model.setHalation(halation, for: source)
             try await edit(model, frame, try ManualAdjustments(exposureEV: -0.4, highlights: -30, curves: strong, masks: try MaskSet(masks: [ours]),
                                                                presence: kept, lens: LensSettings(arguments: "distortion=off")), notes: named([ours], ["Ours"]))
             model.setLabBalance(.warm, for: frame)
@@ -231,8 +234,25 @@ final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
                 #expect(values.masks == before.adjustments.masks && names(model, frame) == ["Ours"])
             }
             #expect(model.frameControls(frame) == (part == .frameControls ? FrameControls(ratedAt: .oneStopOver, stock: otherID)
-                                                   : part == .film ? FrameControls(labBalance: .warm, grain: grain) : ownBefore))
+                                                   : part == .film ? FrameControls(labBalance: .warm, grain: grain, halation: halation)
+                                                   : ownBefore))
             #expect(model.manualUndoManager?.undoActionName == "Paste Adjustments")
+        }
+    }
+
+    /// A frame's own Halation alone is something to copy: the film part is offered for it, and carries it.
+    @Test func aFramesOwnHalationAloneIsCarriedByTheFilmPart() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let roll = try await open(fixture)
+            defer { AutoDecisionStateTests.close(roll.model, roll.gate) }
+            let model = roll.model, source = roll.frames[0], frame = roll.frames[1]
+            let halation = model.output.halation == 150 ? 50 : 150
+            model.setHalation(halation, for: source)
+            model.copyAdjustments(from: source)
+            #expect(model.adjustmentsClipboard?.parts == [.film])
+            #expect(model.canPasteAdjustments(to: frame, parts: .film))
+            try await paste(model, to: frame, .film)
+            #expect(model.frameControls(frame) == FrameControls(halation: halation))
         }
     }
 
