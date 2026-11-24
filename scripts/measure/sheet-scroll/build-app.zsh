@@ -30,6 +30,7 @@ app=$out/$name.app
 rm -rf $app
 mkdir -p $app/Contents/MacOS $app/Contents/Resources
 cp $bin/Argent $app/Contents/MacOS/Argent
+scripts/embed-sparkle.sh $app $bin
 cp App/Info.plist $app/Contents/Info.plist
 plutil -replace CFBundleIdentifier -string camera.argent.Argent.scroll $app/Contents/Info.plist
 for bundle in $bin/*.bundle(N); do
@@ -44,8 +45,7 @@ done
 entitlements=$out/$name.entitlements
 cp App/Argent.entitlements $entitlements
 /usr/libexec/PlistBuddy -c 'Add :com.apple.security.get-task-allow bool true' $entitlements
-codesign --force --sign - --options runtime --entitlements $entitlements $app
-codesign --verify --strict $app
+scripts/sign-app.sh $app - --entitlements $entitlements
 
 xcrun swiftc -O -o $out/argent-drive scripts/measure/develop-memory/drive.swift
 {

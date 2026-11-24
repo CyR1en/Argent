@@ -65,7 +65,9 @@ kept per roll.
 
 On a Mac with Apple silicon and macOS 27, download `Argent-nightly.dmg` from the
 [nightly release](https://github.com/CyR1en/Argent/releases/tag/nightly), open it, and drag Argent
-to Applications. Published builds are signed with Developer ID and notarized by Apple.
+to Applications. Published builds are signed with Developer ID, notarized by Apple, and update
+automatically via Sparkle 2 (configurable under **Settings › Updates** and **Argent › Check for
+Updates…**, with Stable and Nightly channels).
 
 The [releases page](https://github.com/CyR1en/Argent/releases) also lists versioned disk images
 when published. Published app builds omit the smart-mask and Remove models. Sky and Remove
@@ -111,8 +113,9 @@ Local checks are the gate. The one hosted workflow, [`.github/workflows/release.
 a pushed `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) publishes that version, and a pull request keeps the image as a
 workflow artifact. It runs no tests. The app's version is the newest `v*` tag and its build number the commit count
 (`scripts/build-app.sh`); builds are signed with Developer ID Application (`scripts/sign-identity.sh`, `scripts/sign-app.sh`)
-and notarized (`scripts/notarize.sh`), in CI from the `DEVELOPER_ID_P12` and `NOTARY_API_KEY_*` secrets, falling back to
-ad-hoc on fork pull requests.
+and notarized (`scripts/notarize.sh`), signed for Sparkle 2 updates with `SPARKLE_ED_KEY`, and published to the GitHub Pages
+appcast (`gh-pages/appcast.xml`), in CI from the `DEVELOPER_ID_P12`, `NOTARY_API_KEY_*`, and `SPARKLE_ED_KEY` secrets,
+falling back to ad-hoc on fork pull requests.
 
 ```sh
 swift test

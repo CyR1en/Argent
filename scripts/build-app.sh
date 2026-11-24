@@ -60,6 +60,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Argent" "$app/Contents/MacOS/Argent"
 # Remove's helper, beside the app's binary: the app starts it as its child when the model is wanted (docs/remove-plan.md, 4.5).
 cp "$bin/argent-remove" "$app/Contents/MacOS/argent-remove"
+scripts/embed-sparkle.sh "$app" "$bin"
 cp App/Info.plist "$app/Contents/Info.plist"
 # The version, from the tag (.github/workflows/release.yml): ARGENT_VERSION when set (CI sets it from the v* tag it builds), else
 # the highest well-formed vN.N.N[-suffix] tag behind HEAD without its v (a pre-release below its release; a malformed tag is
@@ -78,10 +79,25 @@ fi
 [[ -n $version ]] || version=$(plutil -extract CFBundleShortVersionString raw App/Info.plist)
 short=${version%%-*}
 [[ $short =~ '^[0-9]+(\.[0-9]+){0,2}$' ]] || { echo "error: version $version is not N.N.N, optionally with a -suffix" >&2; exit 1; }
-build_number=$(git rev-list --count HEAD 2>/dev/null || plutil -extract CFBundleVersion raw App/Info.plist)
+channel=${ARGENT_CHANNEL:-dev}
+# Monotonic numeric CFBundleVersion so same-commit promotions strictly increase for Sparkle:
+#   dev / nightly:         commit_count * 10
+#   vN.N.N-suffix release: commit_count * 10 + 1
+#   vN.N.N stable release: commit_count * 10 + 2
+# The next commit on main starts at (commit_count + 1) * 10, staying strictly above all three.
+if [[ -n ${ARGENT_BUILD_NUMBER:-} ]]; then
+  build_number=$ARGENT_BUILD_NUMBER
+elif commit_count=$(git rev-list --count HEAD 2>/dev/null); then
+  offset=0
+  if [[ $channel == release ]]; then
+    offset=$([[ $version == *-* ]] && echo 1 || echo 2)
+  fi
+  build_number=$(( commit_count * 10 + offset ))
+else
+  build_number=$(plutil -extract CFBundleVersion raw App/Info.plist)
+fi
 commit=$(git rev-parse --short=7 HEAD 2>/dev/null || echo unknown)
 [[ $commit == unknown ]] || git diff --quiet HEAD -- 2>/dev/null || commit+="-dirty"
-channel=${ARGENT_CHANNEL:-dev}
 plist=$app/Contents/Info.plist
 plutil -replace CFBundleShortVersionString -string "$short" "$plist"
 plutil -replace CFBundleVersion -string "$build_number" "$plist"

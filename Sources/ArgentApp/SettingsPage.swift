@@ -28,6 +28,8 @@ struct SettingsPage: View {
                 RollsBackdropCard(settings: settings)
                 sectionHeading("Develop")
                 DevelopMemoryCard(settings: model.developMemory)
+                sectionHeading("Updates")
+                UpdatesCard(updates: model.updates)
             }
             .frame(maxWidth: Self.columnWidth)
             .padding(.horizontal, Self.pageInset)
@@ -331,5 +333,59 @@ struct DevelopMemoryCard: View {
         case .default: return "The default: keep the app under \(defaultAmount) while developing"
         case .gb3, .gb4, .gb6: return "Allow develops up to \(choice.title) so two frames can decode at once"
         }
+    }
+}
+
+private struct UpdatesCard: View {
+    let updates: UpdateController
+
+    var body: some View {
+        let channel = Binding(get: { updates.channel }, set: { updates.setChannel($0) })
+        VStack(spacing: 0) {
+            SettingsRow(title: AboutView.versionText(), note: statusNote) {
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .buttonStyle(.graphite(.secondary))
+                    .fixedSize()
+                    .disabled(!updates.canCheckForUpdates)
+            }
+            SectionDivider()
+            SettingsRow(title: "Check automatically",
+                        note: "Look for new builds in the background") {
+                InspectorSwitch(title: "Check for updates automatically", isOn: updates.automaticallyChecksForUpdates,
+                                help: "Automatically check for Argent updates in the background") {
+                    updates.setAutomaticallyChecksForUpdates(!updates.automaticallyChecksForUpdates)
+                }
+                .disabled(!updates.isAvailable)
+            }
+            SectionDivider()
+            SettingsRow(title: "Download automatically",
+                        note: "Download new builds in the background and install on quit") {
+                InspectorSwitch(title: "Download updates automatically", isOn: updates.automaticallyDownloadsUpdates,
+                                help: "Download updates automatically when available") {
+                    updates.setAutomaticallyDownloadsUpdates(!updates.automaticallyDownloadsUpdates)
+                }
+                .disabled(!updates.isAvailable || !updates.allowsAutomaticUpdates)
+            }
+            SectionDivider()
+            SettingsRow(title: "Channel", note: updates.channelNote) {
+                GraphiteSegmented(
+                    selection: channel,
+                    segments: UpdateChannel.allCases.map { item in
+                        .init(value: item, title: item.title, help: item.note)
+                    },
+                    size: .large,
+                    fillsWidth: true
+                )
+                .frame(width: 196)
+                .accessibilityLabel("Update channel")
+            }
+        }
+        .graphiteCard(cornerRadius: Graphite.Metric.m)
+    }
+
+    private var statusNote: String {
+        guard updates.isAvailable else { return "Automatic updates are inactive in development builds" }
+        guard let last = updates.lastUpdateCheckDate else { return "Not checked yet" }
+        return "Last checked \(last.formatted(date: .abbreviated, time: .shortened))"
     }
 }

@@ -33,6 +33,13 @@ Hanken Grotesk (SIL Open Font License 1.1)
   (https://github.com/marcologous/hanken-grotesk). Licensed under the SIL Open Font License,
   Version 1.1; the licence is in Sources/ArgentApp/Resources/Fonts/HankenGrotesk-OFL.txt.
 
+Sparkle 2 (MIT License, with bundled BSD/MIT/public-domain components)
+  https://github.com/sparkle-project/Sparkle
+  Copyright (c) 2006-2013 Andy Matuschak; Elgato Systems GmbH; Kornel Lesiński;
+  Mayur Pawashe; C.W. Betts; Petroules Corporation; Big Nerd Ranch; and Sparkle contributors.
+  Includes bsdiff/bspatch (BSD-2-Clause, Copyright 2003-2005 Colin Percival) and sais-lite (MIT).
+  Licensed under the MIT License; the full licence text is carried inside Sparkle.framework.
+
 Frame view surround specimen and README banner
   Sources/ArgentApp/Resources/FrameSurroundSpecimen.jpg
   design/banner.jpg

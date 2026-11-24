@@ -19,8 +19,7 @@ struct AboutView: View {
 
     /// "Version 0.2.0 (412)" for a release; a nightly or a local build names its channel and commit,
     /// "Version 0.1.0 nightly (412 · a1b2c3d)". scripts/build-app.sh writes the keys from the v* tag.
-    private var version: String {
-        let info = Bundle.main.infoDictionary
+    static func versionText(info: [String: Any]? = Bundle.main.infoDictionary) -> String {
         let short = info?["ArgentVersion"] as? String
             ?? info?["CFBundleShortVersionString"] as? String ?? "development"
         let build = info?["CFBundleVersion"] as? String
@@ -33,6 +32,8 @@ struct AboutView: View {
         if !detail.isEmpty { text += " (\(detail.joined(separator: " · ")))" }
         return text
     }
+
+    private var version: String { Self.versionText() }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

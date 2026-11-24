@@ -161,6 +161,8 @@ final class RollModel {
     var editRevision: UInt64 = UInt64(Date().timeIntervalSince1970 * 1_000_000)
     var isRestoringManual = false
     var isQuitting = false
+    /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
+    let updates = UpdateController()
     var editLineage = UUID().uuidString
     var manualSaveMessage: String?
     var manualSaveFailed = false
@@ -1363,7 +1365,8 @@ final class RollModel {
                          canShowDevelopedFile: selected.hasDevelopedFile,
                          isSeveralSelected: selected.isSeveral, canChangeFrames: selected.canChangeFrames,
                          moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop,
-                         isShowingSubjectModels: subjectModels.isShown)
+                         isShowingSubjectModels: subjectModels.isShown,
+                         canCheckForUpdates: updates.canCheckForUpdates)
     }
 
     /// Frame > Open Frame and the rail's Frame: on the sheet, a frame selected or one shown

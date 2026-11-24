@@ -59,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard self.model == nil else { return }
         self.model = model
         model.watchCards()
+        model.updates.start(for: model)
         // Once, at launch, before any undo history or download exists: any unfinished Subject models' staging folder
         // (`SubjectModelPack.sweepStaging`), the smart masks' seeds no edit names any more (`MaskRasterStore.sweep`),
         // and the removals' patches likewise.
@@ -196,6 +197,8 @@ struct MenuState: Equatable {
     var isShowingSubjectModels = false
     /// Either modal sheet is up over the workspace.
     var isSheetShown: Bool { isAskingToDevelop || isShowingSubjectModels }
+    /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
+    var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
     var actsOnRoll: Bool { page == .roll && !isSheetShown }
     /// As `showsFrames`, with no dialog over the roll.
@@ -248,6 +251,9 @@ struct ArgentCommands: Commands {
         // The About window rather than AppKit's panel, which could not carry the notices.
         CommandGroup(replacing: .appInfo) {
             Button("About Argent") { openWindow(id: AboutView.windowID) }
+            Divider()
+            Button("Check for Updates…") { model.updates.checkForUpdates() }
+                .disabled(!state.canCheckForUpdates)
         }
         // Settings is a page of the main window (the rail's Settings), not a window of its own.
         CommandGroup(replacing: .appSettings) {

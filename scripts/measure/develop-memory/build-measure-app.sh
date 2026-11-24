@@ -32,6 +32,7 @@ app=$out/Argent-m3mem.app
 rm -rf $app
 mkdir -p $app/Contents/MacOS $app/Contents/Resources
 cp $bin/Argent $app/Contents/MacOS/Argent
+scripts/embed-sparkle.sh $app $bin
 cp App/Info.plist $app/Contents/Info.plist
 plutil -replace CFBundleIdentifier -string camera.argent.Argent.m3mem $app/Contents/Info.plist
 for bundle in $bin/*.bundle(N); do
@@ -44,8 +45,7 @@ for stock in build/stocks/*(/N); do
   mkdir -p $app/Contents/Resources/Stocks/${stock:t}
   cp $stock/stock.json $stock/*.lut3d $app/Contents/Resources/Stocks/${stock:t}/
 done
-codesign --force --sign - --options runtime --entitlements App/Argent.entitlements $app
-codesign --verify --strict $app
+scripts/sign-app.sh $app -
 
 xcrun swiftc -O -o $out/argent-drive scripts/measure/develop-memory/drive.swift
 

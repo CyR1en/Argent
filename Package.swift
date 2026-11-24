@@ -9,6 +9,9 @@ let package = Package(
         .executable(name: "Argent", targets: ["ArgentApp"]),
         .executable(name: "argent-remove", targets: ["ArgentRemoveHelper"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.1"),
+    ],
     targets: [
         .target(
             name: "ArgentCore",
@@ -27,7 +30,11 @@ let package = Package(
         // The Mac app. scripts/build-app.sh wraps the binary into a signed, sandboxed Argent.app.
         .executableTarget(
             name: "ArgentApp",
-            dependencies: ["ArgentCore", "ArgentRoll"],
+            dependencies: [
+                "ArgentCore",
+                "ArgentRoll",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             // The display face.
             resources: [.copy("Resources")]
         ),
