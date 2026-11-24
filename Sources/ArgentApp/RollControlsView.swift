@@ -390,6 +390,17 @@ struct HalationControl: View {
         Int(spec.scrubbed(from: Float(start), steps: steps).rounded())
     }
 
+    /// Advances a readout scrub by horizontal drag `delta` (10x when `largeStep` is held), clamping accumulated steps
+    /// to the reachable range around `start` so overshooting 0 or 200 reverses immediately without dead travel.
+    static func advanceScrub(steps: CGFloat, delta: CGFloat, from start: Int, largeStep: Bool,
+                             spec: AdjustmentSliderSpec = .halation) -> (steps: CGFloat, value: Int) {
+        let stepSize = CGFloat(max(spec.step, Float.leastNonzeroMagnitude))
+        let minSteps = (CGFloat(spec.range.lowerBound) - CGFloat(start)) / stepSize
+        let maxSteps = (CGFloat(spec.range.upperBound) - CGFloat(start)) / stepSize
+        let nextSteps = min(maxSteps, max(minSteps, steps + delta * (largeStep ? 10 : 1)))
+        return (nextSteps, scrubbed(from: start, steps: nextSteps, spec: spec))
+    }
+
     private func help(roll: Int, own: Bool) -> String {
         let scale = "The glow around bright lights: 100 is the stock's own, 0 none and 200 twice as much."
         guard frame != nil else { return "The roll's Halation. \(scale) Every frame without its own develops with it." }
@@ -757,7 +768,6 @@ private struct HalationScrubberBar: View {
             .allowsHitTesting(numberFocused)
             .accessibilityHidden(!numberFocused)
             .accessibilityLabel("\(spec.title) value")
-            .accessibilityValue(spec.spoken(Float(current)))
             .accessibilityHint(validationMessage ?? spec.entryHelp(help))
             .onSubmit { commitNumber(); numberFocused = false }
             .onKeyPress(.escape) {
@@ -824,8 +834,10 @@ private struct HalationScrubberBar: View {
                 }
                 let dx = gesture.location.x - scrubLastX
                 scrubLastX = gesture.location.x
-                scrubSteps += dx * (NSEvent.modifierFlags.contains(.shift) ? 10 : 1)
-                applyDragValue(HalationControl.scrubbed(from: scrubStartValue, steps: scrubSteps, spec: spec))
+                let advanced = HalationControl.advanceScrub(steps: scrubSteps, delta: dx, from: scrubStartValue,
+                                                            largeStep: NSEvent.modifierFlags.contains(.shift), spec: spec)
+                scrubSteps = advanced.steps
+                applyDragValue(advanced.value)
             }
             .onEnded { _ in
                 if isDragging {
