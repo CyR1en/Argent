@@ -40,6 +40,10 @@ app=build/Argent.app
 codesign --verify --deep --strict "$app"
 
 identity=$(scripts/sign-identity.sh)
+if (( notarize )) && [[ $identity == - || $identity == "Argent Self-Signed" ]]; then
+  echo "error: --notarize requires a Developer ID Application signing identity (got: $identity)" >&2
+  exit 1
+fi
 
 # ArgentVersion, the whole version scripts/build-app.sh took from the tag (0.2.0-beta.1), else the short one.
 version=$(plutil -extract ArgentVersion raw "$app/Contents/Info.plist" 2>/dev/null \
@@ -64,8 +68,30 @@ rm -rf "$stage"
 mkdir -p "$stage"
 cp -c -R "$app" "$stage/"
 staged=$stage/Argent.app
+resign=0
 if (( ! with_models )) && [[ -d $staged/Contents/Resources/Models ]]; then
   rm -rf "$staged/Contents/Resources/Models"
+  resign=1
+fi
+if (( ! resign )); then
+  # Decouple release signing from Models/ removal: if --skip-build staged an ad-hoc, self-signed,
+  # or untimestamped copy (or ARGENT_SIGN_IDENTITY overrides the identity), re-sign the staged copy
+  # while leaving build/Argent.app untouched.
+  if [[ -n ${ARGENT_SIGN_IDENTITY:-} ]]; then
+    sign_info=$(codesign -dvv "$staged" 2>&1 || true)
+    if [[ $ARGENT_SIGN_IDENTITY == - ]]; then
+      [[ $sign_info == *"Signature=adhoc"* ]] || resign=1
+    elif [[ $sign_info != *"Authority=$ARGENT_SIGN_IDENTITY"* ]] || { (( notarize )) && [[ $sign_info != *"Timestamp="* ]]; }; then
+      resign=1
+    fi
+  elif (( notarize )); then
+    sign_info=$(codesign -dvv "$staged" 2>&1 || true)
+    if [[ $sign_info != *"Authority=Developer ID Application:"* || $sign_info != *"Timestamp="* ]]; then
+      resign=1
+    fi
+  fi
+fi
+if (( resign )); then
   scripts/sign-app.sh "$staged" "$identity"
 fi
 codesign --verify --deep --strict "$staged"
@@ -77,8 +103,8 @@ if (( notarize )); then
     exit 1
   fi
   sign_info=$(codesign -dvv "$staged" 2>&1)
-  if [[ $sign_info != *"Authority=Developer ID Application:"* ]]; then
-    echo "error: --notarize requires a Developer ID Application signature on $staged" >&2
+  if [[ $sign_info != *"Authority=Developer ID Application:"* || $sign_info != *"Timestamp="* ]]; then
+    echo "error: --notarize requires a timestamped Developer ID Application signature on $staged" >&2
     print -u2 "$sign_info"
     exit 1
   fi
