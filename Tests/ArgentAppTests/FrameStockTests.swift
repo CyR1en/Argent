@@ -183,6 +183,8 @@ import Testing
             let entry = HalationControl.sameAsRoll(frames[2], roll: 150, isOwn: true, model: model)
             #expect(entry.title == "Same as roll, 150" && entry.isEnabled)
             #expect(!HalationControl.sameAsRoll(frames[3], roll: 150, isOwn: false, model: model).isEnabled)
+            // On a stock without halation the row is disabled, and its menu leaves the frame's own alone.
+            #expect(!HalationControl.sameAsRoll(frames[2], roll: 150, isOwn: true, isAvailable: false, model: model).isEnabled)
             if case .action(let run) = entry.kind { run() }
             #expect(model.frameControls(frames[2]).isEmpty)
             model.setHalation(40, for: frames[2])

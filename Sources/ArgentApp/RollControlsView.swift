@@ -323,15 +323,17 @@ struct HalationControl: View {
                                    value: Binding(get: { Float(value) }, set: { model.moveHalation(Int($0.rounded()), for: frame) }),
                                    snapshot: frame?.url, beginGesture: { model.beginHalationAdjusting(for: frame) },
                                    endGesture: { model.endHalationAdjusting() },
-                                   menuSwitch: frame.map { frame in { Self.sameAsRoll(frame, roll: roll, isOwn: own, model: model) } })
+                                   menuSwitch: frame.map { frame in { Self.sameAsRoll(frame, roll: roll, isOwn: own, isAvailable: unavailable == nil, model: model) } })
             .disabled(unavailable != nil)
             .modifier(FrameOverrideIndicator(isOwn: own))
     }
 
-    /// The row's menu's way back to the roll's value, off while the frame follows the roll already.
-    @MainActor static func sameAsRoll(_ frame: Frame, roll: Int, isOwn: Bool, model: RollModel) -> MenuEntry {
+    /// The row's menu's way back to the roll's value, off while the frame follows the roll already, and while the row is
+    /// disabled (its stock has no halation), so a frame's own kept for its stock's return is not cleared from a disabled row.
+    @MainActor static func sameAsRoll(_ frame: Frame, roll: Int, isOwn: Bool, isAvailable: Bool = true,
+                                      model: RollModel) -> MenuEntry {
         .action("film.halationSameAsRoll", RollControlsView.sameAsRollItem(AdjustmentSliderSpec.halation.formatted(Float(roll))),
-                isEnabled: isOwn) { model.setHalation(nil, for: frame) }
+                isEnabled: isOwn && isAvailable) { model.setHalation(nil, for: frame) }
     }
 
     private func help(roll: Int, own: Bool) -> String {
