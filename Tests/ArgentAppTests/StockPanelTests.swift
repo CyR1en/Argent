@@ -111,6 +111,32 @@ import Testing
         #expect(narrow.offset(revealing: 5, from: 0) == narrow.maximumOffset)
     }
 
+    @Test func halationBarMapsPointerCoordinatesAcrossTheRange() {
+        #expect(HalationControl.value(at: -20, width: 228) == 0)
+        #expect(HalationControl.value(at: 0, width: 228) == 0)
+        #expect(HalationControl.value(at: 114, width: 228) == 100)
+        #expect(HalationControl.value(at: 228, width: 228) == 200)
+        #expect(HalationControl.value(at: 300, width: 228) == 200)
+        #expect(HalationControl.value(at: 50, width: 0) == OutputSettings.defaultHalation)
+        // Readout scrub moves relative to its starting value and clamps to 0...200.
+        #expect(HalationControl.scrubbed(from: 100, steps: -4) == 96)
+        #expect(HalationControl.scrubbed(from: 100, steps: 25) == 125)
+        #expect(HalationControl.scrubbed(from: 10, steps: -40) == 0)
+        #expect(HalationControl.scrubbed(from: 190, steps: 40) == 200)
+        // Overshooting a limit with Shift does not stick when reversing without Shift, and preserves fractional motion.
+        let overshootHigh = HalationControl.advanceScrub(steps: 0, delta: 12, from: 190, largeStep: true)
+        #expect(overshootHigh.value == 200 && overshootHigh.steps == 10)
+        let reverseHigh = HalationControl.advanceScrub(steps: overshootHigh.steps, delta: -20, from: 190, largeStep: false)
+        #expect(reverseHigh.value == 180 && reverseHigh.steps == -10)
+        let overshootLow = HalationControl.advanceScrub(steps: 0, delta: -12, from: 10, largeStep: true)
+        #expect(overshootLow.value == 0 && overshootLow.steps == -10)
+        let reverseLow = HalationControl.advanceScrub(steps: overshootLow.steps, delta: 5, from: 10, largeStep: false)
+        #expect(reverseLow.value == 5 && reverseLow.steps == -5)
+        let fine1 = HalationControl.advanceScrub(steps: 0, delta: 0.6, from: 0, largeStep: false)
+        let fine2 = HalationControl.advanceScrub(steps: fine1.steps, delta: 0.6, from: 0, largeStep: false)
+        #expect(fine1.value == 0 && fine2.value == 1)
+    }
+
     @Test func emptyAndTinyShelvesHaveFiniteScrollTargets() {
         let empty = StockShelfLayout(width: 346, count: 0)
         #expect(!empty.showsPaging && empty.contentWidth == 0 && empty.maximumOffset == 0)

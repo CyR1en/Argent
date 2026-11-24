@@ -185,6 +185,18 @@ import Testing
             #expect(!HalationControl.sameAsRoll(frames[3], roll: 150, isOwn: false, model: model).isEnabled)
             // On a stock without halation the row is disabled, and its menu leaves the frame's own alone.
             #expect(!HalationControl.sameAsRoll(frames[2], roll: 150, isOwn: true, isAvailable: false, model: model).isEnabled)
+            let frameMenu = HalationControl.menuEntries(frame: frames[2], roll: 150, value: 180, isOwn: true,
+                                                        isAvailable: true, isDragging: false, model: model) {}
+            #expect(frameMenu.titles == ["Same as roll, 150", "—", "Reset Halation"])
+            #expect(frameMenu.entry("film.halationSameAsRoll")?.isEnabled == true)
+            #expect(frameMenu.entry("slider.reset")?.isEnabled == true)
+            let draggingMenu = HalationControl.menuEntries(frame: frames[2], roll: 150, value: 180, isOwn: true,
+                                                           isAvailable: true, isDragging: true, model: model) {}
+            #expect(draggingMenu.entry("film.halationSameAsRoll")?.isEnabled == false)
+            #expect(draggingMenu.entry("slider.reset")?.isEnabled == false)
+            let rollMenu = HalationControl.menuEntries(frame: nil, roll: 100, value: 100, isOwn: false,
+                                                       isAvailable: true, isDragging: false, model: model) {}
+            #expect(rollMenu.titles == ["Reset Halation"] && rollMenu.entry("slider.reset")?.isEnabled == false)
             if case .action(let run) = entry.kind { run() }
             #expect(model.frameControls(frames[2]).isEmpty)
             model.setHalation(40, for: frames[2])
