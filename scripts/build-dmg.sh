@@ -73,23 +73,11 @@ if (( ! with_models )) && [[ -d $staged/Contents/Resources/Models ]]; then
   rm -rf "$staged/Contents/Resources/Models"
   resign=1
 fi
-if (( ! resign )); then
-  # Decouple release signing from Models/ removal: if --skip-build staged an ad-hoc, self-signed,
-  # or untimestamped copy (or ARGENT_SIGN_IDENTITY overrides the identity), re-sign the staged copy
-  # while leaving build/Argent.app untouched.
-  if [[ -n ${ARGENT_SIGN_IDENTITY:-} ]]; then
-    sign_info=$(codesign -dvv "$staged" 2>&1 || true)
-    if [[ $ARGENT_SIGN_IDENTITY == - ]]; then
-      [[ $sign_info == *"Signature=adhoc"* ]] || resign=1
-    elif [[ $sign_info != *"Authority=$ARGENT_SIGN_IDENTITY"* ]] || { (( notarize )) && [[ $sign_info != *"Timestamp="* ]]; }; then
-      resign=1
-    fi
-  elif (( notarize )); then
-    sign_info=$(codesign -dvv "$staged" 2>&1 || true)
-    if [[ $sign_info != *"Authority=Developer ID Application:"* || $sign_info != *"Timestamp="* ]]; then
-      resign=1
-    fi
-  fi
+if (( skip_build )) && { (( notarize )) || [[ -n ${ARGENT_SIGN_IDENTITY:-} ]]; }; then
+  # Decouple release signing from Models/ removal: when repacking a pre-built app for notarization or
+  # under an explicit ARGENT_SIGN_IDENTITY override, always re-sign the staged copy so the app and DMG
+  # carry the exact same identity and timestamp (leaving build/Argent.app untouched).
+  resign=1
 fi
 if (( resign )); then
   scripts/sign-app.sh "$staged" "$identity"
