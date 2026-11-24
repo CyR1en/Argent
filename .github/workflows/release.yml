@@ -4,10 +4,11 @@
 #   a pull request, or Run workflow   the image as a workflow artifact only
 #
 # The version comes from the tag (scripts/build-app.sh): a release is its tag's version, a nightly the newest v* tag's,
-# both with the commit count as the build number. The app is signed with the self-signed "Argent Self-Signed" certificate
-# from the secrets SIGNING_P12 (base64 of the .p12) and SIGNING_P12_PASSWORD, so every build has the same designated
-# requirement (scripts/sign-identity.sh); it is not notarized, so a downloaded copy asks once in Privacy & Security >
-# Open Anyway. The smart masks' and Remove's models are not in Git and not in these images.
+# both with the commit count as the build number. Published builds are signed with the Developer ID Application certificate
+# from DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD and notarized & stapled with Apple's notary service using the
+# App Store Connect API key from NOTARY_API_KEY_P8 / NOTARY_API_KEY_ID / NOTARY_API_ISSUER_ID. Pull requests from forks
+# without secrets fall back to an ad-hoc, unnotarized check build. The smart masks' and Remove's models are not in Git
+# and not in these images.
 name: Release
 
 on:
@@ -84,37 +85,105 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install --quiet --disable-pip-version-check --require-hashes --only-binary :all: -r bake/requirements.lock
 
-      # The certificate goes into a keychain of the run's own, which codesign may use without asking. A published build
-      # must have it, so that every copy has the same identity; a pull request from a fork has no secrets and goes ad-hoc.
-      - name: Signing identity
+      # The Developer ID certificate goes into a keychain of the run's own, which codesign may use without asking.
+      # Published builds (nightly and release) require Developer ID signing and notarization credentials; pull requests
+      # from forks without secrets fall back to an ad-hoc, unnotarized build.
+      - name: Signing and notarization credentials
         env:
-          SIGNING_P12: ${{ secrets.SIGNING_P12 }}
-          SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
         run: |
-          if [[ -z $SIGNING_P12 ]]; then
+          if [[ -z $DEVELOPER_ID_P12 ]]; then
             if [[ $KIND != check ]]; then
-              echo "::error::SIGNING_P12 is not set; a $KIND build must be signed with Argent Self-Signed"; exit 1
+              echo "::error::DEVELOPER_ID_P12 is not set; a $KIND build must be signed with Developer ID Application"
+              exit 1
             fi
-            echo "no signing secrets: ad-hoc"
+            echo "no signing secrets: ad-hoc, unnotarized"
             echo "ARGENT_SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+            echo "NOTARIZE=0" >> "$GITHUB_ENV"
             exit 0
           fi
+          if [[ -z $DEVELOPER_ID_P12_PASSWORD ]]; then
+            echo "::error::DEVELOPER_ID_P12_PASSWORD is not set"
+            exit 1
+          fi
+
           keychain=$RUNNER_TEMP/signing.keychain-db
           password=$(openssl rand -hex 24)
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$SIGNING_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
-          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$SIGNING_P12_PASSWORD" -T /usr/bin/codesign
-          rm "$RUNNER_TEMP/signing.p12"
+          (
+            umask 077
+            printf '%s' "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          )
+          security import "$RUNNER_TEMP/signing.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          rm -f "$RUNNER_TEMP/signing.p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          echo "ARGENT_SIGN_IDENTITY=Argent Self-Signed" >> "$GITHUB_ENV"
 
-      - name: Build the disk image
+          existing_keychains=()
+          while IFS= read -r line; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line%\"}"
+            line="${line#\"}"
+            [[ -n $line ]] && existing_keychains+=("$line")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing_keychains[@]}"
+
+          # Ensure Apple's Developer ID G2 intermediate is present so the trust chain validates on fresh runners.
+          if ! security find-identity -v -p codesigning "$keychain" | grep -q '"Developer ID Application: '; then
+            echo "Developer ID G2 intermediate missing from trust chain; installing DeveloperIDG2CA.cer"
+            g2=$RUNNER_TEMP/DeveloperIDG2CA.cer
+            curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$g2"
+            actual=$(shasum -a 256 "$g2" | awk '{print $1}')
+            expected=f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a
+            if [[ $actual != "$expected" ]]; then
+              echo "::error::DeveloperIDG2CA.cer SHA-256 mismatch: $actual"
+              exit 1
+            fi
+            security import "$g2" -k "$keychain"
+            rm -f "$g2"
+          fi
+
+          identity=$(scripts/sign-identity.sh)
+          if [[ $identity != "Developer ID Application: "* ]]; then
+            echo "::error::no valid Developer ID Application identity in signing keychain (got: $identity)"
+            security find-identity -p codesigning "$keychain"
+            exit 1
+          fi
+          echo "ARGENT_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "signing identity: $identity"
+
+          if [[ -n $NOTARY_API_KEY_P8 && -n $NOTARY_API_KEY_ID && -n $NOTARY_API_ISSUER_ID ]]; then
+            notary_key=$RUNNER_TEMP/notary.p8
+            (
+              umask 077
+              printf '%s' "$NOTARY_API_KEY_P8" | base64 --decode > "$notary_key"
+            )
+            echo "ARGENT_NOTARY_KEY=$notary_key" >> "$GITHUB_ENV"
+            echo "ARGENT_NOTARY_KEY_ID=$NOTARY_API_KEY_ID" >> "$GITHUB_ENV"
+            echo "ARGENT_NOTARY_ISSUER=$NOTARY_API_ISSUER_ID" >> "$GITHUB_ENV"
+            echo "NOTARIZE=1" >> "$GITHUB_ENV"
+            echo "notarization enabled"
+          elif [[ $KIND != check ]]; then
+            echo "::error::NOTARY_API_KEY_P8, NOTARY_API_KEY_ID and NOTARY_API_ISSUER_ID must be set for a $KIND build"
+            exit 1
+          else
+            echo "no notarization secrets: skipping notarization on check build"
+            echo "NOTARIZE=0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and notarize the disk image
         id: dmg
         run: |
-          scripts/build-dmg.sh --no-models
+          args=(--no-models)
+          if [[ $NOTARIZE == 1 ]]; then
+            args+=(--notarize)
+          fi
+          scripts/build-dmg.sh "${args[@]}"
           plist=build/Argent.app/Contents/Info.plist
           version=$(plutil -extract ArgentVersion raw "$plist")
           codesign -d -r- build/Argent.app
@@ -135,9 +204,11 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Remove the signing keychain
+      - name: Clean up signing and notarization credentials
         if: always()
-        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/DeveloperIDG2CA.cer"
 
   publish:
     needs: build
@@ -171,7 +242,7 @@ jobs:
               echo "The newest build of \`main\`, at ${GITHUB_SHA::7} ($(date -u +%Y-%m-%d)). Every push to \`main\` replaces it."
               echo
             fi
-            echo "**Install:** open the disk image and drag Argent to Applications. Argent is self-signed, not notarized, so the first time it opens, macOS asks: allow it in System Settings › Privacy & Security › Open Anyway."
+            echo "**Install:** open the disk image and drag Argent to Applications. Signed with Developer ID and notarized by Apple."
             echo
             echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable, Subject and Background offer the Subject models as a separate download, and Remove has no model."
             if [[ $KIND == nightly ]]; then
