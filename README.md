@@ -6,7 +6,7 @@
 <p align="center"><strong>A digital roll. A film finish.</strong></p>
 
 <p align="center">
-  Native RAW development for Sony a7 IV.<br>
+  Native development for Sony RAW files.<br>
   Modelled colour negative and print. Made for Mac.
 </p>
 
@@ -42,7 +42,7 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
 
 ## The workflow
 
-1. **Bring in a roll.** Use File › Add Existing Folder (⌘O) to keep a folder of Sony a7 IV
+1. **Bring in a roll.** Use File › Add Existing Folder (⌘O) to keep a folder of Sony
    `.ARW` files where it is, or File › Import Roll (⌘I) to copy frames from a card or folder
    into a new roll. Review the contact sheet in capture order, flag the frames to keep in view,
    and work with one frame or a selection.
