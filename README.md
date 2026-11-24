@@ -65,8 +65,7 @@ kept per roll.
 
 On a Mac with Apple silicon and macOS 27, download `Argent-nightly.dmg` from the
 [nightly release](https://github.com/CyR1en/Argent/releases/tag/nightly), open it, and drag Argent
-to Applications. The app is self-signed, not notarized. If macOS blocks the first launch, go to
-System Settings › Privacy & Security › Open Anyway after trying to open the app.
+to Applications. Published builds are signed with Developer ID and notarized by Apple.
 
 The [releases page](https://github.com/CyR1en/Argent/releases) also lists versioned disk images
 when published. Published app builds omit the smart-mask and Remove models. Sky and Remove
@@ -88,7 +87,8 @@ scripts/build-app.sh debug open
 ```
 
 The script bakes the stock library, builds the Swift package's app and helper with SwiftPM,
-signs `build/Argent.app` (ad-hoc unless the keychain holds "Argent Self-Signed"), then opens it.
+signs `build/Argent.app` (using a Developer ID Application identity when the keychain holds one,
+falling back to "Argent Self-Signed" or ad-hoc), then opens it.
 Import a roll in the app, or open one directly:
 
 ```sh
@@ -97,7 +97,8 @@ open -a "$PWD/build/Argent.app" /path/to/roll
 
 `scripts/build-dmg.sh` packs a release build into `build/Argent-<version>.dmg`, a drag-to-Applications
 image with the models `build/Argent.app` holds; `--no-models` leaves them out for a copy that goes to
-anyone else. The disk image script needs Python 3.11 or newer in `.venv`.
+anyone else, and `--notarize` notarizes and staples both the app and the disk image with Apple
+(`scripts/notarize.sh`). The disk image script needs Python 3.11 or newer in `.venv`.
 
 For optional local models, see [model setup and licences](scripts/README.md). Remove's weights
 must not be distributed unless cleared or replaced.
@@ -106,11 +107,12 @@ must not be distributed unless cleared or replaced.
 <summary>Development and validation</summary>
 
 Local checks are the gate. The one hosted workflow, [`.github/workflows/release.yml`](.github/workflows/release.yml), runs
-`scripts/build-dmg.sh --no-models` on GitHub's Xcode 27 runner: a push to `main` replaces the `nightly` pre-release, a pushed
-`v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) publishes that version, and a pull request keeps the image as a
+`scripts/build-dmg.sh --no-models --notarize` on GitHub's Xcode 27 runner: a push to `main` replaces the `nightly` pre-release,
+a pushed `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) publishes that version, and a pull request keeps the image as a
 workflow artifact. It runs no tests. The app's version is the newest `v*` tag and its build number the commit count
-(`scripts/build-app.sh`); builds are signed with the self-signed "Argent Self-Signed" certificate when the keychain holds it
-(`scripts/sign-identity.sh`), in CI from the `SIGNING_P12` secrets, else ad-hoc.
+(`scripts/build-app.sh`); builds are signed with Developer ID Application (`scripts/sign-identity.sh`, `scripts/sign-app.sh`)
+and notarized (`scripts/notarize.sh`), in CI from the `DEVELOPER_ID_P12` and `NOTARY_API_KEY_*` secrets, falling back to
+ad-hoc on fork pull requests.
 
 ```sh
 swift test

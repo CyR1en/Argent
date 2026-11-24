@@ -3,8 +3,9 @@
 # App/Info.plist, the icon compiled from App/Argent.icon, the baked stocks, the smart masks' four models
 # when build/models holds them, Remove's helper (argent-remove) and its four graphs when build/models holds them, the version from
 # the newest v* tag, and a signature with App/Argent.entitlements, so the app runs sandboxed, the helper with
-# App/ArgentRemoveHelper.entitlements. The signature is the self-signed "Argent Self-Signed" when a keychain holds it, else ad-hoc
-# (scripts/sign-identity.sh); there is no Developer ID signing or notarization (docs/deferred.md).
+# App/ArgentRemoveHelper.entitlements. The signature is the keychain's Developer ID Application identity when present,
+# else "Argent Self-Signed", else ad-hoc (scripts/sign-identity.sh, scripts/sign-app.sh). Notarization runs in
+# scripts/build-dmg.sh --notarize, keeping local builds fast and offline.
 #
 # The stocks are baked with the Python bake tool at 65 cubed into build/stocks, and baked
 # again only when bake/ changes. Only the manifests and the binary LUTs go into the bundle;
@@ -157,12 +158,9 @@ else
   echo "note: Remove's graphs are not all in build/models (scripts/convert-objectclear.zsh makes them). The app builds, and Remove says it has no model." >&2
   echo "      Build them with scripts/convert-objectclear.zsh." >&2
 fi
-# The helper first: the app's signature seals it. Sandboxed and inheriting, it runs in the app's sandbox and container.
-# The identity is "Argent Self-Signed" when a keychain holds it, else ad-hoc (scripts/sign-identity.sh).
+# Sign inside-out (helper, any embedded frameworks, then the app bundle) with the resolved identity.
 identity=$(scripts/sign-identity.sh)
-codesign --force --sign "$identity" --options runtime --entitlements App/ArgentRemoveHelper.entitlements "$app/Contents/MacOS/argent-remove"
-codesign --force --sign "$identity" --options runtime --entitlements App/Argent.entitlements "$app"
-codesign --verify --strict "$app"
+scripts/sign-app.sh "$app" "$identity"
 [[ $identity == - ]] && signed_by="ad-hoc" || signed_by="signed by $identity"
 echo "built $app ($configuration, $version $channel, build $build_number, $commit, $signed_by)"
 

@@ -16,7 +16,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "App" / "DMG"
-HANKEN = ROOT / "Sources/ArgentApp/Resources/Fonts/HankenGrotesk-Variable.ttf"
 DIDOT = "/System/Library/Fonts/Supplemental/Didot.ttc"
 MONO = "/System/Library/Fonts/SFNSMono.ttf"
 
@@ -25,12 +24,6 @@ APP = (160, 196)  # icon centres, in points; scripts/dmg/settings.py uses the sa
 APPLICATIONS = (480, 196)
 AMBER = (184, 98, 44)
 INK = (28, 29, 33)
-
-
-def hanken(size, weight):
-    font = ImageFont.truetype(str(HANKEN), size)
-    font.set_variation_by_axes([weight])
-    return font
 
 
 def mono(size):
@@ -116,16 +109,7 @@ def render(s):
         fill=AMBER + (245,), width=int(2.2 * s), joint="curve",
     )
 
-    base = Image.alpha_composite(base, layer)
-
-    # Footnote for a Mac that has not opened Argent before: the app is ad-hoc signed, not notarized.
-    notes = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    note = ImageDraw.Draw(notes)
-    nf = hanken(int(9.5 * s), 450)
-    line = "If macOS blocks Argent, click Open Anyway in System Settings › Privacy & Security."
-    note.text((w / 2, 362 * s), line, font=nf, fill=INK + (120,), anchor="mt")
-
-    return Image.alpha_composite(base, notes).convert("RGB")
+    return Image.alpha_composite(base, layer).convert("RGB")
 
 
 def main():
