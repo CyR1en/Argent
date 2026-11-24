@@ -54,6 +54,9 @@ a rendering choice rather than a measured film. [Inside the film model →](bake
    to JPEG, HEIC or 16-bit TIFF in sRGB, Display P3 or Adobe RGB. Output retains EXIF, GPS and
    XMP metadata from the source. Recipes keep the settings; a stopped develop can resume.
 
+Argent decodes with macOS's own RAW support. A roll shows the `.ARW` files in its folder
+whichever camera made them, but Argent can develop only those macOS can open.
+
 Edits leave the source RAW data untouched, and image processing stays on the Mac. Auto is a
 starting point, not a guarantee of identical brightness across reframings.
 
