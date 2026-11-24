@@ -1,0 +1,15 @@
+{
+  "build_number": "1222",
+  "channel": "stable",
+  "commit": "503df1a",
+  "ed_signature": "1dleQy/K0+L+ATHgpNXgTSCut0iFbeMYFoCsvekPv4KgOVW+MbPSHS5xJCb0McZWt6ZCrhbDgn78Ar5+DQc/DQ==",
+  "kind": "release",
+  "length": 82981176,
+  "min_system_version": "27.0",
+  "pub_date": "Tue, 24 Nov 2026 05:02:35 +0000",
+  "release_notes_url": "https://github.com/CyR1en/Argent/releases/tag/v0.1.0",
+  "short_version": "0.1.0",
+  "title": "Argent 0.1.0",
+  "url": "https://github.com/CyR1en/Argent/releases/download/v0.1.0/Argent-0.1.0.dmg",
+  "version": "0.1.0"
+}
