@@ -118,6 +118,11 @@ import Testing
         #expect(HalationControl.value(at: 228, width: 228) == 200)
         #expect(HalationControl.value(at: 300, width: 228) == 200)
         #expect(HalationControl.value(at: 50, width: 0) == OutputSettings.defaultHalation)
+        // Readout scrub moves relative to its starting value and clamps to 0...200.
+        #expect(HalationControl.scrubbed(from: 100, steps: -4) == 96)
+        #expect(HalationControl.scrubbed(from: 100, steps: 25) == 125)
+        #expect(HalationControl.scrubbed(from: 10, steps: -40) == 0)
+        #expect(HalationControl.scrubbed(from: 190, steps: 40) == 200)
     }
 
     @Test func emptyAndTinyShelvesHaveFiniteScrollTargets() {

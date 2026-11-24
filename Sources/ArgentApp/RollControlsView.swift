@@ -385,6 +385,11 @@ struct HalationControl: View {
         return min(range.upperBound, max(range.lowerBound, range.lowerBound + Int((fraction * span).rounded())))
     }
 
+    /// Scrubs Halation relatively from `start` by `steps` (positive right, negative left), clamped to `spec.range`.
+    static func scrubbed(from start: Int, steps: CGFloat, spec: AdjustmentSliderSpec = .halation) -> Int {
+        Int(spec.scrubbed(from: Float(start), steps: steps).rounded())
+    }
+
     private func help(roll: Int, own: Bool) -> String {
         let scale = "The glow around bright lights: 100 is the stock's own, 0 none and 200 twice as much."
         guard frame != nil else { return "The roll's Halation. \(scale) Every frame without its own develops with it." }
@@ -464,6 +469,9 @@ private struct HalationScrubberBar: View {
     @State private var live: Int?
     @State private var isDragging = false
     @State private var suppressDrag = false
+    @State private var scrubStartValue = 0
+    @State private var scrubLastX: CGFloat = 0
+    @State private var scrubSteps: CGFloat = 0
     @State private var barWidth: CGFloat = 228
     @State private var spot = PointerSpot()
     @State private var resetHovered = false
@@ -477,6 +485,7 @@ private struct HalationScrubberBar: View {
 
     @FocusState private var barFocused: Bool
     @FocusState private var numberFocused: Bool
+    @AccessibilityFocusState private var numberAccessibilityFocused: Bool
 
     private var isActive: Bool { isAvailable && environmentEnabled }
     private var isHovered: Bool { spot.isInside && isActive }
@@ -567,7 +576,7 @@ private struct HalationScrubberBar: View {
                     showsKeyboardFocus = false
                 }
             }
-            .onKeyPress(phases: .down) { key in
+            .onKeyPress(phases: [.down, .repeat]) { key in
                 guard isActive, !numberFocused else { return .ignored }
                 return handleKey(key)
             }
@@ -581,6 +590,10 @@ private struct HalationScrubberBar: View {
                 guard isActive else { return }
                 let delta = direction == .increment ? 1 : -1
                 stepValue(to: current + delta)
+            }
+            .accessibilityAction(named: "Edit \(spec.title.lowercased()) value") {
+                guard isActive, !numberFocused else { return }
+                numberFocused = true
             }
             .accessibilityAction(named: isFrame ? "Same as roll" : "Reset halation") {
                 guard canReset else { return }
@@ -607,6 +620,9 @@ private struct HalationScrubberBar: View {
                 number = spec.formatted(Float(value))
                 numberSnapshot = snapshot
                 validationMessage = nil
+                Task { @MainActor in
+                    if numberFocused { numberAccessibilityFocused = true }
+                }
             } else {
                 commitNumber()
                 numberSnapshot = nil
@@ -736,9 +752,13 @@ private struct HalationScrubberBar: View {
             .background(fieldShape.fill(Graphite.control))
             .overlay { fieldShape.strokeBorder(Graphite.dockAccent.opacity(0.75), lineWidth: 1) }
             .focused($numberFocused)
+            .accessibilityFocused($numberAccessibilityFocused)
             .opacity(numberFocused ? 1 : 0)
             .allowsHitTesting(numberFocused)
             .accessibilityHidden(!numberFocused)
+            .accessibilityLabel("\(spec.title) value")
+            .accessibilityValue(spec.spoken(Float(current)))
+            .accessibilityHint(validationMessage ?? spec.entryHelp(help))
             .onSubmit { commitNumber(); numberFocused = false }
             .onKeyPress(.escape) {
                 number = spec.formatted(Float(value))
@@ -762,6 +782,7 @@ private struct HalationScrubberBar: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 3)
         .contentShape(Rectangle())
+        .help(isActive ? spec.entryHelp(help) + " Drag left or right over the value to change it, Shift in larger steps." : help)
         .gesture(valueClickOrDrag, isEnabled: isActive)
     }
 
@@ -779,7 +800,7 @@ private struct HalationScrubberBar: View {
                     beginDrag()
                 }
                 guard !suppressDrag else { return }
-                updateDrag(at: gesture.location.x)
+                applyDragValue(HalationControl.value(at: gesture.location.x, width: barWidth))
             }
             .onEnded { _ in
                 if suppressDrag {
@@ -790,15 +811,21 @@ private struct HalationScrubberBar: View {
             }
     }
 
-    /// Click on the number edits it inline; dragging past 3 pt seamlessly scrubs the bar.
+    /// Click on the number edits it inline; dragging past 3 pt scrubs relative to its starting value (Shift in 10x steps).
     private var valueClickOrDrag: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.barSpace))
             .onChanged { gesture in
                 if !isDragging {
                     guard abs(gesture.translation.width) >= ValueScrubView.dragThreshold else { return }
+                    scrubStartValue = current
+                    scrubLastX = gesture.startLocation.x
+                    scrubSteps = 0
                     beginDrag()
                 }
-                updateDrag(at: gesture.location.x)
+                let dx = gesture.location.x - scrubLastX
+                scrubLastX = gesture.location.x
+                scrubSteps += dx * (NSEvent.modifierFlags.contains(.shift) ? 10 : 1)
+                applyDragValue(HalationControl.scrubbed(from: scrubStartValue, steps: scrubSteps, spec: spec))
             }
             .onEnded { _ in
                 if isDragging {
@@ -817,8 +844,7 @@ private struct HalationScrubberBar: View {
         beginGesture()
     }
 
-    private func updateDrag(at x: CGFloat) {
-        let next = HalationControl.value(at: x, width: barWidth)
+    private func applyDragValue(_ next: Int) {
         guard next != current else { return }
         live = next
         written = next
@@ -863,6 +889,10 @@ private struct HalationScrubberBar: View {
             return .handled
         case .end:
             stepValue(to: OutputSettings.halationRange.upperBound)
+            return .handled
+        case .return:
+            guard press.phase == .down else { return .ignored }
+            numberFocused = true
             return .handled
         default:
             return .ignored
