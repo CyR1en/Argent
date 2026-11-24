@@ -1,9 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <title>Argent</title>
     <link>https://github.com/CyR1en/Argent</link>
     <description>Updates for Argent.</description>
     <language>en</language>
+    <item>
+      <title>Nightly 2026-11-24 (85d0299)</title>
+      <guid isPermaLink="false">argent-nightly</guid>
+      <pubDate>Tue, 24 Nov 2026 03:25:44 +0000</pubDate>
+      <sparkle:channel>nightly</sparkle:channel>
+      <sparkle:version>1180</sparkle:version>
+      <sparkle:shortVersionString>0.1.0 nightly (85d0299)</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+      <description>&lt;p&gt;Nightly 2026-11-24 (85d0299) — &lt;a href="https://github.com/CyR1en/Argent/releases/tag/nightly"&gt;View release notes on GitHub&lt;/a&gt;.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg" length="82874679" type="application/octet-stream" sparkle:edSignature="6Q995ZDs6wuNS9+2rbsLu50wfnLAlzz6Z4I3XRvdbc7jKtQ3s0RmVuOwXvZBDrbO9uX78uJMiguSQJhCZ4uzCw==" />
+    </item>
   </channel>
 </rss>
