@@ -152,7 +152,11 @@ import Testing
             prompt.prompted = pending
             return prompt.shouldConfirm
         }
-        let stagedNightly = UpdateController.PendingQuitUpdate(version: "0.2.0 nightly (abc1234)", isNightly: true)
+        let stagedNightly = UpdateController.PendingQuitUpdate(
+            buildVersion: "1200",
+            version: "0.2.0 nightly (abc1234)",
+            isNightly: true
+        )
         controller.notePendingQuitUpdate(stagedNightly)
 
         controller.setChannel(.stable)
@@ -167,10 +171,29 @@ import Testing
         #expect(controller.channelNote.contains("0.2.0 nightly (abc1234)"))
         #expect(controller.channelNote.contains("subsequent updates"))
 
+        // Dismissing (Install on Quit) or skipping a different build preserves the staged nightly;
+        // skipping the matching build clears it so switching to Stable no longer prompts or warns.
+        controller.setChannel(.nightly)
+        prompt.prompted = nil
+        prompt.shouldConfirm = false
+        controller.noteUserUpdateChoice(.dismiss, buildVersion: "1200")
+        controller.noteUserUpdateChoice(.skip, buildVersion: "1190")
+        #expect(controller.pendingQuitUpdate == stagedNightly)
+        controller.noteUserUpdateChoice(.skip, buildVersion: "1200")
+        #expect(controller.pendingQuitUpdate == nil)
+        controller.setChannel(.stable)
+        #expect(prompt.prompted == nil)
+        #expect(controller.channel == .stable)
+        #expect(controller.channelNote == UpdateChannel.stable.note)
+
         // Switching when a stable update (not nightly) is staged does not prompt.
         prompt.prompted = nil
         controller.setChannel(.nightly)
-        controller.notePendingQuitUpdate(UpdateController.PendingQuitUpdate(version: "0.2.0", isNightly: false))
+        controller.notePendingQuitUpdate(UpdateController.PendingQuitUpdate(
+            buildVersion: "1202",
+            version: "0.2.0",
+            isNightly: false
+        ))
         controller.setChannel(.stable)
         #expect(prompt.prompted == nil)
         #expect(controller.channel == .stable)

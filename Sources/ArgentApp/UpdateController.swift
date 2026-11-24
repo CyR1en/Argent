@@ -53,6 +53,7 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
 
     /// An update Sparkle has already downloaded in the background and staged to install on quit.
     struct PendingQuitUpdate: Equatable, Sendable {
+        var buildVersion: String
         var version: String
         var isNightly: Bool
     }
@@ -171,6 +172,12 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
         pendingQuitUpdate = update
     }
 
+    func noteUserUpdateChoice(_ choice: SPUUserUpdateChoice, buildVersion: String) {
+        if choice == .skip, pendingQuitUpdate?.buildVersion == buildVersion {
+            pendingQuitUpdate = nil
+        }
+    }
+
     func setChannel(_ newChannel: UpdateChannel) {
         guard channel != newChannel else { return }
         if channel == .nightly, newChannel == .stable, let pending = pendingQuitUpdate, pending.isNightly {
@@ -278,8 +285,16 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
         lastUpdateCheckDate = updater.lastUpdateCheckDate
     }
 
+    func updater(_ updater: SPUUpdater, userDidMake choice: SPUUserUpdateChoice, forUpdate updateItem: SUAppcastItem, state: SPUUserUpdateState) {
+        noteUserUpdateChoice(choice, buildVersion: updateItem.versionString)
+    }
+
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
-        notePendingQuitUpdate(PendingQuitUpdate(version: item.displayVersionString, isNightly: item.channel != nil))
+        notePendingQuitUpdate(PendingQuitUpdate(
+            buildVersion: item.versionString,
+            version: item.displayVersionString,
+            isNightly: item.channel != nil
+        ))
         return false
     }
 
