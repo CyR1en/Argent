@@ -5,19 +5,39 @@
 # Uses a secure timestamp (--timestamp) for Apple-issued identities (Developer ID Application) as required
 # by Apple's notarization service, and --timestamp=none for ad-hoc ("-") or legacy self-signed builds.
 #
-#   scripts/sign-app.sh path/to/Argent.app [IDENTITY]
+#   scripts/sign-app.sh path/to/Argent.app [IDENTITY] [--entitlements FILE]
 set -euo pipefail
 
-if (( $# < 1 || $# > 2 )); then
-  print -u2 "usage: scripts/sign-app.sh APP_BUNDLE [IDENTITY]"
+usage() {
+  print -u2 "usage: scripts/sign-app.sh APP_BUNDLE [IDENTITY] [--entitlements FILE]"
   exit 2
-fi
+}
 
+(( $# >= 1 )) || usage
 app=${1:A}
-root=${0:A:h:h}
-identity=${2:-$("$root/scripts/sign-identity.sh")}
+shift
 
+root=${0:A:h:h}
+identity=""
+entitlements=$root/App/Argent.entitlements
+
+while (( $# > 0 )); do
+  case $1 in
+    --entitlements) (( $# >= 2 )) || usage; entitlements=${2:A}; shift 2 ;;
+    *)
+      if [[ -z $identity ]]; then
+        identity=$1
+        shift
+      else
+        usage
+      fi
+      ;;
+  esac
+done
+
+[[ -n $identity ]] || identity=$("$root/scripts/sign-identity.sh")
 [[ -d $app ]] || { print -u2 "error: app bundle not found: $app"; exit 1; }
+[[ -f $entitlements ]] || { print -u2 "error: entitlements not found: $entitlements"; exit 1; }
 
 # Ad-hoc and self-signed identities cannot use Apple's timestamp authority; Developer ID requires it.
 if [[ $identity == - || $identity == "Argent Self-Signed" ]]; then
@@ -37,7 +57,7 @@ if [[ -f $helper ]]; then
   codesign "${sign_args[@]}" --entitlements "$root/App/ArgentRemoveHelper.entitlements" "$helper"
 fi
 
-# 2. Embedded frameworks inside-out (prepared for Sparkle 2 XPC services and helpers without --deep).
+# 2. Embedded Sparkle 2 framework inside-out (XPC services and helpers before the framework bundle).
 sparkle=$app/Contents/Frameworks/Sparkle.framework
 if [[ -d $sparkle ]]; then
   sparkle_v=$sparkle/Versions/B
@@ -49,5 +69,5 @@ if [[ -d $sparkle ]]; then
 fi
 
 # 3. The app bundle itself, sealing the nested helper, frameworks and resources.
-codesign "${sign_args[@]}" --entitlements "$root/App/Argent.entitlements" "$app"
+codesign "${sign_args[@]}" --entitlements "$entitlements" "$app"
 codesign --verify --deep --strict "$app"

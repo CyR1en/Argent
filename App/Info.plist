@@ -65,5 +65,15 @@
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
+	<!-- Sparkle 2 OTA updates (https://cyr1en.github.io/Argent/appcast.xml). Sandboxed app uses the
+	     out-of-sandbox Installer XPC service; Downloader XPC is unnecessary since network.client is granted. -->
+	<key>SUFeedURL</key>
+	<string>https://cyr1en.github.io/Argent/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>NRTEHtCbq54jY8ZwNBw+3dlf0Y4leIkYmCVoY0SS5gQ=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 </dict>
 </plist>

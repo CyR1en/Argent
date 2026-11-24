@@ -60,6 +60,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin/Argent" "$app/Contents/MacOS/Argent"
 # Remove's helper, beside the app's binary: the app starts it as its child when the model is wanted (docs/remove-plan.md, 4.5).
 cp "$bin/argent-remove" "$app/Contents/MacOS/argent-remove"
+scripts/embed-sparkle.sh "$app" "$bin"
 cp App/Info.plist "$app/Contents/Info.plist"
 # The version, from the tag (.github/workflows/release.yml): ARGENT_VERSION when set (CI sets it from the v* tag it builds), else
 # the highest well-formed vN.N.N[-suffix] tag behind HEAD without its v (a pre-release below its release; a malformed tag is

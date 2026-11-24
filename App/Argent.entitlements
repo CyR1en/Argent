@@ -5,8 +5,8 @@
 	<!-- Sandboxed (spec, Platform). -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- The Subject models' one download (SubjectModelPack), from Argent's GitHub releases, when the user agrees to
-	     their licences. Nothing else goes to the network. -->
+	<!-- Outgoing network access for the Subject models' download (SubjectModelPack) and Sparkle 2 update
+	     checks and downloads from GitHub Pages / GitHub Releases. Nothing else goes to the network. -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<!-- Rolls are folders and cards the user drops or opens, written to only for the recipes
@@ -32,6 +32,14 @@
 	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
 	<array>
 		<string>/Volumes/</string>
+	</array>
+	<!-- Sparkle 2 updater XPC services (Installer Status & Installer Connection): lets the sandboxed app
+	     hand updates to Sparkle's out-of-sandbox Installer.xpc (SUEnableInstallerLauncherService).
+	     Uses the literal bundle ID because SwiftPM + codesign does not expand Xcode variables. -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>camera.argent.Argent-spks</string>
+		<string>camera.argent.Argent-spki</string>
 	</array>
 </dict>
 </plist>

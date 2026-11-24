@@ -83,13 +83,28 @@ elif [[ ! -f $target ]]; then
 fi
 
 print "notarizing ${target:t}..."
-rc=0
-output=$(xcrun notarytool submit "$submission" "${auth_args[@]}" --wait --output-format json) || rc=$?
+max_attempts=3
+attempt=1
+while true; do
+  rc=0
+  output=$(xcrun notarytool submit "$submission" "${auth_args[@]}" --wait --output-format json) || rc=$?
 
-submission_status=$(plutil -extract status raw - <<< "$output" 2>/dev/null || true)
-submission_id=$(plutil -extract id raw - <<< "$output" 2>/dev/null || true)
+  submission_status=$(plutil -extract status raw - <<< "$output" 2>/dev/null || true)
+  submission_id=$(plutil -extract id raw - <<< "$output" 2>/dev/null || true)
 
-if (( rc != 0 )) || [[ $submission_status != Accepted ]]; then
+  if (( rc == 0 )) && [[ $submission_status == Accepted ]]; then
+    break
+  fi
+
+  # Retry only transient upload/network failures (no Apple submission id returned yet).
+  if [[ -z $submission_id ]] && (( attempt < max_attempts )); then
+    delay=$(( attempt * 10 ))
+    print -u2 "note: notarization upload failed for ${target:t} (attempt $attempt/$max_attempts, exit=$rc); retrying in ${delay}s..."
+    sleep "$delay"
+    (( attempt += 1 ))
+    continue
+  fi
+
   print -u2 "error: notarization failed for ${target:t} (exit=$rc, status=${submission_status:-unknown}, id=${submission_id:-none})"
   [[ -n $output ]] && print -u2 "$output"
   if [[ -n $submission_id ]]; then
@@ -97,7 +112,7 @@ if (( rc != 0 )) || [[ $submission_status != Accepted ]]; then
     xcrun notarytool log "$submission_id" "${auth_args[@]}" >&2 || true
   fi
   exit 1
-fi
+done
 
 print "notarization accepted (${target:t}, id $submission_id)"
 xcrun stapler staple "$target"

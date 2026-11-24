@@ -44,15 +44,14 @@ cp -c -R $base $app
 cp $bin/Argent $app/Contents/MacOS/Argent
 # Remove's helper from the same sources, not the base app's, which is built again only when its resources change.
 cp $bin/argent-remove $app/Contents/MacOS/argent-remove
+scripts/embed-sparkle.sh $app $bin
 cp App/Info.plist $app/Contents/Info.plist
 plutil -replace CFBundleIdentifier -string $id $app/Contents/Info.plist
 rm -rf $app/Contents/Resources/*.bundle
 for bundle in $bin/*.bundle; do
   cp -R $bundle $app/Contents/Resources/
 done
-codesign --force --sign - --options runtime --entitlements App/ArgentRemoveHelper.entitlements $app/Contents/MacOS/argent-remove
-codesign --force --sign - --options runtime --entitlements App/Argent.entitlements $app
-codesign --verify --strict $app
+scripts/sign-app.sh $app -
 
 drive=build/lanes/argent-drive
 if [[ ! -x $drive || scripts/measure/develop-memory/drive.swift -nt $drive ]]; then

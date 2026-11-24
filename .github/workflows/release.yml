@@ -5,10 +5,11 @@
 #
 # The version comes from the tag (scripts/build-app.sh): a release is its tag's version, a nightly the newest v* tag's,
 # both with the commit count as the build number. Published builds are signed with the Developer ID Application certificate
-# from DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD and notarized & stapled with Apple's notary service using the
-# App Store Connect API key from NOTARY_API_KEY_P8 / NOTARY_API_KEY_ID / NOTARY_API_ISSUER_ID. Pull requests from forks
-# without secrets fall back to an ad-hoc, unnotarized check build. The smart masks' and Remove's models are not in Git
-# and not in these images.
+# from DEVELOPER_ID_P12 / DEVELOPER_ID_P12_PASSWORD, notarized & stapled with Apple's notary service using the
+# App Store Connect API key from NOTARY_API_KEY_P8 / NOTARY_API_KEY_ID / NOTARY_API_ISSUER_ID, signed for Sparkle 2 with
+# SPARKLE_ED_KEY, and published to the GitHub Pages appcast (gh-pages/appcast.xml). Pull requests from forks without
+# secrets fall back to an ad-hoc, unnotarized check build. The smart masks' and Remove's models are not in Git and not in
+# these images.
 name: Release
 
 on:
@@ -33,11 +34,14 @@ jobs:
     env:
       # The Xcode the app is built with locally; the image's default is older.
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      SPARKLE_VERSION: 2.10.1
+      SPARKLE_TARBALL_SHA256: 1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27
     outputs:
       kind: ${{ steps.kind.outputs.kind }}
       version: ${{ steps.dmg.outputs.version }}
       artifact: ${{ steps.dmg.outputs.artifact }}
       previous_tag: ${{ steps.kind.outputs.previous_tag }}
+      has_manifest: ${{ steps.sparkle.outputs.has_manifest }}
     steps:
       # The whole history and its tags: the version is the newest v* tag, the build number the commit count.
       - uses: actions/checkout@v7
@@ -194,8 +198,89 @@ jobs:
           esac
           mv "build/Argent-$version.dmg" "dist/$name"
           (cd dist && shasum -a 256 "$name" > "$name.sha256")
+          echo "DMG_NAME=$name" >> "$GITHUB_ENV"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "artifact=Argent-$version-$KIND-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign update for Sparkle
+        id: sparkle
+        env:
+          SPARKLE_ED_KEY: ${{ secrets.SPARKLE_ED_KEY }}
+        run: |
+          if [[ -z $SPARKLE_ED_KEY || $NOTARIZE != 1 ]]; then
+            if [[ $KIND != check ]]; then
+              echo "::error::SPARKLE_ED_KEY and notarization are required for a $KIND build"
+              exit 1
+            fi
+            echo "skipping Sparkle signature on unnotarized or secretless check build"
+            echo "has_manifest=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          sparkle_dir=$RUNNER_TEMP/sparkle
+          mkdir -p "$sparkle_dir"
+          tarball=$sparkle_dir/Sparkle-$SPARKLE_VERSION.tar.xz
+          curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" -o "$tarball"
+          actual=$(shasum -a 256 "$tarball" | awk '{print $1}')
+          if [[ $actual != "$SPARKLE_TARBALL_SHA256" ]]; then
+            echo "::error::Sparkle tarball SHA-256 mismatch: $actual"
+            exit 1
+          fi
+          tar -xf "$tarball" -C "$sparkle_dir" bin/sign_update
+
+          dmg_path="dist/$DMG_NAME"
+          ed_sig=$(printf '%s' "$SPARKLE_ED_KEY" | "$sparkle_dir/bin/sign_update" -p --ed-key-file - "$dmg_path")
+          printf '%s' "$SPARKLE_ED_KEY" | "$sparkle_dir/bin/sign_update" --verify --ed-key-file - "$dmg_path" "$ed_sig"
+
+          plist=build/Argent.app/Contents/Info.plist
+          version=$(plutil -extract ArgentVersion raw "$plist")
+          build_number=$(plutil -extract CFBundleVersion raw "$plist")
+          commit=$(plutil -extract ArgentCommit raw "$plist")
+          min_os=$(plutil -extract LSMinimumSystemVersion raw "$plist")
+          length=$(stat -f %z "$dmg_path")
+          pub_date=$(LC_ALL=C date -u +"%a, %d %b %Y %H:%M:%S +0000")
+          manifest_kind=$([[ $KIND == release ]] && echo release || echo nightly)
+
+          if [[ $manifest_kind == nightly ]]; then
+            channel=nightly
+            short_version="$version nightly ($commit)"
+            title="Nightly $(date -u +%Y-%m-%d) ($commit)"
+            url="https://github.com/$GITHUB_REPOSITORY/releases/download/nightly/Argent-nightly.dmg"
+            notes_url="https://github.com/$GITHUB_REPOSITORY/releases/tag/nightly"
+          else
+            channel=$([[ $version == *-* ]] && echo nightly || echo stable)
+            short_version=$version
+            title="Argent $version"
+            url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$version/Argent-$version.dmg"
+            notes_url="https://github.com/$GITHUB_REPOSITORY/releases/tag/v$version"
+          fi
+
+          python3 - "$manifest_kind" "$version" "$short_version" "$build_number" "$commit" "$channel" \
+            "$title" "$pub_date" "$min_os" "$url" "$ed_sig" "$length" "$notes_url" <<'PY' > dist/update-manifest.json
+          import json, sys
+          (kind, version, short_version, build_number, commit, channel,
+           title, pub_date, min_os, url, ed_sig, length, notes_url) = sys.argv[1:]
+          print(json.dumps({
+              "kind": kind,
+              "version": version,
+              "short_version": short_version,
+              "build_number": build_number,
+              "commit": commit,
+              "channel": channel,
+              "title": title,
+              "pub_date": pub_date,
+              "min_system_version": min_os,
+              "url": url,
+              "ed_signature": ed_sig,
+              "length": int(length),
+              "release_notes_url": notes_url,
+          }, indent=2))
+          PY
+
+          # Exercise update-appcast.py on every signed build (including PR checks).
+          python3 scripts/update-appcast.py --appcast "$RUNNER_TEMP/test-appcast.xml" --manifest dist/update-manifest.json
+          echo "Sparkle update signed and manifest validated (channel=$channel, build=$build_number, length=$length)"
+          echo "has_manifest=true" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -208,7 +293,8 @@ jobs:
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          rm -rf "$RUNNER_TEMP/signing.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/DeveloperIDG2CA.cer" \
+            "$RUNNER_TEMP/sparkle" "$RUNNER_TEMP/test-appcast.xml"
 
   publish:
     needs: build
@@ -221,6 +307,8 @@ jobs:
       # One queue a ref: nightlies publish in order, and tags pushed together each publish.
       group: publish-${{ github.ref }}
       cancel-in-progress: false
+    outputs:
+      published: ${{ steps.nightly.outputs.published || steps.release.outputs.published || 'false' }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -257,11 +345,13 @@ jobs:
       # Updated in place, so the nightly's link never goes missing: the tag is moved to this commit first, then the assets are
       # replaced and the title and notes rewritten. A run of an older commit (a re-run) leaves the nightly to main's newest.
       - name: Publish the nightly
+        id: nightly
         if: env.KIND == 'nightly'
         run: |
           head=$(gh api "repos/$GH_REPO/commits/main" --jq .sha)
           if [[ $head != "$GITHUB_SHA" ]]; then
             echo "main is at ${head::7}, not ${GITHUB_SHA::7}: its own run publishes the nightly"
+            echo "published=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if gh api "repos/$GH_REPO/git/ref/tags/nightly" > /dev/null 2>&1; then
@@ -271,27 +361,72 @@ jobs:
           fi
           title="Nightly $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})"
           if gh release view nightly > /dev/null 2>&1; then
-            gh release upload nightly dist/* --clobber
+            gh release upload nightly dist/*.dmg dist/*.sha256 --clobber
             gh release edit nightly --title "$title" --notes-file notes.md --prerelease --latest=false --draft=false
           else
-            gh release create nightly dist/* --verify-tag --prerelease --latest=false --title "$title" --notes-file notes.md
+            gh release create nightly dist/*.dmg dist/*.sha256 --verify-tag --prerelease --latest=false --title "$title" --notes-file notes.md
           fi
           tagged=$(gh api "repos/$GH_REPO/git/ref/tags/nightly" --jq .object.sha)
           if [[ $tagged != "$GITHUB_SHA" ]]; then
             echo "::error::the nightly tag is at $tagged, not $GITHUB_SHA"
             exit 1
           fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
 
       - name: Publish the release
+        id: release
         if: env.KIND == 'release'
         run: |
           tag=v$VERSION
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" dist/* --clobber
+            gh release upload "$tag" dist/*.dmg dist/*.sha256 --clobber
             gh release edit "$tag" --draft=false
           else
             args=(--verify-tag --title "Argent $VERSION" --notes-file notes.md)
             if [[ $VERSION == *-* ]]; then args+=(--prerelease); fi
             if [[ -n $PREVIOUS_TAG ]]; then args+=(--generate-notes --notes-start-tag "$PREVIOUS_TAG"); fi
-            gh release create "$tag" dist/* "${args[@]}"
+            gh release create "$tag" dist/*.dmg dist/*.sha256 "${args[@]}"
           fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+  appcast:
+    needs: [build, publish]
+    if: needs.build.outputs.kind != 'check' && needs.build.outputs.has_manifest == 'true' && needs.publish.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      # Serialize every appcast update across main nightlies and v* tag releases so gh-pages never races.
+      group: appcast
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: repo
+
+      - uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: dist
+
+      - name: Update and publish appcast.xml
+        run: |
+          python3 repo/scripts/update-appcast.py \
+            --appcast pages/appcast.xml \
+            --manifest dist/update-manifest.json
+          cd pages
+          if git diff --quiet appcast.xml; then
+            echo "appcast.xml unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Update appcast for ${{ needs.build.outputs.kind }} ${{ needs.build.outputs.version }} (${GITHUB_SHA::7})"
+          git push origin gh-pages
