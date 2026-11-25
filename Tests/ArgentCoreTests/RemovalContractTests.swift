@@ -206,6 +206,43 @@ import Testing
         #expect(read == nil || read?.identity != original, "a changed plane is refused or is another patch")
     }
 
+    /// The file `patch` encodes to, with its header's JSON changed by `edit`.
+    private static func file(of patch: RemovalPatch, editing edit: (inout [String: Any]) -> Void) throws -> Data {
+        let file = try patch.encoded()
+        let start = RemovalPatch.magic.count + 4
+        let length = file[RemovalPatch.magic.count..<start].enumerated().reduce(0) { $0 | Int($1.element) << (8 * $1.offset) }
+        var header = try #require(try JSONSerialization.jsonObject(with: file[start..<start + length]) as? [String: Any])
+        edit(&header)
+        let edited = try JSONSerialization.data(withJSONObject: header, options: [.sortedKeys])
+        var out = RemovalPatch.magic
+        withUnsafeBytes(of: UInt32(edited.count).littleEndian) { out.append(contentsOf: $0) }
+        return out + edited + file[(start + length)...]
+    }
+
+    @Test func aPatchFileWithHugeLengthsOrBoxIsRefusedNotTrapped() throws {
+        let patch = try Self.patch()
+        for key in ["rgb", "object", "effects"] {
+            let file = try Self.file(of: patch) { $0[key] = Int.max }
+            #expect(throws: RemovalError.self, "\(key)") { try RemovalPatch(decoding: file) }
+        }
+        let both = try Self.file(of: patch) { $0["rgb"] = Int.max; $0["object"] = Int.max }
+        #expect(throws: RemovalError.self) { try RemovalPatch(decoding: both) }
+        for (key, side) in [("x", "width"), ("y", "height")] {
+            let file = try Self.file(of: patch) {
+                var box = $0["box"] as! [String: Any]
+                box[key] = Int.max - 807; box[side] = 1000
+                $0["box"] = box
+            }
+            #expect(throws: RemovalError.self, "\(key)") { try RemovalPatch(decoding: file) }
+        }
+        #expect(throws: RemovalError.self) { try RemovalPatch.Box(x: Int.max - 807, y: 0, width: 1000, height: 64) }
+        #expect(throws: RemovalError.self) { try RemovalPatch.Box(x: 0, y: Int.max, width: 64, height: Int.max) }
+        #expect(throws: RemovalError.self) { try RemovalPatch.Box(x: 0, y: 0, width: Int.max, height: 64) }
+        #expect(try RemovalPatch.Box(x: RemovalPatch.Box.limit - 64, y: 0, width: 64, height: 64).x == RemovalPatch.Box.limit - 64)
+        // The file rebuilt without a change still reads, so the refusals above are the large values'.
+        #expect(try RemovalPatch(decoding: Self.file(of: patch) { _ in }) == patch)
+    }
+
     @Test func aPatchChecksItsSizesAndItsPixels() throws {
         let box = try RemovalPatch.Box(x: 0, y: 0, width: 64, height: 64)
         let rgb = [Float16](repeating: 0.5, count: 16 * 16 * 3), alpha = [UInt8](repeating: 255, count: 16 * 16)
