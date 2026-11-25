@@ -78,7 +78,12 @@ public struct MaskModelPack: Sendable, Equatable {
 
     /// Downloads the pack, checks its size and SHA-256, unpacks it beside `folder`, checks every model against the pins, then puts the licences and models
     /// into `folder`, replacing what was there. Nothing in `folder` changes unless every check passes. Cancelling the calling task stops the download.
-    public func install(into folder: URL, step: @escaping @Sendable (Step) -> Void = { _ in }) async throws {
+    /// `coordinatePlacement` wraps the final move step so callers (such as `RollModel`) can serialize it with active mask inference.
+    public func install(
+        into folder: URL,
+        step: @escaping @Sendable (Step) -> Void = { _ in },
+        coordinatePlacement: @escaping @Sendable (@escaping @Sendable () throws -> Void) async throws -> Void = { try $0() }
+    ) async throws {
         let manager = FileManager.default
         do { try manager.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
             throw Failure.install("the Models folder could not be created: \(error.localizedDescription)")
@@ -135,25 +140,29 @@ public struct MaskModelPack: Sendable, Equatable {
 
         // Every check passed: the licences go in first, then the models. Each old copy moves aside into the work folder (the same volume, so
         // every move is a rename) before its new one goes in; if any move fails, the new ones come out and the old ones go back.
-        let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
-        let previous = work.appendingPathComponent("previous", isDirectory: true)
-        var placed: [String] = [], setAside: [String] = []
-        do {
-            try manager.createDirectory(at: previous, withIntermediateDirectories: true)
-            for name in names {
-                let target = folder.appendingPathComponent(name)
-                // Not `fileExists`, which follows a symbolic link and misses a broken one.
-                if (try? manager.attributesOfItem(atPath: target.path)) != nil {
-                    try manager.moveItem(at: target, to: previous.appendingPathComponent(name))
-                    setAside.append(name)
+        // Placement runs inside `coordinatePlacement` so active mask inference never overlaps the move-aside window.
+        try await coordinatePlacement {
+            let manager = FileManager.default
+            let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
+            let previous = work.appendingPathComponent("previous", isDirectory: true)
+            var placed: [String] = [], setAside: [String] = []
+            do {
+                try manager.createDirectory(at: previous, withIntermediateDirectories: true)
+                for name in names {
+                    let target = folder.appendingPathComponent(name)
+                    // Not `fileExists`, which follows a symbolic link and misses a broken one.
+                    if (try? manager.attributesOfItem(atPath: target.path)) != nil {
+                        try manager.moveItem(at: target, to: previous.appendingPathComponent(name))
+                        setAside.append(name)
+                    }
+                    try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
+                    placed.append(name)
                 }
-                try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
-                placed.append(name)
+            } catch {
+                for name in placed { try? manager.removeItem(at: folder.appendingPathComponent(name)) }
+                for name in setAside { try? manager.moveItem(at: previous.appendingPathComponent(name), to: folder.appendingPathComponent(name)) }
+                throw Failure.install("could not put the models in place: \(error.localizedDescription)")
             }
-        } catch {
-            for name in placed { try? manager.removeItem(at: folder.appendingPathComponent(name)) }
-            for name in setAside { try? manager.moveItem(at: previous.appendingPathComponent(name), to: folder.appendingPathComponent(name)) }
-            throw Failure.install("could not put the models in place: \(error.localizedDescription)")
         }
         step(.done)
     }

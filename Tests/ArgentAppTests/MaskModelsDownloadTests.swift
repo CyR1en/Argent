@@ -321,6 +321,7 @@ import Testing
         let expected = folder.appendingPathComponent("Models", isDirectory: true)
         #expect(model.downloadedModelsFolder == expected)
         #expect(model.maskModels.folder() == expected)
+        #expect(MaskModelsDownload.notCommercial.contains("non-commercial") && MaskModelsDownload.notCommercial.contains("Apache 2.0"))
     }
 }
 

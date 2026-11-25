@@ -513,6 +513,16 @@ final class RollModel {
         let modelsFolder = downloadedModelsFolder
         maskModels.folder = { modelsFolder }
         maskModels.beforeStart = { [weak self] in await self?.maskModelStagingSweep?.value }
+        maskModels.installer = { [weak self] pack, folder, step in
+            try await pack.install(into: folder, step: step) { place in
+                let inference = await MainActor.run { self?.smartMasks.queue }
+                if let inference {
+                    try await inference.serialized(place)
+                } else {
+                    try place()
+                }
+            }
+        }
         maskModels.onInstalled = { [weak self] in self?.smartMasks.modelsChanged() }
         removalRuns.makeSteps = { [weak self] in self?.makeRemovalSteps() }
         (maskEditor.overlay.field as? MaskSeedCoverage)?.seeds = maskSeeds

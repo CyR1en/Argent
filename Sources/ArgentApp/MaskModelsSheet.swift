@@ -164,7 +164,7 @@ final class MaskModelsDownload {
     ]
 
     /// The download's condition as a whole: the first three models' terms ask it, and DA3's Apache-2.0 does not.
-    static let notCommercial = "Use them for non-commercial purposes only. The full texts are installed beside the models."
+    static let notCommercial = "This download as a whole is offered for non-commercial use only because of the first three models; Depth Anything 3 is under Apache 2.0. The full texts are installed beside the models."
 
     var sizeWords: String {
         let f = ByteCountFormatter()

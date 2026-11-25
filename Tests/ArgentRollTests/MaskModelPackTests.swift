@@ -336,6 +336,221 @@ struct MaskModelPackTests {
             if case .unpack = error as? MaskModelPack.Failure { true } else { false }
         }
     }
+
+    /// BundledSmartMasks reports `.unavailable` (not `.needsModels`) when a bundled model fails validation — even when another
+    /// dependency is missing or a valid copy is in the downloadable folder — avoiding an unrecoverable download loop.
+    @Test func invalidBundledModelDoesNotOfferDownloadLoop() throws {
+        let work = try Self.folder("availability")
+        defer { try? FileManager.default.removeItem(at: work) }
+        let bundled = work.appendingPathComponent("Bundled", isDirectory: true)
+        let downloaded = work.appendingPathComponent("Downloaded", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundled, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: downloaded, withIntermediateDirectories: true)
+        try writeToyStock(id: "kodak-portra-400", in: work)
+        let films = try FilmPreviews(stocks: StockLibrary.load(from: work).stocks, decoderChoices: DecoderChoices(route: .raw9))
+
+        func write(_ model: BundledMaskModel, in folder: URL, canary: String? = nil) throws {
+            let dir = folder.appendingPathComponent(model.fileName, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data(repeating: 0xaa, count: 32).write(to: dir.appendingPathComponent("main.hash"))
+            let manifest = ["recipe id": model.recipeID, "weights sha256": model.weightsSHA256, "canary output sha256": canary ?? model.canarySHA256]
+            try JSONSerialization.data(withJSONObject: manifest).write(to: folder.appendingPathComponent(model.manifestName))
+        }
+
+        // Valid downloaded models shadowed by an invalid bundled DA3: Sky is unavailable with rebuild guidance, never needsModels.
+        for model in BundledMaskModel.allCases { try write(model, in: downloaded) }
+        try write(.sky, in: bundled, canary: String(repeating: "0", count: 64))
+        let models = MaskModels(directories: [bundled, downloaded], downloadableDirectory: downloaded, ledgerFile: work.appendingPathComponent("ledger.json"))
+        let engine = BundledSmartMasks(films: films, models: models, app: "tests")
+        if case .unavailable(let why) = engine.availability(of: .sky) {
+            #expect(why.contains(BundledMaskModel.sky.rawValue) && why.contains(BundledMaskModel.sky.script), "\(why)")
+        } else {
+            Issue.record("expected .unavailable for bad bundled DA3, got \(engine.availability(of: .sky))")
+        }
+        #expect(engine.availability(of: .subject) == .available)
+
+        // Missing DA3 + invalid bundled EoMT: Sky, Subject and Background all report .unavailable naming EoMT.
+        try FileManager.default.removeItem(at: bundled.appendingPathComponent(BundledMaskModel.sky.fileName))
+        try FileManager.default.removeItem(at: downloaded.appendingPathComponent(BundledMaskModel.sky.fileName))
+        try write(.water, in: bundled, canary: String(repeating: "0", count: 64))
+        for kind in [SmartKind.sky, .subject, .background] {
+            if case .unavailable(let why) = engine.availability(of: kind) {
+                #expect(why.contains(BundledMaskModel.water.rawValue), "\(kind): \(why)")
+            } else {
+                Issue.record("expected .unavailable for \(kind), got \(engine.availability(of: kind))")
+            }
+        }
+    }
+
+    /// Pack installation coordinated through `MaskInference.serialized` waits for an active Subject run to finish before moving
+    /// v1 files aside, and holds back new inference until placement finishes; cancelling while waiting leaves v1 untouched.
+    @Test func packPlacementCoordinatesWithActiveInference() async throws {
+        let work = try Self.folder("coord")
+        defer { try? FileManager.default.removeItem(at: work) }
+        let installed = work.appendingPathComponent("Models", isDirectory: true)
+        let old = try Self.makeSyntheticPack(in: work, name: "v1", noticeText: "notice v1", holding: MaskModels.subjectModels)
+        let unpacked = work.appendingPathComponent("v1-unpacked", isDirectory: true)
+        try MaskModelPack.extract(old.url, into: unpacked)
+        try FileManager.default.moveItem(at: unpacked, to: installed)
+        let new = try Self.makeSyntheticPack(in: work, name: "v2", noticeText: "notice v2")
+
+        let dummyRaw = work.appendingPathComponent("DSC1.ARW")
+        try Data("raw".utf8).write(to: dummyRaw)
+        let frame = Frame(id: 0, url: dummyRaw, info: .init())
+        let engine = BlockingMaskEngine()
+        let inference = MaskInference(engine: engine, turns: DecodeTurns())
+
+        // Start a Subject inference that holds the inference queue open.
+        let asked = inference.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default)
+        await engine.waitUntilFinding()
+
+        let installTask = Task {
+            try await new.install(into: installed, coordinatePlacement: { place in
+                try await inference.serialized(place)
+            })
+        }
+        // Give install time to unpack, verify, and block on inference.serialized.
+        try await Task.sleep(for: .milliseconds(150))
+        let noticeURL = installed.appendingPathComponent(MaskModelPack.licencesFolder).appendingPathComponent("NOTICE.txt")
+        #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v1", "v1 files must stay untouched while Subject inference runs")
+        #expect(FileManager.default.fileExists(atPath: installed.appendingPathComponent(BundledMaskModel.subject.fileName).path))
+
+        // Release Subject inference: placement runs next and installs v2.
+        engine.releaseFind()
+        _ = await asked.outcome.value
+        try await installTask.value
+        #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v2")
+        #expect(FileManager.default.fileExists(atPath: installed.appendingPathComponent(BundledMaskModel.sky.fileName).path))
+        #expect(engine.unloadedSkyCount >= 1)
+
+        // While placement holds the inference queue, a new Subject click waits until placement finishes.
+        let engine3 = BlockingMaskEngine()
+        let inference3 = MaskInference(engine: engine3, turns: DecodeTurns())
+        let enteredPlace = AsyncSignal()
+        let finishPlace = DispatchSemaphore(value: 0)
+        let holdingPlace = Task {
+            try await inference3.serialized {
+                enteredPlace.signal()
+                finishPlace.wait()
+            }
+        }
+        await enteredPlace.wait()
+        let queuedAsk = inference3.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!engine3.hasEnteredFind, "inference must not start while placement holds the queue")
+        finishPlace.signal()
+        try await holdingPlace.value
+        await engine3.waitUntilFinding()
+        engine3.releaseFind()
+        _ = await queuedAsk.outcome.value
+
+        // Cancelling a second install while an inference holds the queue cancels immediately without touching installed models.
+        let engine2 = BlockingMaskEngine()
+        let inference2 = MaskInference(engine: engine2, turns: DecodeTurns())
+        let asked2 = inference2.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default)
+        await engine2.waitUntilFinding()
+        let pack3 = try Self.makeSyntheticPack(in: work, name: "v3", noticeText: "notice v3")
+        let cancelledTask = Task {
+            try await pack3.install(into: installed, coordinatePlacement: { place in
+                try await inference2.serialized(place)
+            })
+        }
+        try await Task.sleep(for: .milliseconds(150))
+        cancelledTask.cancel()
+        await #expect(throws: CancellationError.self) { try await cancelledTask.value }
+        #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v2", "cancelled install leaves v2 untouched")
+        engine2.releaseFind()
+        _ = await asked2.outcome.value
+    }
+}
+
+private final class AsyncSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var signalled = false
+    private var cont: CheckedContinuation<Void, Never>?
+
+    func signal() {
+        let waiting: CheckedContinuation<Void, Never>? = lock.withLock {
+            signalled = true
+            defer { cont = nil }
+            return cont
+        }
+        waiting?.resume()
+    }
+
+    func wait() async {
+        await withCheckedContinuation { cont in
+            let done: Bool = lock.withLock {
+                if signalled { return true }
+                self.cont = cont
+                return false
+            }
+            if done { cont.resume() }
+        }
+    }
+}
+
+private final class BlockingMaskEngine: SmartMaskEngine, @unchecked Sendable {
+    private let lock = NSLock()
+    private var findingCont: CheckedContinuation<Void, Never>?
+    private var isFinding = false
+    private var releaseCont: CheckedContinuation<Void, Never>?
+    private var isReleased = false
+    private var _unloadedSkyCount = 0
+
+    var unloadedSkyCount: Int { lock.withLock { _unloadedSkyCount } }
+    var hasEnteredFind: Bool { lock.withLock { isFinding } }
+
+    func availability(of kind: SmartKind) -> SmartAvailability { .available }
+    var pins: SmartModelPins { SmartModelPins() }
+    func picture(of frame: Frame, lens: LensSettings, stopped: @escaping @Sendable () -> Bool) async -> SmartPictureHandle? {
+        SmartPictureHandle(frame: frame.url, content: ())
+    }
+    func find(_ kind: SmartKind, on picture: SmartPictureHandle, frame: Frame, sourceSHA256: String,
+              stage: @escaping @Sendable (SmartStage) -> Void) async throws -> (SmartResult, MaskFrame) {
+        let waiter: CheckedContinuation<Void, Never>? = lock.withLock {
+            isFinding = true
+            defer { findingCont = nil }
+            return findingCont
+        }
+        waiter?.resume()
+        await withCheckedContinuation { cont in
+            let done: Bool = lock.withLock {
+                if isReleased { return true }
+                releaseCont = cont
+                return false
+            }
+            if done { cont.resume() }
+        }
+        let provenance = RasterProvenance(engine: "test", engineRevision: "1", parameters: [:],
+                                          operatingSystem: "test", app: "tests",
+                                          input: .init(kind: "test", decoderVersion: "1", width: 4, height: 4, colorSpace: "sRGB", sourceSHA256: sourceSHA256),
+                                          created: Date())
+        return (.nothingFound(kind, provenance), try MaskFrame(orientation: 1, width: 4, height: 4, decoder: .raw9, lensCorrection: false))
+    }
+    func waitUntilFinding() async {
+        await withCheckedContinuation { cont in
+            let already: Bool = lock.withLock {
+                if isFinding { return true }
+                findingCont = cont
+                return false
+            }
+            if already { cont.resume() }
+        }
+    }
+    func releaseFind() {
+        let cont: CheckedContinuation<Void, Never>? = lock.withLock {
+            isReleased = true
+            defer { releaseCont = nil }
+            return releaseCont
+        }
+        cont?.resume()
+    }
+    func unloadSky() async -> Bool {
+        lock.withLock { _unloadedSkyCount += 1 }
+        return false
+    }
+    func releasePictures() {}
 }
 
 private final class StepLog: @unchecked Sendable {

@@ -248,6 +248,8 @@ public final class MaskModels: @unchecked Sendable {
     /// Where the models are looked for, in order: the app's own folder, then the downloaded models' (`MaskModelPack`). A model is taken from
     /// the first folder that holds its file.
     public let directories: [URL]
+    /// The folder `MaskModelPack` installs into, if any: an invalid model found in an earlier folder (such as the app bundle) shadows it and cannot be repaired by downloading.
+    public let downloadableDirectory: URL?
     /// The ledger of compiled copies: for each model, the file, macOS build and options it was last prepared for, and the bookmark
     /// that names that compiled copy (`AIModel.bookmarkData`, about 181 bytes).
     public let ledgerFile: URL
@@ -260,8 +262,9 @@ public final class MaskModels: @unchecked Sendable {
 
     /// `directories` hold `<model>.aimodel` and `<model>.manifest.json` for each model; `ledgerFile` lives in the app's Application
     /// Support (a test's in a temporary folder of its own).
-    public init(directories: [URL], ledgerFile: URL) {
+    public init(directories: [URL], downloadableDirectory: URL? = nil, ledgerFile: URL) {
         self.directories = directories
+        self.downloadableDirectory = downloadableDirectory
         self.ledgerFile = ledgerFile
     }
 
@@ -291,9 +294,11 @@ public final class MaskModels: @unchecked Sendable {
     private func locate(_ model: BundledMaskModel) throws -> (directory: URL, identity: MaskModelIdentity) {
         let script = model.script
         guard !directories.isEmpty else { throw MaskModelError.unavailable(model, "the app has no Models folder; build the models with \(script), then the app") }
-        guard let directory = folder(of: model),
-              let hash = try? Data(contentsOf: directory.appendingPathComponent(model.fileName, isDirectory: true).appendingPathComponent("main.hash")), hash.count == 32 else {
+        guard let directory = folder(of: model) else {
             throw MaskModelError.unavailable(model, "\(model.fileName) is neither in the app nor downloaded; build it with \(script), then the app")
+        }
+        guard let hash = try? Data(contentsOf: directory.appendingPathComponent(model.fileName, isDirectory: true).appendingPathComponent("main.hash")), hash.count == 32 else {
+            throw MaskModelError.unavailable(model, "\(model.fileName)'s main.hash is unreadable or invalid; build the model again with \(script)")
         }
         struct Manifest: Decodable {
             var recipeID: String, weights: String, canary: String
@@ -325,6 +330,40 @@ public final class MaskModels: @unchecked Sendable {
             do { _ = try identity(of: model) } catch let error as MaskModelError { return error } catch { return .unavailable(model, String(describing: error)) }
         }
         return nil
+    }
+
+    /// Whether a kind's required models are ready, can be satisfied by downloading the pack, or are blocked by an invalid copy
+    /// that a download cannot replace (such as a mismatched model in the app bundle).
+    public enum ModelsStatus: Equatable, Sendable {
+        case ready
+        case needsDownload(MaskModelError)
+        case invalid(MaskModelError)
+    }
+
+    /// Checks every model in `models` before deciding whether a download can satisfy them: an invalid copy in a non-downloadable
+    /// folder (such as the app bundle) shadows `downloadableDirectory` and is reported as `.invalid`, even if another model in
+    /// `models` is absent.
+    public func status(of models: [BundledMaskModel]) -> ModelsStatus {
+        guard !directories.isEmpty else {
+            let first = models.first ?? .sky
+            return .invalid(.unavailable(first, "the app has no Models folder; build the models with \(first.script), then the app"))
+        }
+        let downloadable = downloadableDirectory?.resolvingSymlinksInPath().standardizedFileURL
+        var firstDownloadable: MaskModelError?
+        for model in models {
+            do {
+                _ = try identity(of: model)
+            } catch let error as MaskModelError {
+                if let directory = folder(of: model),
+                   directory.resolvingSymlinksInPath().standardizedFileURL != downloadable {
+                    return .invalid(error)
+                }
+                if firstDownloadable == nil { firstDownloadable = error }
+            } catch {
+                return .invalid(.unavailable(model, String(describing: error)))
+            }
+        }
+        return firstDownloadable.map(ModelsStatus.needsDownload) ?? .ready
     }
 
     /// Sky needs DA3 and EoMT: the water veto is part of it (decision 4).

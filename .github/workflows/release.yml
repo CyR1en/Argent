@@ -77,6 +77,9 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Verify pinned mask models release
+        run: python3 scripts/verify-mask-models-release.py
+
       - name: Toolchain
         run: |
           sw_vers
@@ -322,6 +325,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           path: repo
+
+      - name: Verify pinned mask models release
+        run: python3 repo/scripts/verify-mask-models-release.py --repo-root repo
 
       - uses: actions/download-artifact@v8
         with:
