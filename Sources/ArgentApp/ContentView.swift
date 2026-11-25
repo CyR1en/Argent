@@ -36,7 +36,7 @@ struct ContentView: View {
                 workspace
                     .padding(.bottom, Graphite.Metric.workspaceInset)
                     .padding(.trailing, showsInspector || showsDevelopPanel || showsImportPanel ? 0 : Graphite.Metric.workspaceInset)
-                if let frame = model.adjustInspectorFrame {
+                if showsInspector, let frame = model.adjustInspectorFrame {
                     // The Adjust panel sits clear of the workspace and the window's edge, its top and foot
                     // level with the workspace's.
                     ManualAdjustmentsView(frame: frame)

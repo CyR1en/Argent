@@ -254,7 +254,7 @@ struct OnboardingView: View {
                 runningDownloadCard(download: download, step: step)
             } else if installState.isInstalled || download.phase == .done {
                 installedCard(state: installState == .bundled ? .bundled : .downloaded, download: download)
-            } else if case .unavailable(let why) = installState {
+            } else if case .unavailable(let why, _) = installState {
                 unavailableCard(reason: why)
             } else {
                 downloadOfferContent(download: download)
@@ -508,7 +508,7 @@ struct OnboardingView: View {
                 .buttonStyle(.graphite(.primary))
                 .keyboardShortcut(.defaultAction)
                 .fixedSize()
-        } else if installState.isInstalled || download.phase == .done || installState != .notInstalled {
+        } else if !installState.canDownload || download.phase == .done {
             Button("Start Using Argent") { onboarding.complete() }
                 .buttonStyle(.graphite(.primary))
                 .keyboardShortcut(.defaultAction)

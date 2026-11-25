@@ -15,8 +15,16 @@ final class MaskModelsDownload {
         case done
     }
 
+    enum Presentation: Equatable {
+        /// Opened to review licences and download the pack (from a Sky, Subject or Background tile or Settings › Download…).
+        case download
+        /// Opened read-only to read the licences (from Settings › Licences… when already installed or unavailable).
+        case licencesOnly
+    }
+
     private(set) var isShown = false
     private(set) var phase: Phase = .idle
+    private(set) var presentation: Presentation = .download
     /// Whether the licence texts are open in place of the summary.
     var showsTexts = false
     /// Whether the user dismissed the quiet background download notice on the Rolls page for this run.
@@ -71,13 +79,15 @@ final class MaskModelsDownload {
     }
 
     func show() {
+        presentation = .download
         showsTexts = false
         hasUnseenFailure = false
         isShown = true
     }
 
-    /// Opens the sheet directly on the full licence texts (e.g. from Settings › Mask models › Licences…).
+    /// Opens the sheet directly on the full licence texts in read-only mode (e.g. from Settings › Mask models › Licences…).
     func showLicences() {
+        presentation = .licencesOnly
         showsTexts = true
         hasUnseenFailure = false
         isShown = true
@@ -456,7 +466,7 @@ struct MaskModelsSheet: View {
                         .accessibilityHidden(true)
                 }
         case .idle, .failed:
-            if download.phase == .idle && model.maskModelsInstallState != .notInstalled {
+            if download.phase == .idle && download.presentation == .licencesOnly {
                 Button("Done") { download.close() }
                     .buttonStyle(.graphite(.primary))
                     .keyboardShortcut(.defaultAction)

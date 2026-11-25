@@ -255,14 +255,91 @@ import Testing
         let ledger = folder.appendingPathComponent("Mask models.json")
         let emptyModels = MaskModels(directories: [bundled, downloaded], downloadableDirectory: downloaded, ledgerFile: ledger)
         #expect(MaskModelsInstallState.inspect(models: emptyModels) == .notInstalled)
+        #expect(!MaskModelsInstallState.inspect(models: emptyModels).canRemove)
+        #expect(MaskModelsInstallState.inspect(models: emptyModels).canDownload)
+
+        // Upgrading from the earlier three-model Subject pack (missing Sky): still downloadable AND removable.
+        for m in MaskModels.subjectModels { try writeValidModel(m, in: downloaded) }
+        let upgradedState = MaskModelsInstallState.inspect(models: emptyModels)
+        #expect(upgradedState == .notInstalled(hasDownloadedFiles: true))
+        #expect(upgradedState.canDownload && upgradedState.canRemove)
 
         // All four in downloaded folder -> .downloaded (removable).
-        for m in MaskModelPack.models { try writeValidModel(m, in: downloaded) }
+        try writeValidModel(.sky, in: downloaded)
         #expect(MaskModelsInstallState.inspect(models: emptyModels) == .downloaded)
 
         // All four in bundled folder -> .bundled (not removable).
         for m in MaskModelPack.models { try writeValidModel(m, in: bundled) }
         #expect(MaskModelsInstallState.inspect(models: emptyModels) == .bundled)
+    }
+
+    @Test func brokenBundledSkyDoesNotBlockSubjectDownloadsAndReadOnlyLicencesUsesDone() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-mask-broken-sky-\(UUID().uuidString)")
+        let bundled = folder.appendingPathComponent("Bundled", isDirectory: true)
+        let downloaded = folder.appendingPathComponent("Downloaded", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundled, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: downloaded, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        // Put an invalid/mismatched DA3 Sky model in the bundle while Subject models are absent.
+        let badSkyDir = bundled.appendingPathComponent(BundledMaskModel.sky.fileName, isDirectory: true)
+        try FileManager.default.createDirectory(at: badSkyDir, withIntermediateDirectories: true)
+        try Data(repeating: 0x01, count: 32).write(to: badSkyDir.appendingPathComponent("main.hash"))
+        try Data("{\"recipe id\":\"wrong\",\"weights sha256\":\"wrong\",\"canary output sha256\":\"wrong\"}".utf8)
+            .write(to: bundled.appendingPathComponent(BundledMaskModel.sky.manifestName))
+
+        let models = MaskModels(directories: [bundled, downloaded], downloadableDirectory: downloaded,
+                                ledgerFile: folder.appendingPathComponent("Mask models.json"))
+        // Pack inspection still permits downloading because Subject models can be supplied by the pack.
+        let state = MaskModelsInstallState.inspect(models: models)
+        #expect(state == .notInstalled(hasDownloadedFiles: false) && state.canDownload)
+
+        // Sheet presentation preserves explicit download intent vs read-only licence inspection.
+        let model = Self.makeModel(in: folder)
+        model.showMaskModels()
+        #expect(model.maskModels.isShown && model.maskModels.presentation == .download && !model.maskModels.showsTexts)
+        model.showMaskModelsLicences()
+        #expect(model.maskModels.isShown && model.maskModels.presentation == .licencesOnly && model.maskModels.showsTexts)
+        model.maskModels.close()
+    }
+
+    @Test func onboardingHidesAdjustInspectorAndBlocksHiddenWorkspaceCommands() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-onboarding-guards-\(UUID().uuidString)")
+        let roll = folder.appendingPathComponent("Roll", isDirectory: true)
+        try FileManager.default.createDirectory(at: roll, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        func u16(_ v: Int) -> [UInt8] { [UInt8(v & 255), UInt8(v >> 8 & 255)] }
+        func u32(_ v: Int) -> [UInt8] { (0..<4).map { UInt8(v >> (8 * $0) & 255) } }
+        var bytes: [UInt8] = [0x49, 0x49] + u16(42) + u32(8)
+        bytes += u16(1) + u16(0x8769) + u16(4) + u32(1) + u32(26) + u32(0)
+        bytes += u16(1) + u16(0x8827) + u16(3) + u32(1) + u16(100) + u16(0) + u32(0)
+        try (Data(bytes) + Data(UUID().uuidString.utf8)).write(to: roll.appendingPathComponent("DSC1.ARW"), options: .atomic)
+
+        let model = Self.makeModel(in: folder)
+        await model.open(roll)
+        let frame = try #require(model.roll?.frames.first)
+        model.selection = frame.id
+        model.openFrame()
+        let wasAdjustShown = model.isAdjustmentsShown
+        defer { model.isAdjustmentsShown = wasAdjustShown }
+        model.isAdjustmentsShown = true
+        #expect(model.adjustInspectorFrame?.url == frame.url)
+
+        // Reopening Welcome hides the Adjust inspector so hidden frames cannot be edited.
+        model.showOnboarding()
+        #expect(model.adjustInspectorFrame == nil)
+        #expect(model.menuState.isShowingOnboarding && model.menuState.isSheetShown)
+
+        // In-workspace commands (Import Roll… / Develop…) do not open choosers or start develops behind Welcome.
+        model.showImportSource()
+        #expect(!model.isImportSourceShown && model.onboarding.isPresented)
+        model.developCommand()
+        #expect(model.workspacePage == .roll && !model.isDeveloping && model.onboarding.isPresented)
+
+        // Closing Welcome restores the Adjust inspector for the open frame.
+        model.onboarding.complete()
+        #expect(model.adjustInspectorFrame?.url == frame.url)
     }
 
     @Test func onboardingViewAndSettingsPageRenderInHostedWindowAcrossSteps() async throws {

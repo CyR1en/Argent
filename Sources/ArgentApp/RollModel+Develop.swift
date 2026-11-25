@@ -197,6 +197,7 @@ extension RollModel {
     /// under way is stopped by Stop Developing and its files are shown by Reveal, never by this key pressed
     /// once more.
     func developCommand() {
+        guard !onboarding.isPresented else { return }
         guard workspacePage == .develop else {
             showDevelopPage()
             return

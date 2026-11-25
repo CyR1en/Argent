@@ -102,6 +102,7 @@ extension RollModel {
     /// A card the app could list opens as a roll; one it could not opens the panel at the card,
     /// where choosing it is the user's own act and needs no consent from macOS.
     func openCard(_ card: Card) {
+        guard !onboarding.isPresented else { return }
         cards.removeAll { $0.id == card.id }
         guard card.rawCount != nil else {
             importDirectory = card.volume

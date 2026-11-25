@@ -8,12 +8,16 @@ import QuartzCore
 enum MaskModelsInstallState: Equatable, Sendable {
     /// All four models are verified and bundled inside Argent.app (`Contents/Resources/Models`).
     case bundled
-    /// All four models are verified and installed in Application Support's `Models` folder (can be removed).
+    /// All four models are verified and at least one is installed in Application Support's `Models` folder (can be removed).
     case downloaded
-    /// One or more models are missing or not yet downloaded; downloading the pack installs all four.
-    case notInstalled
-    /// An invalid model in the app bundle shadows the downloadable folder and cannot be repaired by downloading.
-    case unavailable(String)
+    /// One or more downloadable models are missing or incomplete; downloading the pack installs all four.
+    /// `hasDownloadedFiles` is true when recognized downloaded files (such as an earlier three-model Subject pack)
+    /// are already on disk and can be removed independently of downloading.
+    case notInstalled(hasDownloadedFiles: Bool)
+    /// Blocked by an invalid non-downloadable (bundled) copy with no downloadable kind remaining to install.
+    case unavailable(String, hasDownloadedFiles: Bool)
+
+    static let notInstalled = Self.notInstalled(hasDownloadedFiles: false)
 
     var isInstalled: Bool {
         switch self {
@@ -22,20 +26,43 @@ enum MaskModelsInstallState: Equatable, Sendable {
         }
     }
 
-    var canRemove: Bool { self == .downloaded }
+    var canDownload: Bool {
+        if case .notInstalled = self { return true }
+        return false
+    }
+
+    var canRemove: Bool {
+        switch self {
+        case .downloaded: true
+        case .bundled: false
+        case .notInstalled(let hasFiles), .unavailable(_, let hasFiles): hasFiles
+        }
+    }
+
+    /// Whether `folder` contains any recognized pack files (models, manifests, or licences) that `MaskModelPack.remove(from:)` can delete.
+    static func hasRecognizedDownloadedFiles(in folder: URL?) -> Bool {
+        guard let folder else { return false }
+        let manager = FileManager.default
+        let names = MaskModelPack.models.flatMap { [$0.fileName, $0.manifestName] } + [MaskModelPack.licencesFolder]
+        return names.contains { (try? manager.attributesOfItem(atPath: folder.appendingPathComponent($0).path)) != nil }
+    }
 
     static func inspect(models: MaskModels) -> MaskModelsInstallState {
-        switch models.status(of: MaskModelPack.models) {
-        case .invalid(let error):
-            return .unavailable(error.description)
-        case .needsDownload:
-            return .notInstalled
-        case .ready:
+        let hasDownloaded = hasRecognizedDownloadedFiles(in: models.downloadableDirectory)
+        let sky = models.status(of: MaskModels.skyModels)
+        let subject = models.status(of: MaskModels.subjectModels)
+        switch (sky, subject) {
+        case (.ready, .ready):
             let downloadable = models.downloadableDirectory?.resolvingSymlinksInPath().standardizedFileURL
             let anyDownloaded = downloadable != nil && MaskModelPack.models.contains { model in
                 models.folder(of: model)?.resolvingSymlinksInPath().standardizedFileURL == downloadable
             }
             return anyDownloaded ? .downloaded : .bundled
+        case (.needsDownload, _), (_, .needsDownload):
+            // At least one kind (Sky or Subject) can be enabled by downloading the pack, even if the other is shadowed by an invalid bundled copy.
+            return .notInstalled(hasDownloadedFiles: hasDownloaded)
+        case (.invalid(let error), _), (_, .invalid(let error)):
+            return .unavailable(error.description, hasDownloadedFiles: hasDownloaded)
         }
     }
 }
@@ -76,14 +103,15 @@ extension RollModel {
             if let bundled = inference.engine as? BundledSmartMasks {
                 state = MaskModelsInstallState.inspect(models: bundled.models)
             } else {
-                // Test double engine (e.g. SessionSmartEngine): derive from Sky and Subject availability.
-                // Unavailable (e.g. invalid bundle copy) takes precedence over needsModels, matching MaskModels.status(of:).
+                // Test double engine (e.g. SessionSmartEngine): derive from Sky and Subject availability,
+                // matching MaskModelsInstallState.inspect (download stays offered whenever either kind needs models).
+                let hasDownloaded = MaskModelsInstallState.hasRecognizedDownloadedFiles(in: downloadedModelsFolder)
                 let sky = inference.availability(of: .sky)
                 let subject = inference.availability(of: .subject)
                 switch (sky, subject) {
-                case (.unavailable(let why), _), (_, .unavailable(let why)): state = .unavailable(why)
-                case (.needsModels, _), (_, .needsModels): state = .notInstalled
                 case (.available, .available): state = .downloaded
+                case (.needsModels, _), (_, .needsModels): state = .notInstalled(hasDownloadedFiles: hasDownloaded)
+                case (.unavailable(let why), _), (_, .unavailable(let why)): state = .unavailable(why, hasDownloadedFiles: hasDownloaded)
                 }
             }
         } else {

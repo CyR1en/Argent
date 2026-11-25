@@ -341,9 +341,9 @@ extension RollModel {
     }
 
     /// File > Import Roll… and the page's Import roll: the sheet that chooses a card, a drive or a folder, over the
-    /// Rolls page. An import under way, or a develop, waits.
+    /// Rolls page. An import under way, a develop, or onboarding waits.
     func showImportSource() {
-        guard canShowImportSource else { return }
+        guard canShowImportSource, !onboarding.isPresented else { return }
         showWorkspacePage(.rolls)
         refreshDrives()
         isImportSourceShown = true

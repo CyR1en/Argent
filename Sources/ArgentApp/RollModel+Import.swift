@@ -460,7 +460,7 @@ extension RollModel {
     func canImport(_ card: Card) -> Bool { card.rawCount != nil && !isDeveloping && importSession == .idle }
 
     func startImport(_ card: Card) {
-        guard canImport(card) else { return }
+        guard canImport(card), !onboarding.isPresented else { return }
         cards.removeAll { $0.id == card.id }
         beginImport(card, isFolder: false)
     }

@@ -812,7 +812,7 @@ final class RollModel {
     /// and the drag goes on from there (`ManualAdjustmentRow.gesture`).
     private(set) var lightGestureGeneration = 0
 
-    private func endInspectorInteraction() {
+    func endInspectorInteraction() {
         if let url = lightAdjusting, let frame = selectedFrame, frame.url == url { endLightAdjusting(for: frame) }
         histogramZone = nil
         curveGraphFocusRequest = nil

@@ -60,7 +60,11 @@ struct SettingsPage: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Removes the downloaded mask models (\(model.maskModels.installedSizeWords)) and their compiled caches. Sky, Subject and Background will require downloading the models again.")
+            if model.maskModelsInstallState == .downloaded {
+                Text("Removes the downloaded mask models (\(model.maskModels.installedSizeWords)) and their compiled caches. Sky, Subject and Background will require downloading the models again.")
+            } else {
+                Text("Removes the downloaded mask models and their compiled caches. Sky, Subject and Background will require downloading the models again.")
+            }
         }
         .task(id: model.roll?.folder) { await loadPictures() }
         .onAppear { model.maskModels.markStatusSeen() }
@@ -434,19 +438,61 @@ struct MaskModelsSettingsCard: View {
             SettingsRow(title: "Included models", note: Self.modelsSummary) {
                 EmptyView()
             }
-        case .notInstalled:
-            SettingsRow(title: "Not installed",
-                        note: "Sky, Subject and Background use four optional models (\(download.sizeWords), non-commercial use only). Person works with macOS Vision.") {
-                Button("Download…") { model.showMaskModels() }
-                    .buttonStyle(.graphite(.secondary))
-                    .fixedSize()
-                    .help("Review licences and download the mask models in the background")
+        case .notInstalled(let hasDownloadedFiles):
+            if hasDownloadedFiles {
+                SettingsRow(title: "Incomplete",
+                            note: "Older or partial mask models are on disk. Download the full pack (\(download.sizeWords), non-commercial use only) for Sky, Subject and Background, or remove the existing models.") {
+                    HStack(spacing: Graphite.Metric.s) {
+                        Button(model.isRemovingMaskModels ? "Removing…" : "Remove…") {
+                            isConfirmingRemoval = true
+                        }
+                        .buttonStyle(.graphite(.secondary))
+                        .fixedSize()
+                        .disabled(model.isRemovingMaskModels)
+                        .help("Remove the existing downloaded mask models from disk")
+                        Button("Download…") { model.showMaskModels() }
+                            .buttonStyle(.graphite(.secondary))
+                            .fixedSize()
+                            .help("Review licences and download the full mask models pack in the background")
+                    }
+                }
+                if let error = model.maskModelsRemovalError {
+                    SectionDivider()
+                    SettingsRow(title: "Removal failed", note: error) { EmptyView() }
+                }
+            } else {
+                SettingsRow(title: "Not installed",
+                            note: "Sky, Subject and Background use four optional models (\(download.sizeWords), non-commercial use only). Person works with macOS Vision.") {
+                    Button("Download…") { model.showMaskModels() }
+                        .buttonStyle(.graphite(.secondary))
+                        .fixedSize()
+                        .help("Review licences and download the mask models in the background")
+                }
+                if let error = model.maskModelsRemovalError {
+                    SectionDivider()
+                    SettingsRow(title: "Removal failed", note: error) { EmptyView() }
+                }
             }
-        case .unavailable(let why):
+        case .unavailable(let why, let hasDownloadedFiles):
             SettingsRow(title: "Unavailable", note: why) {
-                Button("Licences…") { model.showMaskModelsLicences() }
-                    .buttonStyle(.graphite(.secondary))
-                    .fixedSize()
+                HStack(spacing: Graphite.Metric.s) {
+                    Button("Licences…") { model.showMaskModelsLicences() }
+                        .buttonStyle(.graphite(.secondary))
+                        .fixedSize()
+                    if hasDownloadedFiles {
+                        Button(model.isRemovingMaskModels ? "Removing…" : "Remove…") {
+                            isConfirmingRemoval = true
+                        }
+                        .buttonStyle(.graphite(.secondary))
+                        .fixedSize()
+                        .disabled(model.isRemovingMaskModels)
+                        .help("Remove the downloaded mask models from disk")
+                    }
+                }
+            }
+            if let error = model.maskModelsRemovalError {
+                SectionDivider()
+                SettingsRow(title: "Removal failed", note: error) { EmptyView() }
             }
         }
     }

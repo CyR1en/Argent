@@ -50,7 +50,7 @@ extension RollModel {
     }
 
     var adjustInspectorFrame: Frame? {
-        workspacePage == .roll && isAdjustmentsShown ? shownFrame : nil
+        !onboarding.isPresented && workspacePage == .roll && isAdjustmentsShown ? shownFrame : nil
     }
 
     func showWorkspacePage(_ page: WorkspacePage) {
@@ -66,6 +66,8 @@ extension RollModel {
 
     /// Presents the onboarding flow over the workspace (first launch or Help › Welcome to Argent…).
     func showOnboarding(startingAt step: OnboardingStep = .welcome) {
+        endInspectorInteraction()
+        maskEditor.reset()
         quickDevelop = nil
         maskEditor.isPickerOpen = false
         isImportSourceShown = false
@@ -73,9 +75,9 @@ extension RollModel {
         onboarding.present(startingAt: step)
     }
 
-    /// Starts the mask models download in the background (when not already installed) and finishes onboarding into the workspace.
+    /// Starts the mask models download in the background (when downloadable) and finishes onboarding into the workspace.
     func downloadMaskModelsAndFinishOnboarding() {
-        if maskModelsInstallState == .notInstalled {
+        if maskModelsInstallState.canDownload {
             maskModels.start()
         }
         onboarding.complete()
