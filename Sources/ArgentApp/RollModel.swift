@@ -898,11 +898,8 @@ final class RollModel {
     }
 
     /// Where the frame's print is aimed (RollModel+Auto); neutral before it is measured, and for a
-    /// frame whose measurement failed. One aim a frame whichever stock prints it, so the stock
-    /// stock panel's tiles share it: every method so far reads the measurements alone
-    /// (`AutoDecisions.readsStock`). A method that reads the stock would need an aim for each stock
-    /// the stock panel shows, resolved through the frame's own controls, and `visibleAutomatic` and an
-    /// `AutomaticBaseline` would pin the one of the stock in use.
+    /// frame whose measurement failed. The decision follows the effective stock in use. Stock
+    /// comparison tiles share that aim; selecting a different stock settles its own decision.
     func printAim(for frame: Frame) -> PrintAim { printAims[frame.url] ?? PrintAim() }
 
     /// Measures every frame of the roll at low priority, in capture order, behind whatever

@@ -67,7 +67,8 @@ import Testing
     }
 
     @Test func theSameSnapshotGivesTheSameRevisionAndAimsBitForBit() {
-        let one = AutoDecisions.decide(Self.snapshot()), other = AutoDecisions.decide(Self.snapshot(reversed: true))
+        let one = AutoDecisions.decide(Self.snapshot(), method: .control)
+        let other = AutoDecisions.decide(Self.snapshot(reversed: true), method: .control)
         #expect(one.revision == other.revision && one.revision.count == 64)
         #expect(Self.bits(one.aims) == Self.bits(other.aims))
         #expect(one.record == other.record)
@@ -90,20 +91,20 @@ import Testing
     }
 
     @Test func theRevisionReadsWhatTheMethodReads() {
-        let base = AutoDecisions.decide(Self.snapshot()).revision
+        let base = AutoDecisions.decide(Self.snapshot(), method: .control).revision
         // The measurements and the raws.
-        #expect(AutoDecisions.decide(Self.snapshot(shift: [2: 0.001])).revision != base)
-        #expect(AutoDecisions.decide(Self.snapshot(sha: [3: String(repeating: "a", count: 64)])).revision != base)
+        #expect(AutoDecisions.decide(Self.snapshot(shift: [2: 0.001]), method: .control).revision != base)
+        #expect(AutoDecisions.decide(Self.snapshot(sha: [3: String(repeating: "a", count: 64)]), method: .control).revision != base)
         // Roll smoothing reads neither the stock nor the controls.
         let warm = RollControls(ratedAt: .oneStopOver, labBalance: .warm)
-        #expect(AutoDecisions.decide(Self.snapshot(controls: warm, own: [0: FrameControls(labBalance: .cool)])).revision == base)
+        #expect(AutoDecisions.decide(Self.snapshot(controls: warm, own: [0: FrameControls(labBalance: .cool)]), method: .control).revision == base)
         #expect(AutoDecisions.decide(Self.snapshot(), method: .smoothing).revision != base)
         // The control reads no parameter either: a change of the defaults leaves its revision, so
         // its rolls are not developed again. The candidates read theirs.
         var parameters = SequenceAims.Parameters()
         parameters.neighbours = 4
         let edited = AutoDecisions.decide(Self.snapshot(), method: .control, parameters: parameters)
-        #expect(edited.revision == base && Self.bits(edited.aims) == Self.bits(AutoDecisions.decide(Self.snapshot()).aims))
+        #expect(edited.revision == base && Self.bits(edited.aims) == Self.bits(AutoDecisions.decide(Self.snapshot(), method: .control).aims))
         let smoothing = AutoDecisions.decide(Self.snapshot(), method: .smoothing).revision
         #expect(AutoDecisions.decide(Self.snapshot(), method: .smoothing, parameters: parameters).revision != smoothing)
         // A method that renders through the stock reads it and the controls.
@@ -125,7 +126,7 @@ import Testing
             return identities
         }
         func restored(_ identities: [URL: AutoDecisions.Identity], frames: [Frame] = Self.frames,
-                      method: SequenceAims.Method = .control) -> AutoDecisions.Decision? {
+                      method: SequenceAims.Method = AutoDecisions.method) -> AutoDecisions.Decision? {
             AutoDecisions.restored(decision.record, frames: frames, identities: identities, stockDigest: Self.stock.digest,
                                    controls: RollControls(), frameControls: [:], method: method)
         }
@@ -144,7 +145,7 @@ import Testing
         #expect(restored(now(), frames: Array(frames.dropLast()))?.revision == decision.revision)
         // Another method.
         #expect(restored(now(), method: .smoothing) == nil)
-        // Other parameters, which the control does not read; a candidate's decision holds only for its own.
+        // Other parameters, which the shipped method does not read; a candidate holds only for its own.
         var parameters = SequenceAims.Parameters()
         parameters.minimumOverlap = 0.5
         #expect(AutoDecisions.restored(decision.record, frames: frames, identities: now(), stockDigest: Self.stock.digest,
@@ -165,6 +166,27 @@ import Testing
         // It is restored as failed, so that one measured since balances the roll again.
         #expect(AutoDecisions.restored(failed, frames: frames, identities: now(), stockDigest: Self.stock.digest,
                                        controls: RollControls(), frameControls: [:])?.failed == [frames[2].url])
+    }
+
+    @Test func detailDecisionTracksEffectiveStocksAndToneInputs() {
+        var snapshot = Self.snapshot()
+        let url = Self.frames[0].url
+        snapshot.frameStockDigests[url] = "effective-stock"
+        let settled = AutoDecisions.decide(snapshot)
+        #expect(settled.record.method == .detail)
+        #expect(settled.record.controls?.frameStockDigests == [url.lastPathComponent: "effective-stock"])
+        func restore(_ digest: String, _ own: [URL: FrameControls] = [:]) -> AutoDecisions.Decision? {
+            AutoDecisions.restored(settled.record, frames: snapshot.input.frames, identities: snapshot.identities,
+                                   stockDigest: snapshot.stockDigest, controls: snapshot.input.controls,
+                                   frameControls: own, frameStockDigests: [url: digest])
+        }
+        #expect(restore("effective-stock") == settled)
+        #expect(restore("changed-stock") == nil)
+        #expect(restore("effective-stock", [url: FrameControls(ratedAt: .oneStopUnder)]) == nil)
+        #expect(restore("effective-stock", [url: FrameControls(labBalance: .cool)]) == nil)
+        #expect(restore("effective-stock", [url: FrameControls(halation: 0)]) == settled)
+        snapshot.frameStockDigests[url] = "changed-stock"
+        #expect(AutoDecisions.decide(snapshot).revision != settled.revision)
     }
 
     @Test func cullingPreservesTheRevisionAndEverySurvivingAim() throws {

@@ -18,33 +18,31 @@ public enum AutoDecisions {
     /// 2026-10-22-1: the first: one fixed snapshot of the whole roll, resolved once by `method`.
     /// 2026-11-05-2: aims carry a tone step, and the aim is fitted to Lightroom's Auto on the a7 IV
     /// (docs/research/auto/balance-research.md, section 7d).
-    public static let version = "2026-11-05-2"
-    /// The rule that sets the roll's levels: roll smoothing as shipped until the pre-registration's
-    /// stage 3 names a winner (docs/research/auto/sequence-consistency.md, section 3, ship rule).
-    public static let method: SequenceAims.Method = .control
+    public static let version = "2026-11-25-1"
+    /// Roll smoothing remains the prior; the detail check refines its settled aims.
+    public static let method: SequenceAims.Method = .detail
     /// `method`'s constants: the frozen ones of a candidate, the defaults for the control, which
     /// reads none of them.
     public static var parameters: SequenceAims.Parameters { parameters(for: method) }
 
     public static func parameters(for method: SequenceAims.Method) -> SequenceAims.Parameters {
         switch method {
-        case .control: SequenceAims.Parameters()
+        case .control, .detail: SequenceAims.Parameters()
         case .smoothing: SequenceAims.Parameters.frozenSmoothing
         case .render: SequenceAims.Parameters.frozenRender
         }
     }
 
-    /// Whether `method`'s aims depend on the stock, Rated at and Lab balance: candidate B renders
-    /// its matched regions through them; the control and candidate A read the measurements alone.
-    public static func readsStock(_ method: SequenceAims.Method) -> Bool { method == .render }
+    /// Whether `method`'s aims depend on the stock, Rated at and Lab balance.
+    public static func readsStock(_ method: SequenceAims.Method) -> Bool { method == .render || method == .detail }
 
-    /// Whether `method` matches frames by their `SequenceDescriptor`s; the control does not.
+    /// Whether `method` reads the frames' spatial samples.
     public static func readsDescriptors(_ method: SequenceAims.Method) -> Bool { method != .control }
 
     /// Whether `method`'s aims depend on its `SequenceAims.Parameters`: the candidates' do; the
     /// control reads none of them, so its revision and a kept decision of it leave them out, and a
     /// change of the defaults cannot develop a roll smoothing's roll again.
-    public static func readsParameters(_ method: SequenceAims.Method) -> Bool { method != .control }
+    public static func readsParameters(_ method: SequenceAims.Method) -> Bool { method == .smoothing || method == .render }
 
     /// A frame's own aim, from its measurement alone: what it shows while its roll is not yet
     /// settled, rather than roll smoothing over a roll partly measured, which moved 38 of the
@@ -110,14 +108,17 @@ public enum AutoDecisions {
         public var input: SequenceAims.Input
         /// The stock's digest (`Stock.digest`), for a method that reads the stock.
         public var stockDigest: String
+        public var frameStockDigests: [URL: String]
         /// Each frame's raw as it was measured, or failed to be.
         public var identities: [URL: Identity]
         /// Frames whose measurement failed for good: they print at `PrintAim()`, the fallback.
         public var failed: Set<URL>
 
-        public init(input: SequenceAims.Input, stockDigest: String, identities: [URL: Identity], failed: Set<URL> = []) {
+        public init(input: SequenceAims.Input, stockDigest: String, identities: [URL: Identity], failed: Set<URL> = [],
+                    frameStockDigests: [URL: String]? = nil) {
             self.input = input
             self.stockDigest = stockDigest
+            self.frameStockDigests = frameStockDigests ?? input.frameStocks.mapValues(\.digest)
             self.identities = identities
             self.failed = failed
         }
@@ -166,7 +167,9 @@ public enum AutoDecisions {
         }
         let controls = readsStock(method) ? Record.Controls(stockID: input.stock.id, stockDigest: snapshot.stockDigest,
                                                             roll: input.controls,
-                                                            frames: ownControls(input.frames, input.frameControls)) : nil
+                                                            frames: ownControls(input.frames, input.frameControls, method: method),
+                                                            frameStockDigests: method == .detail
+                                                                ? names(input.frames, snapshot.frameStockDigests) : nil) : nil
         let record = Record(method: method, parameters: digest(of: parameters),
                             revision: revision(of: snapshot, method: method, parameters: parameters),
                             controls: controls, frames: members)
@@ -183,6 +186,7 @@ public enum AutoDecisions {
     /// members, so saving it makes a later addition require another resolution.
     public static func restored(_ record: Record, frames: [Frame], identities: [URL: Identity],
                                 stockDigest: String?, controls: RollControls, frameControls: [URL: FrameControls],
+                                frameStockDigests: [URL: String] = [:],
                                 method: SequenceAims.Method = method, parameters: SequenceAims.Parameters? = nil) -> Decision? {
         let parameters = parameters ?? Self.parameters(for: method)
         guard record.decisionVersion == version, record.method == method,
@@ -193,8 +197,11 @@ public enum AutoDecisions {
         if readsStock(method) {
             let names = Set(frames.map { $0.url.lastPathComponent })
             guard let kept = record.controls, kept.stockDigest == stockDigest, kept.roll == controls,
-                  kept.frames.filter({ names.contains($0.key) }) == ownControls(frames, frameControls) else { return nil }
+                  kept.frames.filter({ names.contains($0.key) }) == ownControls(frames, frameControls, method: method),
+                  method != .detail || kept.frameStockDigests?.filter({ names.contains($0.key) })
+                    == Self.names(frames, frameStockDigests) else { return nil }
             keptRecord.controls?.frames = kept.frames.filter { names.contains($0.key) }
+            keptRecord.controls?.frameStockDigests = kept.frameStockDigests?.filter { names.contains($0.key) }
         }
         var aims: [URL: PrintAim] = [:], failed: Set<URL> = []
         var members = record.frames.makeIterator(), retained: [Record.Member] = []
@@ -222,16 +229,19 @@ public enum AutoDecisions {
         if readsParameters(method) { lines[1] += " parameters \(digest(of: parameters))" }
         let stock = readsStock(method), descriptors = readsDescriptors(method)
         if stock { lines.append("stock \(snapshot.stockDigest) roll \(jsonText(input.controls))") }
+        if method == .detail { lines.append("descriptor-version \(SequenceDescriptor.version)") }
+        let own = ownControls(input.frames, input.frameControls, method: method)
         for frame in input.frames {
             let identity = snapshot.identities[frame.url] ?? Identity(frame, stamp: nil)
             var line = "frame \(identity.fingerprint)"
             if !snapshot.failed.contains(frame.url), let analysis = input.analyses[frame.url] {
                 line += " analysis \(sha256(jsonData(analysis)))"
-                if descriptors { line += " descriptor \(input.descriptors[frame.url].map(digest(of:)) ?? "none")" }
+                if descriptors { line += " descriptor \(input.descriptors[frame.url].map { digest(of: $0, readsNoise: method == .detail) } ?? "none")" }
             } else {
                 line += " failed"
             }
-            if stock, let own = input.frameControls[frame.url], !own.isEmpty { line += " own \(jsonText(own))" }
+            if stock, let controls = own[identity.fileName] { line += " own \(jsonText(controls))" }
+            if method == .detail, let digest = snapshot.frameStockDigests[frame.url] { line += " stock \(digest)" }
             lines.append(line)
         }
         return sha256(Data(lines.joined(separator: "\n").utf8))
@@ -240,20 +250,32 @@ public enum AutoDecisions {
     /// The SHA-256 of `parameters` encoded with sorted keys, which a kept decision names.
     public static func digest(of parameters: SequenceAims.Parameters) -> String { sha256(jsonData(parameters)) }
 
-    private static func digest(of descriptor: SequenceDescriptor) -> String {
+    private static func digest(of descriptor: SequenceDescriptor, readsNoise: Bool) -> String {
         var hash = SHA256()
         [descriptor.width, descriptor.height].withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         for values in [descriptor.rgb, descriptor.unclipped, descriptor.detail] {
             values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         }
+        if readsNoise, let noise = descriptor.noise {
+            [noise.read.x, noise.read.y, noise.read.z, noise.shot.x, noise.shot.y, noise.shot.z].withUnsafeBufferPointer {
+                hash.update(bufferPointer: UnsafeRawBufferPointer($0))
+            }
+        }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     /// Each frame's own controls, by file name, where it has any.
-    private static func ownControls(_ frames: [Frame], _ own: [URL: FrameControls]) -> [String: FrameControls] {
-        Dictionary(frames.compactMap { frame in
-            own[frame.url].flatMap { $0.isEmpty ? nil : (frame.url.lastPathComponent, $0) }
-        }, uniquingKeysWith: { first, _ in first })
+    public static func ownControls(_ frames: [Frame], _ own: [URL: FrameControls],
+                                   method: SequenceAims.Method = method) -> [String: FrameControls] {
+        names(frames, own.compactMapValues { controls in
+            let used = method == .detail ? FrameControls(ratedAt: controls.ratedAt, labBalance: controls.labBalance) : controls
+            return used.isEmpty ? nil : used
+        })
+    }
+
+    public static func names<Value>(_ frames: [Frame], _ values: [URL: Value]) -> [String: Value] {
+        Dictionary(frames.compactMap { frame in values[frame.url].map { (frame.url.lastPathComponent, $0) } },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     private static func jsonData<T: Encodable>(_ value: T) -> Data {
@@ -347,12 +369,15 @@ public enum AutoDecisions {
             public var roll: RollControls
             /// Each frame's own Rated at or Lab balance, by file name, where it has any.
             public var frames: [String: FrameControls]
+            public var frameStockDigests: [String: String]?
 
-            public init(stockID: String, stockDigest: String, roll: RollControls, frames: [String: FrameControls]) {
+            public init(stockID: String, stockDigest: String, roll: RollControls, frames: [String: FrameControls],
+                        frameStockDigests: [String: String]? = nil) {
                 self.stockID = stockID
                 self.stockDigest = stockDigest
                 self.roll = roll
                 self.frames = frames
+                self.frameStockDigests = frameStockDigests
             }
         }
     }

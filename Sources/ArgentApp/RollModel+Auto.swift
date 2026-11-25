@@ -110,7 +110,7 @@ extension RollModel {
         guard let roll, let decision = AutoDecisions.restored(
             record, frames: roll.frames, identities: identities,
             stockDigest: stockDigests.indices.contains(stockIndex) ? stockDigests[stockIndex] : nil,
-            controls: controls, frameControls: overrides) else { return }
+            controls: controls, frameControls: overrides, frameStockDigests: autoStockDigests(roll.frames)) else { return }
         // Save projected membership after a cull, while retaining the revision that made the aims.
         publish(decision, keeping: decision.record != record)
     }
@@ -127,7 +127,7 @@ extension RollModel {
         guard let decision = AutoDecisions.restored(
             previous.record, frames: frames, identities: identities,
             stockDigest: stockDigests.indices.contains(stockIndex) ? stockDigests[stockIndex] : nil,
-            controls: controls, frameControls: overrides) else { return false }
+            controls: controls, frameControls: overrides, frameStockDigests: autoStockDigests(frames)) else { return false }
         // A frame whose raw has gone stays in the roll, as one that cannot be measured; one taken out of the roll
         // (`dropping`, `dropFrames`) leaves nothing behind.
         if !dropping { for url in urls { measurementFailures[url] = MeasurementFailure(source: nil) } }
@@ -147,7 +147,7 @@ extension RollModel {
     }
 
     private func balance(_ frames: [Frame], stock: Stock, stockDigest: String, generation: UInt64) async {
-        // A method that matches frames needs each one's descriptor; a frame whose measurement a recipe
+        // A method that reads spatial samples needs each frame's descriptor; a frame whose measurement a recipe
         // gave has none until the sheet's decode of it is described, its measurement kept. As many at
         // once as the previews decode.
         if AutoDecisions.readsDescriptors(AutoDecisions.method), let films {
@@ -169,8 +169,13 @@ extension RollModel {
         }
         guard generation == balanceGeneration, !Task.isCancelled else { return }
         let failed = Set(measurementFailures.keys)
+        let frameStockDigests = autoStockDigests(frames)
+        let frameStocks = Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
+            frameStockDigests[frame.url].flatMap { _ in self.stock(for: frame).map { (frame.url, $0) } }
+        })
         let input = SequenceAims.Input(frames: frames, analyses: analyses.filter { !failed.contains($0.key) },
-                                       descriptors: descriptors, stock: stock, controls: controls, frameControls: overrides)
+                                       descriptors: descriptors, stock: stock, controls: controls, frameControls: overrides,
+                                       frameStocks: frameStocks)
         let stamps = Dictionary(uniqueKeysWithValues: frames.map { frame in
             (frame.url, measurementFailures[frame.url].map(\.source) ?? measuredFrom[frame.url])
         })
@@ -180,7 +185,8 @@ extension RollModel {
                 (frame.url, AutoDecisions.Identity(frame, stamp: stamps[frame.url] ?? nil))
             })
             return AutoDecisions.decide(AutoDecisions.Snapshot(input: input, stockDigest: stockDigest,
-                                                               identities: identities, failed: failed))
+                                                               identities: identities, failed: failed,
+                                                               frameStockDigests: frameStockDigests))
         }.value
         guard generation == balanceGeneration, !Task.isCancelled else { return }
         balanceTask = nil
@@ -266,10 +272,18 @@ extension RollModel {
             return
         }
         guard let decision = autoDecision, let roll, let stock = currentStock else { return }
+        let frames = roll.frames.filter { decision.aims[$0.url] != nil }
         let now = AutoDecisions.Record.Controls(stockID: stock.id, stockDigest: stockDigests[stockIndex], roll: controls,
-                                                frames: Dictionary(roll.frames.filter { decision.aims[$0.url] != nil }.compactMap { frame in
-                                                    overrides[frame.url].flatMap { $0.isEmpty ? nil : (frame.url.lastPathComponent, $0) }
-                                                }, uniquingKeysWith: { first, _ in first }))
+                                                frames: AutoDecisions.ownControls(frames, overrides),
+                                                frameStockDigests: AutoDecisions.method == .detail
+                                                    ? AutoDecisions.names(frames, autoStockDigests(frames)) : nil)
         if decision.record.controls != now { unsettle() }
+    }
+
+    private func autoStockDigests(_ frames: [Frame]) -> [URL: String] {
+        Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
+            let index = stockIndex(for: frame)
+            return index == stockIndex ? nil : (frame.url, stockDigests[index])
+        })
     }
 }
