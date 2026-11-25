@@ -52,9 +52,9 @@ Machine-learning models (not in this repository)
 
 Built with DINOv3.
 
-No model weights are in this repository or in public app builds. For Subject and Background
-masks, Argent offers S3OD-sod, EoMT-DINOv3-L and ViTMatte-S as an optional, free,
-non-commercial download after showing their terms in the app (SubjectModelPack); their
+No model weights are in this repository or in public app builds. For Sky, Subject and Background
+masks, Argent offers S3OD-sod, EoMT-DINOv3-L, ViTMatte-S and Depth Anything 3 Mono-Large as an
+optional, free, non-commercial download after showing their terms in the app (MaskModelPack); their
 user-facing licence texts are carried in Argent.app/Contents/Resources/Model Licences and
 in Licences/ inside the pack. Locally, scripts/convert-*.zsh downloads and converts all
 models on your Mac, and scripts/build-app.sh bundles them with their licence texts in

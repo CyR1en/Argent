@@ -122,7 +122,7 @@ import Testing
 
         #expect(UpdateController.activeWorkDescription(isDeveloping: true, isImporting: false, isDownloadingModels: false, isMovingFrames: false) == "developing frames")
         #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: true, isDownloadingModels: false, isMovingFrames: false) == "importing a roll")
-        #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: false, isDownloadingModels: true, isMovingFrames: false) == "downloading the Subject models")
+        #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: false, isDownloadingModels: true, isMovingFrames: false) == "downloading the mask models")
         #expect(UpdateController.activeWorkDescription(isDeveloping: false, isImporting: false, isDownloadingModels: false, isMovingFrames: false) == nil)
 
         @MainActor final class FlagBox { var busy = true; var installed = false }

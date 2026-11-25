@@ -5,7 +5,7 @@
 	<!-- Sandboxed (spec, Platform). -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Outgoing network access for the Subject models' download (SubjectModelPack) and Sparkle 2 update
+	<!-- Outgoing network access for the mask models' download (MaskModelPack) and Sparkle 2 update
 	     checks and downloads from GitHub Pages / GitHub Releases. Nothing else goes to the network. -->
 	<key>com.apple.security.network.client</key>
 	<true/>

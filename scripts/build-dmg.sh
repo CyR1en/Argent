@@ -9,8 +9,8 @@
 # The image carries the smart masks' and Remove's models that build/Argent.app holds, about 7 GB, so it takes
 # minutes. Their weights must not go to anyone else until cleared (decision 24, scripts/README.md): for an image
 # that leaves the owner's Macs (and whenever --notarize is used), --no-models leaves out Contents/Resources/Models
-# and re-signs the copy, and then Sky says it is unavailable, Subject and Background offer the Subject models'
-# download, and Remove says it has no model.
+# and re-signs the copy, and then Sky, Subject and Background offer the mask models' download, and Remove says
+# it has no model.
 #
 #   scripts/build-dmg.sh                            release build, then build/Argent-<version>.dmg with the models
 #   scripts/build-dmg.sh --no-models                the same without them

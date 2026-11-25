@@ -216,8 +216,8 @@ final class RollModel {
     let maskEditor = MaskEditor()
     /// Smart masks' selections under way and what they came to (`RollModel+SmartMasks`).
     let smartMasks = SmartMasks()
-    /// The Subject models' licence screen and download (`SubjectModelsSheet`).
-    let subjectModels = SubjectModelsDownload()
+    /// The mask models' licence screen and download (`MaskModelsSheet`).
+    let maskModels = MaskModelsDownload()
     /// The Remove tab's state that is not in the frame's edit (`RemoveState.swift`).
     let remove = RemoveSession()
     /// Remove's steps, its runs under way and what its patches say of themselves (`RollModel+Remove`).
@@ -296,11 +296,11 @@ final class RollModel {
     /// The quick develop dialog is up: set only as it comes and goes, never at a choice made in it, so the menu bar,
     /// which disables on it what would act on the roll under the dialog, is not asked again at each (`MenuState`).
     private(set) var isAskingToDevelop = false
-    /// A modal sheet is up over the workspace (Quick Develop or the Subject models' licence screen): keys and menus leave
+    /// A modal sheet is up over the workspace (Quick Develop or the mask models' licence screen): keys and menus leave
     /// the roll and frame under it alone.
-    var isSheetShown: Bool { isAskingToDevelop || subjectModels.isShown }
+    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown }
     /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
-    @ObservationIgnored var subjectModelStagingSweep: Task<Void, Never>?
+    @ObservationIgnored var maskModelStagingSweep: Task<Void, Never>?
     var importSettings = ImportSettings(defaults: .standard) {
         didSet {
             importSettings.save(to: .standard)
@@ -511,9 +511,19 @@ final class RollModel {
         maskEditor.model = self
         smartMasks.makeInference = { [weak self] in self?.makeMaskInference() }
         let modelsFolder = downloadedModelsFolder
-        subjectModels.folder = { modelsFolder }
-        subjectModels.beforeStart = { [weak self] in await self?.subjectModelStagingSweep?.value }
-        subjectModels.onInstalled = { [weak self] in self?.smartMasks.modelsChanged() }
+        maskModels.folder = { modelsFolder }
+        maskModels.beforeStart = { [weak self] in await self?.maskModelStagingSweep?.value }
+        maskModels.installer = { [weak self] pack, folder, step in
+            try await pack.install(into: folder, step: step) { place in
+                let inference = await MainActor.run { self?.smartMasks.queue }
+                if let inference {
+                    try await inference.serialized(place)
+                } else {
+                    try place()
+                }
+            }
+        }
+        maskModels.onInstalled = { [weak self] in self?.smartMasks.modelsChanged() }
         removalRuns.makeSteps = { [weak self] in self?.makeRemovalSteps() }
         (maskEditor.overlay.field as? MaskSeedCoverage)?.seeds = maskSeeds
         (maskEditor.overlay.field as? MaskSeedCoverage)?.refined = films
@@ -1365,7 +1375,7 @@ final class RollModel {
                          canShowDevelopedFile: selected.hasDevelopedFile,
                          isSeveralSelected: selected.isSeveral, canChangeFrames: selected.canChangeFrames,
                          moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop,
-                         isShowingSubjectModels: subjectModels.isShown,
+                         isShowingMaskModels: maskModels.isShown,
                          canCheckForUpdates: updates.canCheckForUpdates)
     }
 

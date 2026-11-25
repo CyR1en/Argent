@@ -60,11 +60,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.model = model
         model.watchCards()
         model.updates.start(for: model)
-        // Once, at launch, before any undo history or download exists: any unfinished Subject models' staging folder
-        // (`SubjectModelPack.sweepStaging`), the smart masks' seeds no edit names any more (`MaskRasterStore.sweep`),
+        // Once, at launch, before any undo history or download exists: any unfinished mask models' staging folder
+        // (`MaskModelPack.sweepStaging`), the smart masks' seeds no edit names any more (`MaskRasterStore.sweep`),
         // and the removals' patches likewise.
         Task {
-            await model.sweepSubjectModelStaging()
+            await model.sweepMaskModelStaging()
             await model.sweepMaskSeeds()
             await model.sweepPatches()
         }
@@ -84,9 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await model.finishWritesForQuit()
             let quits = await model.saveAdjustmentsForQuit()
             // The model Remove holds goes with the app: a helper left to itself would outlive the app that started it. Nothing is
-            // made here: a session that removed nothing has no queue. Cancel any Subject models download so its staging folder cleans up.
+            // made here: a session that removed nothing has no queue. Cancel any mask models download so its staging folder cleans up.
             if quits {
-                await model.subjectModels.cancelForQuit()
+                await model.maskModels.cancelForQuit()
                 await model.removalRuns.steps?.developWillStart()
             }
             sender.reply(toApplicationShouldTerminate: quits)
@@ -192,11 +192,11 @@ struct MenuState: Equatable {
     /// the selection under it is disabled, so no key does what the dialog does not show. It changes as the dialog comes and
     /// goes, not at a choice made in it. What leaves the roll's page, Develop…, Settings, another roll, stays: the dialog goes.
     var isAskingToDevelop = false
-    /// The Subject models' licence and download screen is up over the workspace (`SubjectModelsDownload.isShown`):
+    /// The mask models' licence and download screen is up over the workspace (`MaskModelsDownload.isShown`):
     /// as `isAskingToDevelop`, keys and menus leave the roll and frame under it alone.
-    var isShowingSubjectModels = false
+    var isShowingMaskModels = false
     /// Either modal sheet is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingSubjectModels }
+    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -469,29 +469,29 @@ struct ArgentCommands: Commands {
             }
             .disabled(!state.canShow || !state.actsOnFrames)
             Divider()
-            // The thumbnails' size on the sheet and the zoom in the frame view, as a pinch changes each; not under the Subject models' screen,
+            // The thumbnails' size on the sheet and the zoom in the frame view, as a pinch changes each; not under the mask models' screen,
             // which covers them.
             Button(state.openFrame == nil ? "Larger Thumbnails" : "Zoom In") {
                 if model.isFrameOpen { model.zoomFrame(.zoomIn) } else { model.changeSize(by: 1) }
             }
             .keyboardShortcut("+")
-            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingSubjectModels)
+            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingMaskModels)
             Button(state.openFrame == nil ? "Smaller Thumbnails" : "Zoom Out") {
                 if model.isFrameOpen { model.zoomFrame(.zoomOut) } else { model.changeSize(by: -1) }
             }
             .keyboardShortcut("-")
-            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingSubjectModels)
+            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingMaskModels)
             Button("Actual Size") { model.zoomFrame(.actualSize) }
                 .keyboardShortcut("0")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
             Button("Zoom to Fit") { model.zoomFrame(.fit) }
                 .keyboardShortcut("9")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
             Divider()
             // The split comparison of the neutral raw and film, the frame view's Compare.
             Toggle("Split Compare", isOn: Binding(get: { model.isSplitComparing }, set: { model.isSplitComparing = $0 }))
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingSubjectModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
             // The inspector edits the open frame, and its curve graph takes the keys: not under the dialog.
             Toggle("Adjustments", isOn: Binding(get: { model.isAdjustmentsShown }, set: { model.isAdjustmentsShown = $0 }))
                 .keyboardShortcut("a", modifiers: [.command, .shift])

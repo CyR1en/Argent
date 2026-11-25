@@ -1,11 +1,12 @@
-Subject Models for Argent — Licences and Notices
+Mask Models for Argent — Licences and Notices
 
 Built with DINOv3.
 
-The Subject models (S3OD-sod, EoMT-DINOv3-L, and ViTMatte-S) are made by third
-parties. They are not part of Argent and are not licensed under Argent's
-Apache-2.0 licence. They are offered here as an optional, free download for
-non-commercial use only, and are never sold or made part of a paid product.
+The mask models (S3OD-sod, EoMT-DINOv3-L, ViTMatte-S, and Depth Anything 3
+Mono-Large) are made by third parties. They are not part of Argent and are not
+licensed under Argent's Apache-2.0 licence. They are offered here as an
+optional, free download for non-commercial use only, and are never sold or made
+part of a paid product.
 
 Conditions of use and distribution
 
@@ -19,6 +20,10 @@ Conditions of use and distribution
   (§1.b.iii), no reverse engineering (§1.b.iv), and no military use (§1.b.v).
 - Required citation (Adobe Deep Image Matting dataset agreement §3):
   Ning Xu, Brian Price, Scott Cohen and Thomas Huang. Deep Image Matting. CVPR 2017.
+- Depth Anything 3 Mono-Large is under the Apache License, Version 2.0
+  (DA3-LICENSE), which does not limit it to non-commercial use. This pack as a
+  whole is offered for non-commercial use only because of the terms of the
+  other three models.
 
 Models included in this pack
 
@@ -31,7 +36,8 @@ Models included in this pack
      FLUX.1 [dev] Non-Commercial License (FLUX1-Krea-dev-LICENSE.md), along
      with DIS5K, HR-SOD, UHRSOD, and DUTS
 
-2. EoMT-DINOv3-L (eomt-sq768-f16.aimodel) — checks for a scene with no subject
+2. EoMT-DINOv3-L (eomt-sq768-f16.aimodel) — checks for a scene with no subject,
+   and for sky reflected in water
    - Code (tue-mps/eomt): MIT License, Copyright (c) 2025 Mobile Perception
      Systems Lab at TU/e (EoMT-LICENSE-MIT.txt)
    - Weights (tue-mps/eomt-dinov3-ade-semantic-large-512): fine-tuned from
@@ -52,5 +58,14 @@ Models included in this pack
      non-commercial use and distribution only; may not be sold.
      Citation: Ning Xu, Brian Price, Scott Cohen and Thomas Huang. Deep Image
      Matting. CVPR 2017.
+
+4. Depth Anything 3 Mono-Large (da3-sky-sq756-f16.aimodel) — finds the sky
+   - Code (ByteDance-Seed/Depth-Anything-3) and weights
+     (depth-anything/DA3MONO-LARGE): Apache License, Version 2.0, Copyright
+     2025 The Depth Anything 3 Team (DA3-LICENSE)
+   - Changes: this file is not the published one. Argent converted the
+     published weights to Core AI's format in half floats, at one fixed input
+     size of 756 by 756 pixels, keeping the sky and depth outputs
+     (scripts/convert-da3-sky.zsh in Argent's source).
 
 Full licence texts and model cards are included beside this notice.

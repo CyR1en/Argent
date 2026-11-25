@@ -360,6 +360,9 @@ enum SmartMaskFixtures {
         try FileManager.default.removeItem(at: folder.appendingPathComponent(BundledMaskModel.sky.fileName, isDirectory: true))
         let models = MaskModels(directory: folder, ledgerFile: folder.appendingPathComponent("ledger.json"))
         #expect(!models.isSkyAvailable && models.isSubjectAvailable, "EoMT is Subject's gate, DA3 is Sky's alone")
+        // Sky says which model it lost, as Subject does: what a download that held Subject's three alone left a Mac with.
+        #expect(models.skyMissing?.description.contains(BundledMaskModel.sky.rawValue) == true && models.skyMissing?.description.contains(BundledMaskModel.sky.script) == true)
+        #expect(models.subjectMissing == nil)
     }
 
     @Test func aModelIsKnownByItsManifestAndItsFileByMainHash() throws {
@@ -460,6 +463,62 @@ enum SmartMaskFixtures {
         #expect(models.folder(of: .subject) == bundled)
         #expect(!models.isSubjectAvailable)
         #expect(throws: MaskModelError.self) { try models.url(of: .subject) }
+    }
+
+    /// An invalid copy in a non-downloadable folder (the app bundle) shadows the downloadable folder and cannot be fixed by downloading,
+    /// even when another dependency is genuinely missing; an invalid copy only in the downloadable folder can be replaced by downloading.
+    @Test func statusDistinguishesMissingModelsFromInvalidBundledCopies() throws {
+        let root = try SmartMaskFixtures.temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bundled = root.appendingPathComponent("Bundled", isDirectory: true)
+        let downloaded = root.appendingPathComponent("Downloaded", isDirectory: true)
+        try FileManager.default.createDirectory(at: bundled, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: downloaded, withIntermediateDirectories: true)
+
+        func write(_ model: BundledMaskModel, in folder: URL, hashBytes: Data = Data(repeating: 0x11, count: 32), canary: String? = nil) throws {
+            let dir = folder.appendingPathComponent(model.fileName, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try hashBytes.write(to: dir.appendingPathComponent("main.hash"))
+            let manifest = ["recipe id": model.recipeID, "weights sha256": model.weightsSHA256, "canary output sha256": canary ?? model.canarySHA256]
+            try JSONSerialization.data(withJSONObject: manifest).write(to: folder.appendingPathComponent(model.manifestName))
+        }
+
+        let models = MaskModels(directories: [bundled, downloaded], downloadableDirectory: downloaded, ledgerFile: root.appendingPathComponent("ledger.json"))
+        // Neither folder has models: downloading satisfies both Sky and Subject.
+        guard case .needsDownload = models.status(of: MaskModels.skyModels) else { Issue.record("expected needsDownload for empty Sky"); return }
+        guard case .needsDownload = models.status(of: MaskModels.subjectModels) else { Issue.record("expected needsDownload for empty Subject"); return }
+
+        // A corrupt/mismatched copy only in the downloadable folder can be replaced by downloading.
+        try write(.sky, in: downloaded, canary: String(repeating: "0", count: 64))
+        try write(.water, in: downloaded)
+        guard case .needsDownload = models.status(of: MaskModels.skyModels) else { Issue.record("expected needsDownload for invalid downloaded DA3"); return }
+
+        // Put valid copies in downloaded, then shadow DA3 with an invalid bundled copy: downloading cannot repair it.
+        try write(.sky, in: downloaded)
+        try write(.sky, in: bundled, canary: String(repeating: "0", count: 64))
+        if case .invalid(let error) = models.status(of: MaskModels.skyModels) {
+            #expect(error.description.contains(BundledMaskModel.sky.rawValue))
+            #expect(error.description.contains(BundledMaskModel.sky.script))
+        } else {
+            Issue.record("expected invalid for bad bundled DA3, got \(models.status(of: MaskModels.skyModels))")
+        }
+
+        // Remove bundled DA3 (and downloaded DA3) so DA3 is genuinely missing, while bundled EoMT has a corrupt main.hash:
+        // missing DA3 must not hide the invalid bundled EoMT.
+        try FileManager.default.removeItem(at: bundled.appendingPathComponent(BundledMaskModel.sky.fileName))
+        try FileManager.default.removeItem(at: downloaded.appendingPathComponent(BundledMaskModel.sky.fileName))
+        try write(.water, in: bundled, hashBytes: Data([0x01, 0x02]))
+        if case .invalid(let error) = models.status(of: MaskModels.skyModels) {
+            #expect(error.description.contains(BundledMaskModel.water.rawValue))
+            #expect(error.description.contains("main.hash"))
+        } else {
+            Issue.record("expected invalid for missing DA3 + bad bundled EoMT, got \(models.status(of: MaskModels.skyModels))")
+        }
+        if case .invalid(let error) = models.status(of: MaskModels.subjectModels) {
+            #expect(error.description.contains(BundledMaskModel.water.rawValue))
+        } else {
+            Issue.record("expected invalid for bad bundled EoMT in Subject, got \(models.status(of: MaskModels.subjectModels))")
+        }
     }
 }
 

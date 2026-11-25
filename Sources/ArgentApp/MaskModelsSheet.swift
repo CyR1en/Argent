@@ -3,14 +3,14 @@ import ArgentRoll
 import Foundation
 import SwiftUI
 
-/// The Subject models' download: shown from a Subject or Background tile while the models are not here, it says what they are and under which terms,
-/// and downloads them only when the user agrees (`SubjectModelPack`). The models are not Argent's and not under its licence: the screen is where their
-/// terms are shown, as the licences ask and the owner chose (2026-11-20).
+/// The mask models' download: shown from a Sky, Subject or Background tile while its models are not here, it says what they are and under which terms,
+/// and downloads them only when the user agrees (`MaskModelPack`). The models are not Argent's and not under its licence: the screen is where their
+/// terms are shown, as the licences ask and the owner chose (2026-11-20; Sky's model with them since 2026-11-24).
 @MainActor @Observable
-final class SubjectModelsDownload {
+final class MaskModelsDownload {
     enum Phase: Equatable {
         case idle
-        case running(SubjectModelPack.Step)
+        case running(MaskModelPack.Step)
         case failed(String)
         case done
     }
@@ -19,15 +19,15 @@ final class SubjectModelsDownload {
     private(set) var phase: Phase = .idle
     /// Whether the licence texts are open in place of the summary.
     var showsTexts = false
-    let pack: SubjectModelPack
+    let pack: MaskModelPack
     /// Where it installs; a test gives its own.
-    @ObservationIgnored var folder: () -> URL = { SubjectModelPack.installedFolder }
+    @ObservationIgnored var folder: () -> URL = { MaskModelPack.installedFolder }
     /// Awaited before a download creates its staging folder, so the launch sweep never deletes it.
     @ObservationIgnored var beforeStart: @MainActor () async -> Void = {}
     /// Told once the models are in place, so the tiles ask again.
     @ObservationIgnored var onInstalled: () -> Void = {}
     /// Performs the install; tests replace this to drive state without network or disk I/O.
-    @ObservationIgnored var installer: @Sendable (SubjectModelPack, URL, @escaping @Sendable (SubjectModelPack.Step) -> Void) async throws -> Void = { pack, folder, step in
+    @ObservationIgnored var installer: @Sendable (MaskModelPack, URL, @escaping @Sendable (MaskModelPack.Step) -> Void) async throws -> Void = { pack, folder, step in
         try await pack.install(into: folder, step: step)
     }
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -36,7 +36,7 @@ final class SubjectModelsDownload {
     @ObservationIgnored private var draining: Task<Void, Never>?
     @ObservationIgnored private(set) var generation: UInt64 = 0
 
-    init(pack: SubjectModelPack = .current) {
+    init(pack: MaskModelPack = .current) {
         self.pack = pack
     }
 
@@ -102,9 +102,9 @@ final class SubjectModelsDownload {
     }
 
     /// A step for `run`, kept only when it belongs to the active run, moves forward monotonically, and changes what the screen shows.
-    func advance(to step: SubjectModelPack.Step, run: UInt64) {
+    func advance(to step: MaskModelPack.Step, run: UInt64) {
         guard run == generation, case .running(let now) = phase else { return }
-        let next: SubjectModelPack.Step
+        let next: MaskModelPack.Step
         switch step {
         case .downloading(let fraction):
             guard fraction.isFinite else { return }
@@ -121,7 +121,7 @@ final class SubjectModelsDownload {
         phase = .running(next)
     }
 
-    private static func rank(of step: SubjectModelPack.Step) -> Int {
+    private static func rank(of step: MaskModelPack.Step) -> Int {
         switch step {
         case .downloading: 0
         case .checking: 1
@@ -139,9 +139,9 @@ final class SubjectModelsDownload {
 
     // MARK: Words
 
-    static let title = "Subject models"
+    static let title = "Mask models"
     static let intro = """
-        Subject and Background find the subject with three models made by others. Argent downloads them once, from Argent's releases on GitHub. \
+        Sky, Subject and Background find what they mask with four models made by others. Argent downloads them once, from Argent's releases on GitHub. \
         They are not part of Argent and not under its licence: by downloading them you accept the terms below.
         """
 
@@ -155,13 +155,16 @@ final class SubjectModelsDownload {
     static let models: [Model] = [
         Model(name: "S3OD-sod", role: "Finds the subject.",
               terms: "MIT licence, © 2024 S3OD Team. Built with DINOv3: fine-tuned from Meta's DINOv3, and distributed under the DINOv3 License. Trained partly on images made with FLUX.1 Krea-dev, under its non-commercial licence."),
-        Model(name: "EoMT (DINOv3-L, ADE20K)", role: "Checks for a scene with no subject.",
+        Model(name: "EoMT (DINOv3-L, ADE20K)", role: "Checks for a scene with no subject, and for sky reflected in water.",
               terms: "MIT licence, © 2025 Mobile Perception Systems Lab, TU/e. Built with DINOv3, under the DINOv3 License. Trained on ADE20K, whose images are for non-commercial research and education."),
         Model(name: "ViTMatte-S (Composition-1k)", role: "Draws soft edges in low light.",
               terms: "MIT licence, © 2023 Hust Vision Lab. Trained on Adobe's Deep Image Matting dataset: for non-commercial use only, and never to be sold. Ning Xu, Brian Price, Scott Cohen and Thomas Huang. Deep Image Matting. CVPR 2017."),
+        Model(name: "Depth Anything 3 Mono-Large", role: "Finds the sky.",
+              terms: "Apache License 2.0, © 2025 The Depth Anything 3 Team. Converted by Argent to run on this Mac."),
     ]
 
-    static let notCommercial = "Use them for non-commercial purposes only. The full texts are installed beside the models."
+    /// The download's condition as a whole: the first three models' terms ask it, and DA3's Apache-2.0 does not.
+    static let notCommercial = "This download as a whole is offered for non-commercial use only because of the first three models; Depth Anything 3 is under Apache 2.0. The full texts are installed beside the models."
 
     var sizeWords: String {
         let f = ByteCountFormatter()
@@ -169,10 +172,10 @@ final class SubjectModelsDownload {
         return f.string(fromByteCount: pack.bytes)
     }
 
-    /// The bundled licence texts, in `scripts/models/subject-licences.txt` order (`scripts/build-app.sh` copies both).
+    /// The bundled licence texts, in `scripts/models/mask-licences.txt` order (`scripts/build-app.sh` copies both).
     static let texts: [(name: String, text: String)] = {
         guard let resources = Bundle.main.resourceURL else { return [] }
-        return SubjectModelLicences.texts(in: resources)
+        return MaskModelLicences.texts(in: resources)
     }()
 }
 
@@ -193,16 +196,16 @@ private final class ResumeOnce: @unchecked Sendable {
 }
 
 /// The screen itself, over the workspace as Quick Develop is over the roll.
-struct SubjectModelsSheet: View {
+struct MaskModelsSheet: View {
     @Environment(RollModel.self) private var model
     @State private var chosenText = 0
     /// The sheet has the keys while it is up, so none reaches the contact sheet or frame under it.
     @FocusState private var focused: Bool
 
     var body: some View {
-        let download = model.subjectModels
+        let download = model.maskModels
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: SubjectModelsDownload.title)
+            Text(verbatim: MaskModelsDownload.title)
                 .font(Graphite.Typeface.panelTitle)
                 .foregroundStyle(Graphite.text)
                 .accessibilityAddTraits(.isHeader)
@@ -232,17 +235,17 @@ struct SubjectModelsSheet: View {
         }
         .accessibilityAction(.escape) { download.close() }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(SubjectModelsDownload.title)
+        .accessibilityLabel(MaskModelsDownload.title)
         .accessibilityAddTraits(.isModal)
     }
 
-    private func summary(_ download: SubjectModelsDownload) -> some View {
+    private func summary(_ download: MaskModelsDownload) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: SubjectModelsDownload.intro)
+            Text(verbatim: MaskModelsDownload.intro)
                 .font(Graphite.Typeface.body)
                 .foregroundStyle(Graphite.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            ForEach(SubjectModelsDownload.models) { item in
+            ForEach(MaskModelsDownload.models) { item in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(verbatim: item.name)
@@ -261,7 +264,7 @@ struct SubjectModelsSheet: View {
                         .textSelection(.enabled)
                 }
             }
-            Text(verbatim: SubjectModelsDownload.notCommercial)
+            Text(verbatim: MaskModelsDownload.notCommercial)
                 .font(Graphite.Typeface.small.weight(.semibold))
                 .foregroundStyle(Graphite.text)
                 .fixedSize(horizontal: false, vertical: true)
@@ -270,7 +273,7 @@ struct SubjectModelsSheet: View {
     }
 
     private var texts: some View {
-        let all = SubjectModelsDownload.texts
+        let all = MaskModelsDownload.texts
         return VStack(alignment: .leading, spacing: 10) {
             if all.isEmpty {
                 Text("This build of Argent does not carry the licence texts. They come with the models.")
@@ -296,7 +299,7 @@ struct SubjectModelsSheet: View {
         .padding(.top, 10)
     }
 
-    @ViewBuilder private func footer(_ download: SubjectModelsDownload) -> some View {
+    @ViewBuilder private func footer(_ download: MaskModelsDownload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             switch download.phase {
             case .running(let step):
@@ -314,7 +317,7 @@ struct SubjectModelsSheet: View {
                     .foregroundStyle(Graphite.text)
                     .fixedSize(horizontal: false, vertical: true)
             case .done:
-                Text("The Subject models are installed. Subject and Background are ready.")
+                Text("The mask models are installed. Sky, Subject and Background are ready.")
                     .font(Graphite.Typeface.small)
                     .foregroundStyle(Graphite.text)
                     .fixedSize(horizontal: false, vertical: true)
@@ -340,13 +343,13 @@ struct SubjectModelsSheet: View {
         }
     }
 
-    private func licencesButton(_ download: SubjectModelsDownload) -> some View {
+    private func licencesButton(_ download: MaskModelsDownload) -> some View {
         Button(download.showsTexts ? "Summary" : "Read the licences") { download.showsTexts.toggle() }
             .buttonStyle(.graphite(.secondary))
             .fixedSize()
     }
 
-    @ViewBuilder private func actionButtons(_ download: SubjectModelsDownload) -> some View {
+    @ViewBuilder private func actionButtons(_ download: MaskModelsDownload) -> some View {
         switch download.phase {
         case .running:
             Button("Close") { download.close() }
@@ -381,7 +384,7 @@ struct SubjectModelsSheet: View {
                 .buttonStyle(.graphite(.primary))
                 .keyboardShortcut(.defaultAction)
                 .fixedSize()
-                .help("Download the three models and install them for Argent only")
+                .help("Download the four models and install them for Argent only")
         }
     }
 }

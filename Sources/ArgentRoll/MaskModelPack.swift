@@ -4,12 +4,14 @@ import CryptoKit
 import Foundation
 import System
 
-/// The Subject models as one optional download: S3OD-sod (the region), EoMT (the "no subject" gate, and Sky's water veto) and ViTMatte-S (the edge in the
-/// low-light rule), with their licence texts. The public app carries none of them; Subject and Background offer this pack until it is installed, after the user
-/// has read its licence screen (`SubjectModelsSheet`). The pack is an Apple Archive that `scripts/build-subject-models.zsh` makes from `build/models` and the
-/// owner uploads to a GitHub release; it is pinned here by URL, size and SHA-256, and each model in it is checked against `BundledMaskModel`'s pins again
-/// before it is put in place. Installed in Application Support's `Models` folder, which `MaskModels` looks in after the app's own.
-public struct SubjectModelPack: Sendable, Equatable {
+/// The mask models as one optional download: S3OD-sod (Subject's region), EoMT (Subject's "no subject" gate, and Sky's water veto), ViTMatte-S (Subject's edge
+/// in the low-light rule) and, since version 2, Depth Anything 3 Mono-Large (Sky's seed), with their licence texts. Version 1 was the Subject models, a pack
+/// of Subject's three under the release tag `subject-models-1`, which left Sky unavailable. The public app carries none of them; Sky, Subject and Background
+/// offer this pack until their models are installed, after the user has read its licence screen (`MaskModelsSheet`). The pack is an Apple Archive that
+/// `scripts/build-mask-models.zsh` makes from `build/models` and the owner uploads to a GitHub release; it is pinned here by URL, size and SHA-256, and each
+/// model in it is checked against `BundledMaskModel`'s pins again before it is put in place. Installed in Application Support's `Models` folder, which
+/// `MaskModels` looks in after the app's own. Over an installed version 1 it puts all four in place: the three already there are replaced by the same models.
+public struct MaskModelPack: Sendable, Equatable {
     public var version: Int
     public var url: URL
     /// The archive's size in bytes, and its SHA-256.
@@ -18,18 +20,19 @@ public struct SubjectModelPack: Sendable, Equatable {
     /// What it takes on disk once unpacked, for the free-space check and the screen.
     public var installedBytes: Int64
 
-    /// The models it holds: what Subject needs (`MaskModels.subjectModels`).
-    public static let models = MaskModels.subjectModels
+    /// The models it holds: what Subject needs (`MaskModels.subjectModels`), and DA3, which with EoMT is what Sky needs (`MaskModels.skyModels`).
+    public static let models = MaskModels.subjectModels + [.sky]
     /// The licence texts' folder inside the pack and the installed folder.
     public static let licencesFolder = "Licences"
     /// Prefix for staging folders created beside the installed models while an install runs.
     static let stagingPrefix = ".install-"
 
-    /// The pack this build of Argent installs. Made by `scripts/build-subject-models.zsh` from the models these pins name (2026-11-20).
-    public static let current = SubjectModelPack(
-        version: 1,
-        url: URL(string: "https://github.com/CyR1en/Argent/releases/download/subject-models-1/argent-subject-models-1.aar")!,
-        bytes: SubjectModelPackPins.bytes, sha256: SubjectModelPackPins.sha256, installedBytes: SubjectModelPackPins.installedBytes)
+    /// The pack this build of Argent installs. Made by `scripts/build-mask-models.zsh` from the models these pins name (version 1 on 2026-11-20, without
+    /// DA3 and under its first name; version 2 on 2026-11-24). Version 1 stays on its release, `subject-models-1`, for the builds that pin it.
+    public static let current = MaskModelPack(
+        version: 2,
+        url: URL(string: "https://github.com/CyR1en/Argent/releases/download/mask-models-2/argent-mask-models-2.aar")!,
+        bytes: MaskModelPackPins.bytes, sha256: MaskModelPackPins.sha256, installedBytes: MaskModelPackPins.installedBytes)
 
     /// Where downloaded models go: `Models` in the app's Application Support.
     public static var installedFolder: URL { ApplicationSupport.folder.appendingPathComponent("Models", isDirectory: true) }
@@ -75,7 +78,12 @@ public struct SubjectModelPack: Sendable, Equatable {
 
     /// Downloads the pack, checks its size and SHA-256, unpacks it beside `folder`, checks every model against the pins, then puts the licences and models
     /// into `folder`, replacing what was there. Nothing in `folder` changes unless every check passes. Cancelling the calling task stops the download.
-    public func install(into folder: URL, step: @escaping @Sendable (Step) -> Void = { _ in }) async throws {
+    /// `coordinatePlacement` wraps the final move step so callers (such as `RollModel`) can serialize it with active mask inference.
+    public func install(
+        into folder: URL,
+        step: @escaping @Sendable (Step) -> Void = { _ in },
+        coordinatePlacement: @escaping @Sendable (@escaping @Sendable () throws -> Void) async throws -> Void = { try $0() }
+    ) async throws {
         let manager = FileManager.default
         do { try manager.createDirectory(at: folder, withIntermediateDirectories: true) } catch {
             throw Failure.install("the Models folder could not be created: \(error.localizedDescription)")
@@ -132,25 +140,29 @@ public struct SubjectModelPack: Sendable, Equatable {
 
         // Every check passed: the licences go in first, then the models. Each old copy moves aside into the work folder (the same volume, so
         // every move is a rename) before its new one goes in; if any move fails, the new ones come out and the old ones go back.
-        let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
-        let previous = work.appendingPathComponent("previous", isDirectory: true)
-        var placed: [String] = [], setAside: [String] = []
-        do {
-            try manager.createDirectory(at: previous, withIntermediateDirectories: true)
-            for name in names {
-                let target = folder.appendingPathComponent(name)
-                // Not `fileExists`, which follows a symbolic link and misses a broken one.
-                if (try? manager.attributesOfItem(atPath: target.path)) != nil {
-                    try manager.moveItem(at: target, to: previous.appendingPathComponent(name))
-                    setAside.append(name)
+        // Placement runs inside `coordinatePlacement` so active mask inference never overlaps the move-aside window.
+        try await coordinatePlacement {
+            let manager = FileManager.default
+            let names = [Self.licencesFolder] + Self.models.flatMap { [$0.fileName, $0.manifestName] }
+            let previous = work.appendingPathComponent("previous", isDirectory: true)
+            var placed: [String] = [], setAside: [String] = []
+            do {
+                try manager.createDirectory(at: previous, withIntermediateDirectories: true)
+                for name in names {
+                    let target = folder.appendingPathComponent(name)
+                    // Not `fileExists`, which follows a symbolic link and misses a broken one.
+                    if (try? manager.attributesOfItem(atPath: target.path)) != nil {
+                        try manager.moveItem(at: target, to: previous.appendingPathComponent(name))
+                        setAside.append(name)
+                    }
+                    try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
+                    placed.append(name)
                 }
-                try manager.moveItem(at: unpacked.appendingPathComponent(name), to: target)
-                placed.append(name)
+            } catch {
+                for name in placed { try? manager.removeItem(at: folder.appendingPathComponent(name)) }
+                for name in setAside { try? manager.moveItem(at: previous.appendingPathComponent(name), to: folder.appendingPathComponent(name)) }
+                throw Failure.install("could not put the models in place: \(error.localizedDescription)")
             }
-        } catch {
-            for name in placed { try? manager.removeItem(at: folder.appendingPathComponent(name)) }
-            for name in setAside { try? manager.moveItem(at: previous.appendingPathComponent(name), to: folder.appendingPathComponent(name)) }
-            throw Failure.install("could not put the models in place: \(error.localizedDescription)")
         }
         step(.done)
     }
@@ -222,7 +234,7 @@ public struct SubjectModelPack: Sendable, Equatable {
         defer { try? handle.close() }
         var hash = SHA256()
         while true {
-            // 841 MB takes seconds: Stop and Quit are heard between chunks.
+            // 1.46 GB takes seconds: Stop and Quit are heard between chunks.
             try Task.checkCancellation()
             let done: Bool = try autoreleasepool {
                 guard let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty else { return true }
@@ -263,7 +275,7 @@ public struct SubjectModelPack: Sendable, Equatable {
         guard let decompressed = ArchiveByteStream.decompressionStream(readingFrom: file) else { throw Failure.unpack("not a compressed archive") }
         var decompressedClosed = false
         defer { if !decompressedClosed { try? decompressed.close() } }
-        // Cancelling is heard inside an entry too, not only between them: EoMT's one file is 630 MB.
+        // Cancelling is heard inside an entry too, not only between them: DA3's one file is 668 MB.
         guard let decoded = ArchiveStream.decodeStream(readingFrom: decompressed, selectUsing: { _, _, _ in isCancelled() ? .cancel : .ok }) else {
             throw Failure.unpack("not an archive")
         }

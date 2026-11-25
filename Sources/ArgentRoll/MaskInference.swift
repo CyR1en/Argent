@@ -26,7 +26,7 @@ public enum SmartStage: Sendable, Equatable {
 public enum SmartAvailability: Sendable, Equatable {
     case available
     case unavailable(String)
-    /// Not until the Subject models are downloaded (`SubjectModelPack`): why, in the tile's words. The tile offers the download.
+    /// Not until the mask models are downloaded (`MaskModelPack`): why, in the tile's words. The tile offers the download.
     case needsModels(String)
 
     public var isAvailable: Bool { self == .available }
@@ -408,6 +408,67 @@ public final class MaskInference: @unchecked Sendable {
         await QueuedWork.run(on: queue) { () }
     }
 
+    /// Runs `work` on the inference queue, between selections, never while a model is loading or running.
+    /// Unloads any resident Sky model first so downloaded model files may be moved or replaced safely.
+    /// Cancelling the calling task while queued stops waiting immediately and skips `work`; once `work`
+    /// has begun, cancellation waits for it to finish cleanly so file moves never race cleanup.
+    public func serialized<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await serialized(onQueued: nil, work)
+    }
+
+    func serialized<T: Sendable>(onQueued: (@Sendable () -> Void)?, _ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try Task.checkCancellation()
+        let engine = engine, turns = turns
+        let state = SerializedState<T>()
+        let operation = BlockOperation()
+        operation.queuePriority = .high
+        operation.addExecutionBlock { [self, weak operation] in
+            let shouldRun: Bool = state.lock.withLock {
+                guard !state.cancelled, operation?.isCancelled == false else { return false }
+                state.started = true
+                return true
+            }
+            guard shouldRun else {
+                state.resume(nil)
+                return
+            }
+            if Self.wait({ await engine.unloadSky() }) == true { settle(turns) }
+            let stillActive = state.lock.withLock { !state.cancelled && operation?.isCancelled == false }
+            guard stillActive else {
+                state.resume(nil)
+                return
+            }
+            state.resume(Result { try work() })
+        }
+        operation.completionBlock = { state.resume(nil) }
+        let result: Result<T, any Error>? = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                let cancelNow: Bool = state.lock.withLock {
+                    if state.cancelled { return true }
+                    state.continuation = continuation
+                    return false
+                }
+                if cancelNow {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                queue.addOperation(operation)
+                onQueued?()
+            }
+        } onCancel: {
+            operation.cancel()
+            let resumeImmediately: CheckedContinuation<Result<T, any Error>?, Never>? = state.lock.withLock {
+                state.cancelled = true
+                guard !state.started else { return nil }
+                defer { state.continuation = nil }
+                return state.continuation
+            }
+            resumeImmediately?.resume(returning: nil)
+        }
+        guard let result else { throw CancellationError() }
+        return try result.get()
+    }
+
     // MARK: A run
 
     private func perform(_ run: Run, frame: Frame, sourceSHA256: String, lens: LensSettings) async -> SmartOutcome {
@@ -493,4 +554,20 @@ public final class MaskInference: @unchecked Sendable {
 /// What `MaskInference.wait` hands from the task to the waiting thread, after the semaphore.
 private final class WaitBox<T>: @unchecked Sendable {
     var value: T?
+}
+
+/// Shared state between `MaskInference.serialized`'s operation and task cancellation handler.
+private final class SerializedState<T: Sendable>: @unchecked Sendable {
+    let lock = NSLock()
+    var started = false
+    var cancelled = false
+    var continuation: CheckedContinuation<Result<T, any Error>?, Never>?
+
+    func resume(_ value: Result<T, any Error>?) {
+        let cont: CheckedContinuation<Result<T, any Error>?, Never>? = lock.withLock {
+            defer { continuation = nil }
+            return continuation
+        }
+        cont?.resume(returning: value)
+    }
 }

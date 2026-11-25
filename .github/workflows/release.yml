@@ -77,6 +77,9 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Verify pinned mask models release
+        run: python3 scripts/verify-mask-models-release.py
+
       - name: Toolchain
         run: |
           sw_vers
@@ -323,6 +326,9 @@ jobs:
         with:
           path: repo
 
+      - name: Verify pinned mask models release
+        run: python3 repo/scripts/verify-mask-models-release.py --repo-root repo
+
       - uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build.outputs.artifact }}
@@ -339,7 +345,7 @@ jobs:
             fi
             echo "**Install:** open the disk image and drag Argent to Applications. Signed with Developer ID and notarized by Apple."
             echo
-            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky is unavailable, Subject and Background offer the Subject models as a separate download, and Remove has no model."
+            echo "macOS 27 on Apple silicon. The smart masks' and Remove's models are not included: Sky, Subject and Background offer the mask models as a separate download, and Remove has no model."
             if [[ $KIND == nightly ]]; then
               echo
               echo '```'

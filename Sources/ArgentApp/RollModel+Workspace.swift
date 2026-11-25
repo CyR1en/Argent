@@ -62,8 +62,8 @@ extension RollModel {
         // The Develop page's Details popover goes with its page, and the quick develop dialog with the roll.
         if page != .develop { isIssueDetailsShown = false }
         if page != .roll { quickDevelop = nil }
-        // The Subject models' screen is the workspace's; a download under way goes on.
-        if page != requestedPage { subjectModels.close() }
+        // The mask models' screen is the workspace's; a download under way goes on.
+        if page != requestedPage { maskModels.close() }
         requestedPage = page
     }
 

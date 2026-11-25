@@ -561,15 +561,20 @@ final class SessionSmartEngine: SmartMaskEngine, @unchecked Sendable {
         #expect(MaskTileAvailability.of(.linear, frame: nil, smart: nil) == .live)
         #expect(MaskTileAvailability.of(.radial, frame: "Balancing roll…", smart: nil) == .waiting("Balancing roll…"))
         #expect(MaskTileAvailability.of(.sky, frame: nil, smart: .available) == .live)
-        let noModels = SmartAvailability.unavailable("Sky needs the sky and water models, and this build of Argent was made without them.")
-        #expect(MaskTileAvailability.of(.sky, frame: "Balancing roll…", smart: noModels) == .unavailable(noModels.reason!))
+        let noVision = SmartAvailability.unavailable("Sky needs a Vision request this version of macOS does not have.")
+        #expect(MaskTileAvailability.of(.sky, frame: "Balancing roll…", smart: noVision) == .unavailable(noVision.reason!))
         #expect(MaskTileAvailability.of(.person, frame: "Balancing roll…", smart: .available) == .waiting("Balancing roll…"))
         #expect(MaskTileAvailability.of(.subject, frame: nil, smart: nil).reason != nil)
-        // Without the Subject models the tile offers them, whatever the frame, and a click on it opens their screen rather than making a mask.
+        // Without the mask models the tile offers them, whatever the frame, and a click on it opens their screen rather than making a mask.
         let needs = SmartAvailability.needsModels(BundledSmartMasks.needsModels(.subject))
         #expect(MaskTileAvailability.of(.subject, frame: "Balancing roll…", smart: needs) == .offersModels(needs.reason!))
         #expect(MaskTileAvailability.of(.background, frame: nil, smart: needs).isEnabled && !MaskTileAvailability.of(.background, frame: nil, smart: needs).isLive)
-        #expect(!MaskTileAvailability.of(.sky, frame: nil, smart: noModels).isEnabled)
+        // Sky as well, since DA3 is in the download: a build without it offers it, and only a Mac that cannot run Sky dims the tile.
+        let skyNeeds = SmartAvailability.needsModels(BundledSmartMasks.needsModels(.sky))
+        #expect(skyNeeds.reason?.hasPrefix("Sky needs the mask models") == true)
+        #expect(MaskTileAvailability.of(.sky, frame: "Balancing roll…", smart: skyNeeds) == .offersModels(skyNeeds.reason!))
+        #expect(MaskTileAvailability.of(.sky, frame: nil, smart: skyNeeds).isEnabled && !MaskTileAvailability.of(.sky, frame: nil, smart: skyNeeds).isLive)
+        #expect(!MaskTileAvailability.of(.sky, frame: nil, smart: noVision).isEnabled)
     }
 
     @Test func aBuildWithoutTheModelsSaysWhySkyIsUnavailable() async throws {

@@ -21,7 +21,7 @@ import UserNotifications
 ///     develop-page show|close|press|folder FOLDER|state  the Develop page: shown, closed, its button pressed, FOLDER as if chosen, what it says
 ///     card open|dismiss          presses a button in the card bar
 ///     snapshot NAME              each window as a PNG in the container's tmp folder
-///     subject-models show|texts|close|start|cancel|state  the Subject models' licence screen: shown, its texts, closed, its download started or stopped
+///     mask-models show|texts|close|start|cancel|state  the mask models' licence screen: shown, its texts, closed, its download started or stopped
 ///     appearance light|dark|system  sets Mode, as Settings > Appearance does
 ///     theme ID [DARK]            selects a theme by its catalog id, and its dark version DARK, as Settings does
 ///     backdrop on|off            whether the Rolls page shows its backdrop, as Settings does
@@ -394,8 +394,8 @@ enum Automation {
                 }
                 reply("rolls", "page \(model.workspacePage), sheet \(model.isImportSourceShown): " + rolls.joined(separator: " | "))
             }
-        case "subject-models":
-            let download = model.subjectModels
+        case "mask-models":
+            let download = model.maskModels
             switch argument {
             case "show": download.show()
             case "texts": download.show(); download.showsTexts = true
@@ -404,11 +404,11 @@ enum Automation {
             case "cancel": download.cancel()
             case "state", "": break
             default:
-                reply("error", "subject-models show|texts|close|start|cancel|state")
+                reply("error", "mask-models show|texts|close|start|cancel|state")
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                reply("subject-models", "shown \(download.isShown), phase \(download.phase), subject \(model.smartAvailability(.subject))")
+                reply("mask-models", "shown \(download.isShown), phase \(download.phase), subject \(model.smartAvailability(.subject)), sky \(model.smartAvailability(.sky))")
             }
         case "notifications":
             UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
@@ -1296,7 +1296,8 @@ enum Automation {
             }
             return total / 1_000_000
         }
-        let models = MaskModels(directories: [MaskModels.bundledDirectory, SubjectModelPack.installedFolder].compactMap(\.self),
+        let models = MaskModels(directories: [MaskModels.bundledDirectory, MaskModelPack.installedFolder].compactMap(\.self),
+                                downloadableDirectory: MaskModelPack.installedFolder,
                                 ledgerFile: ApplicationSupport.folder.appendingPathComponent("Mask models.json"))
         say("folders \(models.directories.map(\.path)), Sky available \(models.isSkyAvailable) \(models.unavailable.map(\.description)), "
             + "macOS \(MaskModels.osBuild), needs preparation \(models.needsPreparation), coreai-cache \(cacheMB()) MB, footprint \(mb()) MB")
