@@ -445,14 +445,14 @@ jobs:
     needs: [build, publish]
     if: needs.build.outputs.kind != 'check' && needs.build.outputs.has_manifest == 'true' && needs.publish.outputs.published == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry_1.outputs.page_url || steps.deployment_retry_2.outputs.page_url }}
     concurrency:
       # Always deploys the newest gh-pages HEAD (which already contains every committed release manifest),
       # so even if multiple queued Pages deploys coalesce, no published release is ever dropped.
@@ -471,13 +471,55 @@ jobs:
           touch _site/.nojekyll
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: _site
+          include-hidden-files: true
+
+      # actions/deploy-pages lists artifacts once via the internal Actions Results API without retrying,
+      # which can race against eventual consistency right after upload-pages-artifact finalizes in the
+      # same job (actions/deploy-pages#451). Pause briefly before the first attempt and retry with
+      # backoff only when an attempt fails before creating a deployment (no page_url emitted), so an
+      # active deployment always keeps the full default 10-minute deploy-pages timeout.
+      - name: Wait for Pages artifact propagation
+        run: sleep 5
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+
+      - name: Wait before retrying Pages deploy (attempt 2)
+        if: ${{ success() && steps.deployment.outcome == 'failure' && steps.deployment.outputs.page_url == '' }}
+        run: sleep 10
+
+      - name: Retry deploy to GitHub Pages (attempt 2)
+        id: deployment_retry_1
+        if: ${{ success() && steps.deployment.outcome == 'failure' && steps.deployment.outputs.page_url == '' }}
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+
+      - name: Wait before retrying Pages deploy (attempt 3)
+        if: ${{ success() && steps.deployment_retry_1.outcome == 'failure' && steps.deployment_retry_1.outputs.page_url == '' }}
+        run: sleep 20
+
+      - name: Retry deploy to GitHub Pages (attempt 3)
+        id: deployment_retry_2
+        if: ${{ success() && steps.deployment_retry_1.outcome == 'failure' && steps.deployment_retry_1.outputs.page_url == '' }}
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+
+      - name: Verify Pages deployment succeeded
+        if: ${{ success() && steps.deployment.outcome != 'success' && steps.deployment_retry_1.outcome != 'success' && steps.deployment_retry_2.outcome != 'success' }}
+        run: |
+          echo "::error::GitHub Pages deployment failed"
+          exit 1
