@@ -120,7 +120,7 @@ def _parse_final_response_headers(raw: str) -> tuple[int | None, float | None]:
     return status, retry_after
 
 
-def _stream_once(url: str) -> tuple[int, str]:
+def _stream_once(url: str, max_time: int = 180) -> tuple[int, str]:
     # Never pass --retry to streaming curl: a mid-transfer retry appends fresh bytes
     # to the same stdout stream, corrupting the byte count and SHA-256. Retries are
     # handled per attempt in stream_verify so each retry starts with a fresh hash.
@@ -136,7 +136,7 @@ def _stream_once(url: str) -> tuple[int, str]:
                 "--connect-timeout",
                 "30",
                 "--max-time",
-                "600",
+                str(max_time),
                 url,
             ],
             stdout=subprocess.PIPE,
@@ -175,13 +175,15 @@ def _stream_once(url: str) -> tuple[int, str]:
             pass
 
 
+# Worst-case retry budget: 3 × 180 s + 2 × 30 s = 10 min, fitting inside the publish job's 15-minute timeout.
 def stream_verify(
     url: str,
     expected_bytes: int,
     expected_sha256: str,
     attempts: int = 3,
     retry_delay: float = 2.0,
-    max_retry_delay: float = 120.0,
+    max_retry_delay: float = 30.0,
+    max_time: int = 180,
 ) -> None:
     head_len = head_content_length(url)
     if head_len is not None and head_len != expected_bytes:
@@ -192,7 +194,7 @@ def stream_verify(
     last_error: _StreamError | None = None
     for attempt in range(1, attempts + 1):
         try:
-            actual_bytes, actual_sha256 = _stream_once(url)
+            actual_bytes, actual_sha256 = _stream_once(url, max_time=max_time)
             break
         except _StreamError as exc:
             last_error = exc
