@@ -4,6 +4,69 @@ import ArgentRoll
 import Foundation
 import QuartzCore
 
+/// Where the four downloadable smart-mask models stand on disk, independent of an active download.
+enum MaskModelsInstallState: Equatable, Sendable {
+    /// All four models are verified and bundled inside Argent.app (`Contents/Resources/Models`).
+    case bundled
+    /// All four models are verified and at least one is installed in Application Support's `Models` folder (can be removed).
+    case downloaded
+    /// One or more downloadable models are missing or incomplete; downloading the pack installs all four.
+    /// `hasDownloadedFiles` is true when recognized downloaded files (such as an earlier three-model Subject pack)
+    /// are already on disk and can be removed independently of downloading.
+    case notInstalled(hasDownloadedFiles: Bool)
+    /// Blocked by an invalid non-downloadable (bundled) copy with no downloadable kind remaining to install.
+    case unavailable(String, hasDownloadedFiles: Bool)
+
+    static let notInstalled = Self.notInstalled(hasDownloadedFiles: false)
+
+    var isInstalled: Bool {
+        switch self {
+        case .bundled, .downloaded: true
+        case .notInstalled, .unavailable: false
+        }
+    }
+
+    var canDownload: Bool {
+        if case .notInstalled = self { return true }
+        return false
+    }
+
+    var canRemove: Bool {
+        switch self {
+        case .downloaded: true
+        case .bundled: false
+        case .notInstalled(let hasFiles), .unavailable(_, let hasFiles): hasFiles
+        }
+    }
+
+    /// Whether `folder` contains any recognized pack files (models, manifests, or licences) that `MaskModelPack.remove(from:)` can delete.
+    static func hasRecognizedDownloadedFiles(in folder: URL?) -> Bool {
+        guard let folder else { return false }
+        let manager = FileManager.default
+        let names = MaskModelPack.models.flatMap { [$0.fileName, $0.manifestName] } + [MaskModelPack.licencesFolder]
+        return names.contains { (try? manager.attributesOfItem(atPath: folder.appendingPathComponent($0).path)) != nil }
+    }
+
+    static func inspect(models: MaskModels) -> MaskModelsInstallState {
+        let hasDownloaded = hasRecognizedDownloadedFiles(in: models.downloadableDirectory)
+        let sky = models.status(of: MaskModels.skyModels)
+        let subject = models.status(of: MaskModels.subjectModels)
+        switch (sky, subject) {
+        case (.ready, .ready):
+            let downloadable = models.downloadableDirectory?.resolvingSymlinksInPath().standardizedFileURL
+            let anyDownloaded = downloadable != nil && MaskModelPack.models.contains { model in
+                models.folder(of: model)?.resolvingSymlinksInPath().standardizedFileURL == downloadable
+            }
+            return anyDownloaded ? .downloaded : .bundled
+        case (.needsDownload, _), (_, .needsDownload):
+            // At least one kind (Sky or Subject) can be enabled by downloading the pack, even if the other is shadowed by an invalid bundled copy.
+            return .notInstalled(hasDownloadedFiles: hasDownloaded)
+        case (.invalid(let error), _), (_, .invalid(let error)):
+            return .unavailable(error.description, hasDownloadedFiles: hasDownloaded)
+        }
+    }
+}
+
 /// Smart masks: one click on Sky, Subject, Person or Background makes a mask (plan section 2). The click is one undo step: the mask
 /// appears at once with its selection not yet made, and the selection, when it arrives, goes into that mask with no step of its own
 /// and is saved. A develop never runs a model: it waits for a selection under way, and refuses a frame whose selection was never
@@ -21,6 +84,53 @@ extension RollModel {
         recipeLibrary.deletingLastPathComponent().appendingPathComponent("Models", isDirectory: true)
     }
 
+    /// The `MaskModels` descriptor pointing at bundled and downloaded locations for this session.
+    func makeMaskModels() -> MaskModels {
+        MaskModels(directories: [MaskModels.bundledDirectory, downloadedModelsFolder].compactMap(\.self),
+                   downloadableDirectory: downloadedModelsFolder,
+                   ledgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
+    }
+
+    /// Whether the four smart-mask models are bundled, downloaded, not installed, or blocked by an invalid bundle copy.
+    /// Reads `smartMasks.modelsVersion` so Settings, Onboarding, and MaskModelsSheet refresh automatically on install or removal,
+    /// and caches the disk check per `modelsVersion` so SwiftUI renders never hit the filesystem repeatedly.
+    var maskModelsInstallState: MaskModelsInstallState {
+        let version = smartMasks.modelsVersion
+        if let override = maskModelsInstallStateOverride { return override() }
+        if let cached = cachedMaskModelsInstallState, cached.version == version { return cached.state }
+        let state: MaskModelsInstallState
+        if let inference = smartMasks.inference {
+            if let bundled = inference.engine as? BundledSmartMasks {
+                state = MaskModelsInstallState.inspect(models: bundled.models)
+            } else {
+                // Test double engine (e.g. SessionSmartEngine): derive from Sky and Subject availability,
+                // matching MaskModelsInstallState.inspect (download stays offered whenever either kind needs models).
+                let hasDownloaded = MaskModelsInstallState.hasRecognizedDownloadedFiles(in: downloadedModelsFolder)
+                let sky = inference.availability(of: .sky)
+                let subject = inference.availability(of: .subject)
+                switch (sky, subject) {
+                case (.available, .available): state = .downloaded
+                case (.needsModels, _), (_, .needsModels): state = .notInstalled(hasDownloadedFiles: hasDownloaded)
+                case (.unavailable(let why), _), (_, .unavailable(let why)): state = .unavailable(why, hasDownloadedFiles: hasDownloaded)
+                }
+            }
+        } else {
+            state = MaskModelsInstallState.inspect(models: makeMaskModels())
+        }
+        cachedMaskModelsInstallState = (version, state)
+        return state
+    }
+
+    /// The rail's Settings item away from its page: how far a background mask models download is, for its ring.
+    var maskModelsFraction: Double? {
+        maskModels.railFraction
+    }
+
+    /// The rail's Settings item away from its page: a background download failed and has not been seen yet.
+    var maskModelsWantsAttention: Bool {
+        maskModels.hasUnseenFailure && !maskModels.isShown
+    }
+
     /// Removes orphaned `.install-*` staging folders in `downloadedModelsFolder` left behind by a quit or crash during download or install.
     func sweepMaskModelStaging() async {
         guard !maskModels.isRunning else { return }
@@ -31,13 +141,45 @@ extension RollModel {
         maskModelStagingSweep = nil
     }
 
+    /// Removes downloaded mask models and their compiled Core AI cache entries, serialized with active mask inference
+    /// and coordinated with `maskModels.beforeStart` so installs and removals never race on the Models folder.
+    func removeDownloadedMaskModels() async {
+        guard !maskModels.isRunning, !isRemovingMaskModels else { return }
+        isRemovingMaskModels = true
+        maskModelsRemovalError = nil
+        let task = Task { @MainActor in
+            await maskModelStagingSweep?.value
+            guard !maskModels.isRunning else { return }
+            let folder = downloadedModelsFolder
+            let models = (smartMasks.inference?.engine as? BundledSmartMasks)?.models ?? makeMaskModels()
+            let inference = smartMasks.inference
+            let remover = maskModelsRemover
+            do {
+                if let inference {
+                    try await inference.serialized {
+                        try remover(models, folder)
+                    }
+                } else {
+                    try await Task.detached(priority: .userInitiated) {
+                        try remover(models, folder)
+                    }.value
+                }
+                maskModels.resetAfterRemoval()
+                smartMasks.modelsChanged()
+            } catch {
+                maskModelsRemovalError = "Could not remove the mask models: \(error.localizedDescription)"
+            }
+        }
+        maskModelRemovalTask = task
+        await task.value
+        maskModelRemovalTask = nil
+        isRemovingMaskModels = false
+    }
+
     /// The queue the app makes: the film previews' input pictures, and the app's models and the downloaded mask models, whose ledger sits beside the recipes.
     func makeMaskInference() -> MaskInference? {
         guard let films else { return nil }
-        let models = MaskModels(directories: [MaskModels.bundledDirectory, downloadedModelsFolder].compactMap(\.self),
-                                downloadableDirectory: downloadedModelsFolder,
-                                ledgerFile: recipeLibrary.deletingLastPathComponent().appendingPathComponent("Mask models.json"))
-        return MaskInference(engine: BundledSmartMasks(films: films, models: models, app: Self.software), turns: films.decodeTurns)
+        return MaskInference(engine: BundledSmartMasks(films: films, models: makeMaskModels(), app: Self.software), turns: films.decodeTurns)
     }
 
     /// The mask models' licence and download screen, the only modal over the workspace: Quick Develop and Add's picker go.
@@ -45,6 +187,13 @@ extension RollModel {
         quickDevelop = nil
         maskEditor.isPickerOpen = false
         maskModels.show()
+    }
+
+    /// Opens the mask models sheet directly on the full licence texts (from Settings › Mask models).
+    func showMaskModelsLicences() {
+        quickDevelop = nil
+        maskEditor.isPickerOpen = false
+        maskModels.showLicences()
     }
 
     // MARK: The click

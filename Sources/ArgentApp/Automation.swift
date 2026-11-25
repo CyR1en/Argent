@@ -408,8 +408,31 @@ enum Automation {
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                reply("mask-models", "shown \(download.isShown), phase \(download.phase), subject \(model.smartAvailability(.subject)), sky \(model.smartAvailability(.sky))")
+                reply("mask-models", "shown \(download.isShown), phase \(download.phase), install \(model.maskModelsInstallState), subject \(model.smartAvailability(.subject)), sky \(model.smartAvailability(.sky))")
             }
+        case "onboarding":
+            let onboarding = model.onboarding
+            let parts = argument.split(separator: " ").map(String.init)
+            switch parts.first ?? "state" {
+            case "show": model.showOnboarding()
+            case "next": onboarding.advance()
+            case "back": onboarding.goBack()
+            case "finish": onboarding.complete()
+            case "download": model.downloadMaskModelsAndFinishOnboarding()
+            case "reset": onboarding.resetCompletion()
+            case "step":
+                if parts.count > 1, let index = Int(parts[1]), let target = OnboardingStep(rawValue: index) {
+                    if !onboarding.isPresented { model.showOnboarding(startingAt: target) } else { onboarding.goTo(target) }
+                } else {
+                    reply("error", "onboarding step 0|1|2|3")
+                    return
+                }
+            case "state", "": break
+            default:
+                reply("error", "onboarding show|step N|next|back|finish|download|reset|state")
+                return
+            }
+            reply("onboarding", "presented \(onboarding.isPresented), step \(onboarding.step.rawValue) (\(onboarding.step.title)), completed \(onboarding.hasCompleted), maskPhase \(model.maskModels.phase)")
         case "notifications":
             UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
                 let text = delivered.map { "\($0.request.content.title): \($0.request.content.body)" }.joined(separator: " | ")

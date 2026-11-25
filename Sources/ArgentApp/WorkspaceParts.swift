@@ -14,7 +14,9 @@ struct TitleStrip: View {
 
     var body: some View {
         Group {
-            if model.workspacePage == .roll || model.workspacePage == .develop, model.roll != nil {
+            if model.onboarding.isPresented {
+                TitleStripLayout { Wordmark() }
+            } else if model.workspacePage == .roll || model.workspacePage == .develop, model.roll != nil {
                 WorkspaceTopBar(dockShowsAuto: dockShowsAuto)
             } else if model.workspacePage == .importReview {
                 ImportTopBar()

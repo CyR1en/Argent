@@ -218,6 +218,23 @@ final class RollModel {
     let smartMasks = SmartMasks()
     /// The mask models' licence screen and download (`MaskModelsSheet`).
     let maskModels = MaskModelsDownload()
+    /// First-launch onboarding flow (`OnboardingController`, `OnboardingView`).
+    let onboarding: OnboardingController
+    /// Whether downloaded mask models are currently being deleted from Settings.
+    var isRemovingMaskModels = false
+    /// Error line when removing downloaded mask models from Settings fails.
+    var maskModelsRemovalError: String?
+    /// Settings section to scroll to when navigating directly from a notice (e.g. background download notice).
+    var pendingSettingsSection: SettingsSection?
+    /// Cached install state per `smartMasks.modelsVersion` so SwiftUI renders do not hit disk repeatedly.
+    @ObservationIgnored var cachedMaskModelsInstallState: (version: Int, state: MaskModelsInstallState)?
+    /// Test hook to override disk-backed mask model install state without creating fixture files.
+    @ObservationIgnored var maskModelsInstallStateOverride: (() -> MaskModelsInstallState)?
+    /// Test hook to override disk removal when testing Settings › Mask models › Remove.
+    @ObservationIgnored var maskModelsRemover: @Sendable (MaskModels, URL) throws -> Void = { models, folder in
+        try? models.deleteCompiledCopies()
+        try MaskModelPack.remove(from: folder)
+    }
     /// The Remove tab's state that is not in the frame's edit (`RemoveState.swift`).
     let remove = RemoveSession()
     /// Remove's steps, its runs under way and what its patches say of themselves (`RollModel+Remove`).
@@ -296,11 +313,13 @@ final class RollModel {
     /// The quick develop dialog is up: set only as it comes and goes, never at a choice made in it, so the menu bar,
     /// which disables on it what would act on the roll under the dialog, is not asked again at each (`MenuState`).
     private(set) var isAskingToDevelop = false
-    /// A modal sheet is up over the workspace (Quick Develop or the mask models' licence screen): keys and menus leave
+    /// A modal sheet is up over the workspace (Quick Develop, the mask models' licence screen, or onboarding): keys and menus leave
     /// the roll and frame under it alone.
-    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown }
+    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown || onboarding.isPresented }
     /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
     @ObservationIgnored var maskModelStagingSweep: Task<Void, Never>?
+    /// An in-flight Settings removal of downloaded mask models, awaited before a new download starts or on quit.
+    @ObservationIgnored var maskModelRemovalTask: Task<Void, Never>?
     var importSettings = ImportSettings(defaults: .standard) {
         didSet {
             importSettings.save(to: .standard)
@@ -470,8 +489,10 @@ final class RollModel {
     init(bookmarks: BookmarkStore = BookmarkStore(), stocksDirectory: URL? = nil, decisions: AutoDecisionStore = AutoDecisionStore(),
          flagStore: FlagStore = FlagStore(), recipeLibrary: URL = RecipeStore.defaultLibrary,
          previewCache: URL = LinearDiskCache.defaultFolder, digestsFile: URL? = SourceDigests.defaultFile,
-         developMemory: DevelopMemorySettings = .shared) {
+         developMemory: DevelopMemorySettings = .shared,
+         onboarding: OnboardingController = OnboardingController()) {
         self.bookmarks = bookmarks
+        self.onboarding = onboarding
         coverStore = RollCoverStore(folder: previewCache.deletingLastPathComponent().appendingPathComponent("Roll Covers", isDirectory: true))
         self.decisions = decisions
         self.flagStore = flagStore
@@ -512,7 +533,10 @@ final class RollModel {
         smartMasks.makeInference = { [weak self] in self?.makeMaskInference() }
         let modelsFolder = downloadedModelsFolder
         maskModels.folder = { modelsFolder }
-        maskModels.beforeStart = { [weak self] in await self?.maskModelStagingSweep?.value }
+        maskModels.beforeStart = { [weak self] in
+            await self?.maskModelStagingSweep?.value
+            await self?.maskModelRemovalTask?.value
+        }
         maskModels.installer = { [weak self] pack, folder, step in
             try await pack.install(into: folder, step: step) { place in
                 let inference = await MainActor.run { self?.smartMasks.queue }
@@ -788,7 +812,7 @@ final class RollModel {
     /// and the drag goes on from there (`ManualAdjustmentRow.gesture`).
     private(set) var lightGestureGeneration = 0
 
-    private func endInspectorInteraction() {
+    func endInspectorInteraction() {
         if let url = lightAdjusting, let frame = selectedFrame, frame.url == url { endLightAdjusting(for: frame) }
         histogramZone = nil
         curveGraphFocusRequest = nil
@@ -1240,6 +1264,7 @@ final class RollModel {
         isSplitComparing = false
         requestedPage = .roll
         isImportSourceShown = false
+        if onboarding.isPresented { onboarding.complete() }
         // A roll opens fitted even when its first frame has the same selection id as the last roll's.
         frameZoom = FrameZoom()
         frameZoomRoom = nil
@@ -1376,6 +1401,7 @@ final class RollModel {
                          isSeveralSelected: selected.isSeveral, canChangeFrames: selected.canChangeFrames,
                          moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop,
                          isShowingMaskModels: maskModels.isShown,
+                         isShowingOnboarding: onboarding.isPresented,
                          canCheckForUpdates: updates.canCheckForUpdates)
     }
 

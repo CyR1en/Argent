@@ -71,10 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         Automation.start(model: model)
         #endif
-        if !pending.isEmpty {
+        let hadPending = !pending.isEmpty
+        if hadPending {
             model.open(pending)
             pending = []
         }
+        model.onboarding.presentOnLaunchIfNeeded(hasPendingURLs: hadPending)
     }
 
     @MainActor func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -87,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // made here: a session that removed nothing has no queue. Cancel any mask models download so its staging folder cleans up.
             if quits {
                 await model.maskModels.cancelForQuit()
+                await model.maskModelRemovalTask?.value
                 await model.removalRuns.steps?.developWillStart()
             }
             sender.reply(toApplicationShouldTerminate: quits)
@@ -195,8 +198,10 @@ struct MenuState: Equatable {
     /// The mask models' licence and download screen is up over the workspace (`MaskModelsDownload.isShown`):
     /// as `isAskingToDevelop`, keys and menus leave the roll and frame under it alone.
     var isShowingMaskModels = false
-    /// Either modal sheet is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels }
+    /// First-launch onboarding is up over the workspace (`OnboardingController.isPresented`).
+    var isShowingOnboarding = false
+    /// Any modal sheet or overlay is up over the workspace.
+    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -260,18 +265,27 @@ struct ArgentCommands: Commands {
             Button("Settings…") {
                 // The page is the main window's: bring the window back if it was closed.
                 openWindow(id: "main")
+                if model.onboarding.isPresented { model.onboarding.complete() }
                 model.showWorkspacePage(.settings)
             }
             .keyboardShortcut(",")
         }
+        CommandGroup(replacing: .help) {
+            Button("Welcome to Argent…") {
+                openWindow(id: "main")
+                model.showOnboarding()
+            }
+        }
         CommandGroup(replacing: .newItem) {
             // Import Roll… copies a card's or a folder's frames into a new roll; Add Existing Folder… keeps a folder
-            // where it is. Both rolls join the Rolls page.
+            // where it is. Both rolls join the Rolls page. Disabled while Welcome covers the workspace so choosers
+            // and notices cannot open behind it; Finder/Dock drops still open rolls directly.
             Button("Import Roll…") { model.showImportSource() }
                 .keyboardShortcut("i")
-                .disabled(!state.canImportRoll)
+                .disabled(!state.canImportRoll || state.isShowingOnboarding)
             Button("Add Existing Folder…") { model.chooseExistingFolder() }
                 .keyboardShortcut("o")
+                .disabled(state.isShowingOnboarding)
             Menu("Open Recent") {
                 ForEach(state.recents, id: \.path) { recent in
                     Button(recent.name) { model.openRecent(path: recent.path) }
@@ -281,18 +295,19 @@ struct ArgentCommands: Commands {
                 Button("Clear Menu") { model.clearRecents() }
                     .disabled(state.recents.isEmpty)
             }
+            .disabled(state.isShowingOnboarding)
             // One item whose title names the card: the menu bar does not follow items that
             // come and go.
             Button(state.card.map { "Open Card \u{201C}\($0)\u{201D}" } ?? "Open Card") {
                 if let card = model.latestCard { model.openCard(card) }
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
-            .disabled(state.card == nil)
+            .disabled(state.card == nil || state.isShowingOnboarding)
             Button(state.card.map { "Import Card \u{201C}\($0)\u{201D}" } ?? "Import Card") {
                 if let card = model.latestCard { model.startImport(card) }
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
-            .disabled(!state.canImportCard)
+            .disabled(!state.canImportCard || state.isShowingOnboarding)
         }
         // Copy and Paste Adjustments (docs/manual-development.md), after the system's Paste, on the frame open in the frame view or
         // selected on the sheet; the batch on the frames the sheet shows. Their chords are Pages' Copy Style and Paste Style, which
@@ -368,13 +383,13 @@ struct ArgentCommands: Commands {
             // The Develop page from anywhere, and on it its button (`developCommand`).
             Button(state.page == .develop ? "Develop" : "Develop…") { model.developCommand() }
                 .keyboardShortcut("d")
-                .disabled(!state.hasRoll || state.page == .importReview || state.page == .develop && !state.canDevelop)
+                .disabled(!state.hasRoll || state.page == .importReview || state.page == .develop && !state.canDevelop || state.isShowingOnboarding)
             Button("Stop Developing") { model.stopDevelop() }
                 .keyboardShortcut(".")
                 .disabled(!state.isDeveloping)
             Button("Reveal Developed Files in Finder") { model.revealDeveloped() }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(!state.canReveal)
+                .disabled(!state.canReveal || state.isShowingOnboarding)
         }
         // The frame view, and the selected frame's own Rated at and Lab balance, which the
         // spec sets from the frame view only.
@@ -436,11 +451,11 @@ struct ArgentCommands: Commands {
             }
                 .disabled(!state.canDevelopFrame || !state.actsOnFrames)
             Button(state.isSeveralSelected ? "Show RAWs in Finder" : "Show RAW in Finder") { model.showSelectionInFinder() }
-                .disabled(!state.canShowRAW || !state.showsFrames)
+                .disabled(!state.canShowRAW || !state.showsFrames || state.isShowingOnboarding)
             Button(state.isSeveralSelected ? "Show Developed Files in Finder" : "Show Developed File in Finder") {
                 model.showSelectionDevelopedInFinder()
             }
-                .disabled(!state.canShowDevelopedFile || !state.showsFrames)
+                .disabled(!state.canShowDevelopedFile || !state.showsFrames || state.isShowingOnboarding)
             Divider()
             // The frames selected on the sheet leave the roll, for another roll or for the Trash (RollModel+Frames), as
             // their context menu has it (`FrameMenu.roll`).
@@ -475,23 +490,23 @@ struct ArgentCommands: Commands {
                 if model.isFrameOpen { model.zoomFrame(.zoomIn) } else { model.changeSize(by: 1) }
             }
             .keyboardShortcut("+")
-            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingMaskModels)
+            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingMaskModels || state.isShowingOnboarding)
             Button(state.openFrame == nil ? "Smaller Thumbnails" : "Zoom Out") {
                 if model.isFrameOpen { model.zoomFrame(.zoomOut) } else { model.changeSize(by: -1) }
             }
             .keyboardShortcut("-")
-            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingMaskModels)
+            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingMaskModels || state.isShowingOnboarding)
             Button("Actual Size") { model.zoomFrame(.actualSize) }
                 .keyboardShortcut("0")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             Button("Zoom to Fit") { model.zoomFrame(.fit) }
                 .keyboardShortcut("9")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             Divider()
             // The split comparison of the neutral raw and film, the frame view's Compare.
             Toggle("Split Compare", isOn: Binding(get: { model.isSplitComparing }, set: { model.isSplitComparing = $0 }))
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             // The inspector edits the open frame, and its curve graph takes the keys: not under the dialog.
             Toggle("Adjustments", isOn: Binding(get: { model.isAdjustmentsShown }, set: { model.isAdjustmentsShown = $0 }))
                 .keyboardShortcut("a", modifiers: [.command, .shift])
@@ -510,6 +525,7 @@ struct ArgentCommands: Commands {
             if state.showsRemoveTab { RemoveKeys.tabView.menuItem(model: model, state: state) }
             Toggle("Gray Surround", isOn: Binding(get: { model.graySurround }, set: { model.graySurround = $0 }))
                 .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(state.isShowingOnboarding)
             Divider()
         }
     }
