@@ -141,7 +141,7 @@ extension View {
     }
 }
 
-/// Observe the layers here so changes inside Quick Develop or Subject models do not redraw the workspace beneath them.
+/// Observe the layers here so changes inside Quick Develop or the mask models' screen do not redraw the workspace beneath them.
 private struct WorkspaceFocusWatch: View {
     @Environment(RollModel.self) private var model
     let focus: () -> Void

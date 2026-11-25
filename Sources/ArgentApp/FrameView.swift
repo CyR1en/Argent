@@ -164,7 +164,7 @@ struct FrameView: View {
         })
         .onTapGesture { focused = true }
         // Under a workspace sheet no key is the photograph's, wherever the keys are: Return and Escape go on to
-        // the sheet's buttons (`QuickDevelopSheet`, `SubjectModelsSheet`). The model is read as a key comes, not as the view is drawn.
+        // the sheet's buttons (`QuickDevelopSheet`, `MaskModelsSheet`). The model is read as a key comes, not as the view is drawn.
         .workspaceHorizontalArrows { step, _ in
             model.moveSelection(by: step)
             return .handled

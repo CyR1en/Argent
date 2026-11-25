@@ -146,7 +146,7 @@ final class SmartMasks {
         defaults.set(kept, forKey: Self.keptKey)
     }
 
-    /// The models changed under the running app (the Subject models were downloaded): ask the engine again.
+    /// The models changed under the running app (the mask models were downloaded): ask the engine again.
     func modelsChanged() {
         cachedAvailability = [:]
         cachedPins = nil
@@ -243,7 +243,7 @@ struct SmartRowStatus: Equatable, Sendable {
     /// A seed Vision made, in an earlier build, because a Subject model was absent (its provenance's `fallback`; no build makes one now): the row says so,
     /// quietly. With the models here the seed is stale and Update is offered.
     static func visionFallback(_ kind: SmartKind) -> SmartRowStatus {
-        SmartRowStatus(text: "Found by Vision", detail: "Argent did not have the Subject models when this was found, so Vision found this selection, with the edge it always had.")
+        SmartRowStatus(text: "Found by Vision", detail: "Argent did not have the mask models when this was found, so Vision found this selection, with the edge it always had.")
     }
 
     static func stale(_ kind: SmartKind) -> SmartRowStatus {

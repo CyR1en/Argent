@@ -99,7 +99,7 @@ enum MaskTileAvailability: Equatable, Sendable {
     case waiting(String)
     /// Not in this build or on this Mac.
     case unavailable(String)
-    /// Not until the Subject models are downloaded: the tile stays clickable and opens their licence screen.
+    /// Not until the mask models are downloaded: the tile stays clickable and opens their licence screen.
     case offersModels(String)
 
     var isLive: Bool { self == .live }
@@ -120,7 +120,7 @@ enum MaskTileAvailability: Equatable, Sendable {
     }
 
     /// `tile`'s availability: what the build can do comes first (a smart tile's kind, `smart`), then whether this frame can take
-    /// a mask (`frame`, nil when it can). The gradients and the brush need nothing but the frame. The Subject models can be fetched whatever the frame.
+    /// a mask (`frame`, nil when it can). The gradients and the brush need nothing but the frame. The mask models can be fetched whatever the frame.
     static func of(_ tile: MaskTile, frame: String?, smart: SmartAvailability?) -> MaskTileAvailability {
         if tile.smartKind != nil, case .needsModels(let why) = smart { return .offersModels(why) }
         if tile.smartKind != nil, let why = (smart ?? .unavailable("Smart masks are not available.")).reason { return .unavailable(why) }
@@ -232,7 +232,7 @@ struct MaskPicker: View {
         let availability = MaskTileAvailability.of(tile, frame: waiting, smart: tile.smartKind.map(model.smartAvailability))
         return Button {
             if case .offersModels = availability {
-                model.showSubjectModels()
+                model.showMaskModels()
                 return
             }
             if let tool = tile.tool { model.perform(.newMask(tool)) }

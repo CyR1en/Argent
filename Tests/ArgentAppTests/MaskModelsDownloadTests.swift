@@ -5,8 +5,8 @@ import Observation
 import Testing
 @testable import ArgentApp
 
-/// State, observation, entry points, and modal guards for the Subject models' licence and download screen (`SubjectModelsDownload`).
-@MainActor @Suite(.serialized) struct SubjectModelsDownloadTests {
+/// State, observation, entry points, and modal guards for the mask models' licence and download screen (`MaskModelsDownload`).
+@MainActor @Suite(.serialized) struct MaskModelsDownloadTests {
     private func header(_ url: URL) throws {
         func u16(_ n: Int) -> [UInt8] { [UInt8(n & 255), UInt8(n >> 8 & 255)] }
         func u32(_ n: Int) -> [UInt8] { (0..<4).map { UInt8(n >> (8 * $0) & 255) } }
@@ -17,7 +17,7 @@ import Testing
     }
 
     private func fixture() async throws -> (RollModel, Frame, URL, SessionSmartEngine) {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-download-\(UUID().uuidString)")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-mask-models-download-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try header(folder.appendingPathComponent("DSC1.ARW"))
         let library = folder.appendingPathComponent("Recipes", isDirectory: true)
@@ -41,6 +41,7 @@ import Testing
         model.followSelectionFlag()
         let engine = SessionSmartEngine()
         engine.availabilities = [
+            .sky: .needsModels(BundledSmartMasks.needsModels(.sky)),
             .subject: .needsModels(BundledSmartMasks.needsModels(.subject)),
             .background: .needsModels(BundledSmartMasks.needsModels(.background)),
         ]
@@ -57,14 +58,14 @@ import Testing
     }
 
     @Test func unseenBackgroundFailureSurvivesShowAndResetsOnlyAfterSeenClose() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-fail-\(UUID().uuidString)")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-mask-models-fail-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let gate = ContinuationGate()
-        let download = SubjectModelsDownload()
+        let download = MaskModelsDownload()
         download.folder = { folder }
         download.installer = { _, _, _ in
             try await gate.wait()
-            throw SubjectModelPack.Failure.download("offline")
+            throw MaskModelPack.Failure.download("offline")
         }
 
         download.show()
@@ -94,14 +95,14 @@ import Testing
     }
 
     @Test func generationIgnoresStaleStepsAndProgressIsMonotonicAndClamped() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-gen-\(UUID().uuidString)")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-mask-models-gen-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let run1Gate = ContinuationGate()
         let run2Gate = ContinuationGate()
         let callbacks = CallbackBox()
         let installedCount = CounterBox()
 
-        let download = SubjectModelsDownload()
+        let download = MaskModelsDownload()
         download.folder = { folder }
         download.onInstalled = { installedCount.increment() }
         download.installer = { _, _, step in
@@ -161,13 +162,13 @@ import Testing
 
     /// Quit waits for the download to clean up, a running one or one already stopped and still returning, but never past its limit.
     @Test func cancelForQuitWaitsForTheDrainButNotPastItsLimit() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-quit-\(UUID().uuidString)")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-mask-models-quit-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let returned = CounterBox()
         let stuck = ContinuationGate()
 
         // One that never notices it was cancelled: Quit goes on at the limit.
-        let deaf = SubjectModelsDownload()
+        let deaf = MaskModelsDownload()
         deaf.folder = { folder }
         deaf.installer = { _, _, _ in try? await stuck.wait() }
         deaf.start()
@@ -179,7 +180,7 @@ import Testing
         stuck.resume()
 
         // One stopped before Quit and still returning: Quit waits for it, though Stop already let go of it.
-        let draining = SubjectModelsDownload()
+        let draining = MaskModelsDownload()
         draining.folder = { folder }
         draining.installer = { _, _, _ in
             while !Task.isCancelled { try? await Task.sleep(for: .milliseconds(5)) }
@@ -215,20 +216,22 @@ import Testing
             pinsObserved.increment()
         }
 
-        model.subjectModels.installer = { _, _, _ in
+        model.maskModels.installer = { _, _, _ in
             engine.lock.withLock {
+                engine.availabilities[.sky] = .available
                 engine.availabilities[.subject] = .available
                 engine.availabilities[.background] = .available
                 engine.current.subject = ModelProvenance(recipeID: "s3od-test", weightsSHA256: "w", canarySHA256: "c", fileSHA256: "f")
             }
         }
-        model.subjectModels.start()
-        try await waitFor { model.subjectModels.phase == .done }
+        model.maskModels.start()
+        try await waitFor { model.maskModels.phase == .done }
 
         #expect(availabilityObserved.value == 1, "availability(of:) observed modelsVersion")
         #expect(pinsObserved.value == 1, "pins observed modelsVersion")
         #expect(model.smartAvailability(.subject) == .available)
         #expect(model.smartAvailability(.background) == .available)
+        #expect(model.smartAvailability(.sky) == .available, "Sky's model comes in the same download")
         #expect(model.smartMasks.pins?.subject?.recipeID == "s3od-test")
 
         // Replacing inference also clears cachedPins and notifies observers.
@@ -245,28 +248,36 @@ import Testing
         #expect(model.smartMasks.pins?.subject?.recipeID == "s3od-fresh")
     }
 
-    @Test func entryPointsOpenSubjectModelsScreenWhenModelsAreMissing() async throws {
+    @Test func entryPointsOpenMaskModelsScreenWhenModelsAreMissing() async throws {
         let (model, frame, folder, _) = try await fixture()
         defer { try? FileManager.default.removeItem(at: folder) }
 
         // Mask > New Subject Mask opens the licence screen and adds no mask.
         model.maskEditor.isPickerOpen = true
         model.perform(.newSmart(.subject))
-        #expect(model.subjectModels.isShown && !model.maskEditor.isPickerOpen && model.masks(for: frame).isEmpty)
-        model.subjectModels.close()
+        #expect(model.maskModels.isShown && !model.maskEditor.isPickerOpen && model.masks(for: frame).isEmpty)
+        model.maskModels.close()
 
         // Mask > New Background Mask does the same.
         model.perform(.newSmart(.background))
-        #expect(model.subjectModels.isShown && model.masks(for: frame).isEmpty)
-        model.subjectModels.close()
+        #expect(model.maskModels.isShown && model.masks(for: frame).isEmpty)
+        model.maskModels.close()
 
-        // Try Again on a pending/failed Subject mask opens the licence screen.
-        let pending = Mask(components: [MaskComponent(shape: .smart(SmartSelection(kind: .subject)))])
-        let adjustments = model.manualAdjustments(for: frame)
-        model.manualEdits[frame.url]?.adjustments = adjustments.settingMasks(try adjustments.masks.appending(pending))
-        model.retrySelection(pending.id, for: frame)
-        #expect(model.subjectModels.isShown)
-        model.subjectModels.close()
+        // Mask > New Sky Mask too: a build without DA3 offers it with the others.
+        model.maskEditor.isPickerOpen = true
+        model.perform(.newSmart(.sky))
+        #expect(model.maskModels.isShown && !model.maskEditor.isPickerOpen && model.masks(for: frame).isEmpty)
+        model.maskModels.close()
+
+        // Try Again on a pending/failed Subject mask opens the licence screen, and on a Sky one: a paste or an Undo can bring one to a build without its models.
+        for kind in [SmartKind.subject, .sky] {
+            let pending = Mask(components: [MaskComponent(shape: .smart(SmartSelection(kind: kind)))])
+            let adjustments = model.manualAdjustments(for: frame)
+            model.manualEdits[frame.url]?.adjustments = adjustments.settingMasks(try adjustments.masks.appending(pending))
+            model.retrySelection(pending.id, for: frame)
+            #expect(model.maskModels.isShown, "\(kind)")
+            model.maskModels.close()
+        }
     }
 
     @Test func sheetGuardsMenuStateAndIgnoresProgressTicks() async throws {
@@ -274,33 +285,33 @@ import Testing
         defer { try? FileManager.default.removeItem(at: folder) }
 
         let before = model.menuState
-        #expect(!before.isShowingSubjectModels && !before.isSheetShown && before.actsOnRoll && before.actsOnFrames)
+        #expect(!before.isShowingMaskModels && !before.isSheetShown && before.actsOnRoll && before.actsOnFrames)
 
         let changes = CounterBox()
         withObservationTracking { _ = model.menuState } onChange: { changes.increment() }
-        model.subjectModels.show()
+        model.maskModels.show()
         #expect(changes.value == 1 && model.isSheetShown)
         let up = model.menuState
-        #expect(up.isShowingSubjectModels && up.isSheetShown && !up.actsOnRoll && !up.actsOnFrames)
+        #expect(up.isShowingMaskModels && up.isSheetShown && !up.actsOnRoll && !up.actsOnFrames)
 
         // Download progress does not trigger menuState observation.
         let gate = ContinuationGate()
-        model.subjectModels.installer = { _, _, step in
+        model.maskModels.installer = { _, _, step in
             step(.downloading(0.25))
             try await gate.wait()
         }
-        model.subjectModels.start()
+        model.maskModels.start()
         try await waitFor { gate.isWaiting }
         let progressChanges = CounterBox()
         withObservationTracking { _ = model.menuState } onChange: { progressChanges.increment() }
-        model.subjectModels.advance(to: .downloading(0.6), run: model.subjectModels.generation)
-        model.subjectModels.advance(to: .checking, run: model.subjectModels.generation)
-        model.subjectModels.advance(to: .unpacking, run: model.subjectModels.generation)
+        model.maskModels.advance(to: .downloading(0.6), run: model.maskModels.generation)
+        model.maskModels.advance(to: .checking, run: model.maskModels.generation)
+        model.maskModels.advance(to: .unpacking, run: model.maskModels.generation)
         #expect(progressChanges.value == 0)
-        model.subjectModels.cancel()
+        model.maskModels.cancel()
         gate.resume()
 
-        model.subjectModels.close()
+        model.maskModels.close()
         #expect(!model.isSheetShown && model.menuState == before)
     }
 
@@ -309,7 +320,7 @@ import Testing
         defer { try? FileManager.default.removeItem(at: folder) }
         let expected = folder.appendingPathComponent("Models", isDirectory: true)
         #expect(model.downloadedModelsFolder == expected)
-        #expect(model.subjectModels.folder() == expected)
+        #expect(model.maskModels.folder() == expected)
     }
 }
 
@@ -345,7 +356,7 @@ private final class CallbackBox: @unchecked Sendable {
     private let lock = NSLock()
     private var calls = 0
     /// One more install began; its number.
-    func record(_ step: @escaping @Sendable (SubjectModelPack.Step) -> Void) -> Int {
+    func record(_ step: @escaping @Sendable (MaskModelPack.Step) -> Void) -> Int {
         lock.withLock {
             calls += 1
             return calls

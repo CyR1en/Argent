@@ -11,18 +11,27 @@ anyone else, ask counsel** (P0-S5 section 3.7); `scripts/build-dmg.sh --no-model
 **These weights must not be sold or distributed unless their terms are cleared or the models are replaced.**
 
 **Revised by the owner, 2026-11-20 (the Subject models' download):** S3OD-sod, EoMT and ViTMatte-S may be offered as one optional, free,
-non-commercial download, the Subject models (`scripts/build-subject-models.zsh`, `SubjectModelPack`), on these conditions
+non-commercial download, the Subject models (`scripts/build-mask-models.zsh`, `MaskModelPack`), on these conditions
 (an interpretation of the terms, not legal advice):
 
-- The download happens only after the app has shown the models' terms and the user has agreed (`SubjectModelsSheet`), and it carries these texts.
+- The download happens only after the app has shown the models' terms and the user has agreed (`MaskModelsSheet`), and it carries these texts.
 - "Built with DINOv3" is displayed (the About window), and the DINOv3 License goes with every copy; no term is added to S3OD's or EoMT's beyond it (DINOv3 §1.b.i).
 - ViTMatte-S carries the Deep Image Matting citation (Adobe's dataset agreement §3) and is offered for non-commercial use only: its "Models can only be used and
   distributed for non-commercial purposes and may not be sold" (§2). **Before Argent is sold, charges for anything, or carries ads, ViTMatte-S is withdrawn or replaced.**
 - The pack is never sold and is never part of a paid product. A change to any of this asks for the texts to be read again.
 
+**Revised by the owner, 2026-11-24 (Depth Anything 3 joins the download):** DA3 Mono-Large goes into the same download, version 2 of the pack, so a
+published build can make a Sky mask; the pack is the mask models now, and is named for them (an interpretation of the terms, not legal advice):
+
+- DA3 Mono-Large is Apache-2.0, code and weights. Its licence goes with every copy (section 4(a)): `DA3-LICENSE`, the pinned source tree's own `LICENSE`,
+  kept here and checked against that tree by `scripts/convert-da3-sky.zsh`. The tree at the pinned commit has no `NOTICE` file (read 2026-11-24).
+- The file in the pack is not the published one, and the pack's `NOTICE.txt` says what changed (section 4(b)): Core AI's format, half floats, one 756 square,
+  the sky and depth outputs.
+- Apache-2.0 does not limit DA3 to non-commercial use. The pack as a whole is still offered on the conditions above, which are the other three's.
+
 | Model | Part | Text here | What applies |
 | --- | --- | --- | --- |
-| Depth Anything 3 Mono-Large (`da3-sky-sq756-f16`) | code (ByteDance-Seed/Depth-Anything-3 at `3d835ec1`) and weights (`depth-anything/DA3MONO-LARGE` at `f465978e`) | `DA3-LICENSE` (the source tree's own `LICENSE`, copied at conversion) | Apache-2.0, as the model card and the repository say: keep the licence and notices with any copy |
+| Depth Anything 3 Mono-Large (`da3-sky-sq756-f16`) | code (ByteDance-Seed/Depth-Anything-3 at `3d835ec1`) and weights (`depth-anything/DA3MONO-LARGE` at `f465978e`) | `DA3-LICENSE` (the pinned source tree's own `LICENSE`; the conversion checks this copy against it) | Apache-2.0, as the model card and the repository say: keep the licence and notices with any copy |
 | EoMT-DINOv3-L (`eomt-sq768-f16`) | EoMT code (tue-mps/eomt) | `EoMT-LICENSE-MIT.txt` | MIT, Copyright (c) 2025 Mobile Perception Systems Lab at TU/e: the notice goes with any copy |
 | | weights (`tue-mps/eomt-dinov3-ade-semantic-large-512` at `1d1f1727`) | `DINOv3-LICENSE.md` | The card says `license: mit`, but the file holds DINOv3 ViT-L/16 weights fine-tuned, so Meta's DINOv3 Agreement applies to them: a copy of it with any distribution (1.b.i), no reverse engineering (1.b.iv), trade controls and no military use (1.b.iii, 1.b.v), Meta may amend it |
 | | training data (ADE20K) | `ADE20K-terms.txt` | Images: non-commercial research and educational use; the label names (annotations) BSD-3-Clause, Copyright 2019 MIT CSAIL. Whether the image terms reach a model trained on them, the text does not say: a question for counsel before any sale |

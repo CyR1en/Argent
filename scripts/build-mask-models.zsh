@@ -1,23 +1,24 @@
 #!/bin/zsh
-# The Subject models as one download (SubjectModelPack): S3OD-sod, EoMT and ViTMatte-S from build/models, their manifests, and their user-facing
-# licence texts (scripts/models/licences), in one reproducible Apple Archive, LZFSE-compressed. Prints its size and SHA-256; with PIN=1 it also
-# writes them into Sources/ArgentRoll/SubjectModelPackPins.swift, so the build that installs the pack names this very file.
+# The mask models as one download (MaskModelPack): S3OD-sod, EoMT, ViTMatte-S and, since version 2, Depth Anything 3 Mono-Large from build/models,
+# their manifests, and their user-facing licence texts (scripts/models/licences), in one reproducible Apple Archive, LZFSE-compressed. Prints its size
+# and SHA-256; with PIN=1 it also writes them into Sources/ArgentRoll/MaskModelPackPins.swift, so the build that installs the pack names this very file.
 #
-#   scripts/build-subject-models.zsh            build/argent-subject-models-<version>.aar
-#   PIN=1 scripts/build-subject-models.zsh      the same, and pin it
+#   scripts/build-mask-models.zsh            build/argent-mask-models-<version>.aar
+#   PIN=1 scripts/build-mask-models.zsh      the same, and pin it
 #
-# Then upload the file, unchanged, as a release asset under the tag subject-models-<version> (SubjectModelPack.current's URL). Before it goes to anyone
+# Then upload the file, unchanged, as a release asset under the tag mask-models-<version> (MaskModelPack.current's URL). An earlier version's
+# release stays: the builds that pin it still download it (version 1 is subject-models-1, the pack's first name). Before the file goes to anyone
 # else, read scripts/models/licences/README.md: the pack is offered free and non-commercially only, with its licences shown before download.
 set -euo pipefail
 # A relative MODELS_DIR is the caller's, so it is made absolute before the script moves to the repository.
 models_dir=${MODELS_DIR:+${MODELS_DIR:A}}
 cd "${0:A:h}/.."
 models_dir=${models_dir:-build/models}
-version=1
-models=(s3od-sod-sq1024-f16 eomt-sq768-f16 vitmatte-s-c1k-sq1024-f16)
-licences=("${(@f)$(<scripts/models/subject-licences.txt)}")
-out=build/argent-subject-models-$version.aar
-stage=build/.subject-models-$version
+version=2
+models=(s3od-sod-sq1024-f16 eomt-sq768-f16 vitmatte-s-c1k-sq1024-f16 da3-sky-sq756-f16)
+licences=("${(@f)$(<scripts/models/mask-licences.txt)}")
+out=build/argent-mask-models-$version.aar
+stage=build/.mask-models-$version
 
 cleanup() { rm -rf "$stage"; }
 trap cleanup EXIT
@@ -54,11 +55,11 @@ sha=$(shasum -a 256 "$out" | cut -d' ' -f1)
 [[ $bytes =~ ^[0-9]+$ && $sha =~ ^[0-9a-f]{64}$ && $installed_bytes =~ ^[0-9]+$ ]] || { echo "error: unexpected archive metadata ($bytes, $sha, $installed_bytes)" >&2; exit 1 }
 echo "built $out: $bytes bytes, sha256 $sha, $installed_bytes bytes unpacked"
 if [[ ${PIN:-0} == 1 ]]; then
-  pins=Sources/ArgentRoll/SubjectModelPackPins.swift
+  pins=Sources/ArgentRoll/MaskModelPackPins.swift
   cat > "$pins.tmp" <<EOF
-/// The Subject models' archive this build installs (\`SubjectModelPack.current\`). Written by \`PIN=1 scripts/build-subject-models.zsh\`; the file the owner
+/// The mask models' archive this build installs (\`MaskModelPack.current\`). Written by \`PIN=1 scripts/build-mask-models.zsh\`; the file the owner
 /// uploads to the release is the one these name.
-enum SubjectModelPackPins {
+enum MaskModelPackPins {
     static let bytes: Int64 = $bytes
     static let sha256 = "$sha"
     static let installedBytes: Int64 = $installed_bytes

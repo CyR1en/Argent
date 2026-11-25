@@ -73,8 +73,8 @@ automatically via Sparkle 2 (configurable under **Settings › Updates** and **A
 Updates…**, with Stable and Nightly channels).
 
 The [releases page](https://github.com/CyR1en/Argent/releases) also lists versioned disk images
-when published. Published app builds omit the smart-mask and Remove models. Sky and Remove
-are unavailable without local models; Subject and Background offer a separate, free
+when published. Published app builds omit the smart-mask and Remove models. Remove is
+unavailable without local models; Sky, Subject and Background offer a separate, free
 non-commercial download with its licence terms shown before download.
 
 ## Build locally
@@ -163,7 +163,7 @@ checkout. They are not needed to build, run or test the app.
 Argent is licensed under the [Apache License 2.0](LICENSE). A few files keep their own terms, the CIE
 tables in `bake/argent_bake/data/` (CC BY-SA 4.0) and the Hanken Grotesk font (SIL OFL 1.1), as
 [NOTICE](NOTICE) lists. Built with DINOv3. No model weights are in this repository: the optional
-Subject models download is offered free for non-commercial use under its own licences (shown before
+mask models download is offered free for non-commercial use under its own licences (shown before
 download), and the conversion scripts download the rest under theirs ([model licences](scripts/models/licences/README.md)).
 Constants chosen on research-only data must be refit before any commercial use; [NOTICE](NOTICE)
 names them. Film names identify the stocks whose published

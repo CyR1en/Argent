@@ -240,10 +240,12 @@ public final class MaskModels: @unchecked Sendable {
     public static let optionsName = "default"
     /// What Subject needs: S3OD for its region, EoMT for its gate, ViTMatte for its edge in the low-light rule.
     public static let subjectModels: [BundledMaskModel] = [.subject, .water, .matte]
+    /// What Sky needs: DA3 for its seed, EoMT for the water veto, which is part of it (decision 4).
+    public static let skyModels: [BundledMaskModel] = [.sky, .water]
     /// The app's own models.
     public static var bundledDirectory: URL? { Bundle.main.resourceURL?.appendingPathComponent("Models", isDirectory: true) }
 
-    /// Where the models are looked for, in order: the app's own folder, then the downloaded models' (`SubjectModelPack`). A model is taken from
+    /// Where the models are looked for, in order: the app's own folder, then the downloaded models' (`MaskModelPack`). A model is taken from
     /// the first folder that holds its file.
     public let directories: [URL]
     /// The ledger of compiled copies: for each model, the file, macOS build and options it was last prepared for, and the bookmark
@@ -326,7 +328,10 @@ public final class MaskModels: @unchecked Sendable {
     }
 
     /// Sky needs DA3 and EoMT: the water veto is part of it (decision 4).
-    public var isSkyAvailable: Bool { missing([.sky, .water]) == nil }
+    public var isSkyAvailable: Bool { missing(Self.skyModels) == nil }
+
+    /// The first of Sky's models that is not here, `nil` when both are.
+    public var skyMissing: MaskModelError? { missing(Self.skyModels) }
 
     /// Subject needs all three: S3OD, EoMT for its gate, and ViTMatte for its edge in the low-light rule.
     public var isSubjectAvailable: Bool { missing(Self.subjectModels) == nil }

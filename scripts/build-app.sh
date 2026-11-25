@@ -125,7 +125,7 @@ done
 # The smart masks' models (docs/masking-plan.md section 7), built once by scripts/convert-da3-sky.zsh, scripts/convert-eomt.zsh,
 # scripts/convert-s3od.zsh and scripts/convert-vitmatte.zsh into build/models, never in Git, and cloned here: cp -c shares the
 # 1.5 GB of blocks with build/models (2 ms, no new disk), where a copy took 0.25 to 0.45 s a model and its size again. Signing
-# seals them (about 3 s more). Without them the app builds and runs: Sky says it is unavailable, and Subject and Background offer the Subject models' download.
+# seals them (about 3 s more). Without them the app builds and runs: Sky, Subject and Background offer the mask models' download.
 models=(da3-sky-sq756-f16 eomt-sq768-f16 s3od-sod-sq1024-f16 vitmatte-s-c1k-sq1024-f16)
 missing=()
 for model in $models; do
@@ -140,18 +140,18 @@ done
 if [[ -d $app/Contents/Resources/Models && -d build/models/licences ]]; then
   cp -R build/models/licences "$app/Contents/Resources/Models/Licences"
 fi
-# The Subject models' user-facing licence texts, in every build: the licence screen shows them before the user agrees to download them
-# (SubjectModelsSheet), so they are there in a build without the models too. Internal notes (README.md) and Remove's ObjectClear licence stay out.
-# Reading order lives in scripts/models/subject-licences.txt, outside the conversion recipes' licence-text glob.
+# The mask models' user-facing licence texts, in every build: the licence screen shows them before the user agrees to download them
+# (MaskModelsSheet), so they are there in a build without the models too. Internal notes (README.md) and Remove's ObjectClear licence stay out.
+# Reading order lives in scripts/models/mask-licences.txt, outside the conversion recipes' licence-text glob.
 rm -rf "$app/Contents/Resources/Model Licences"
 mkdir -p "$app/Contents/Resources/Model Licences"
-cp scripts/models/subject-licences.txt "$app/Contents/Resources/subject-licences.txt"
-subject_licences=("${(@f)$(<scripts/models/subject-licences.txt)}")
-for licence in $subject_licences; do
+cp scripts/models/mask-licences.txt "$app/Contents/Resources/mask-licences.txt"
+mask_licences=("${(@f)$(<scripts/models/mask-licences.txt)}")
+for licence in $mask_licences; do
   cp "scripts/models/licences/$licence" "$app/Contents/Resources/Model Licences/$licence"
 done
 if (( ${#missing} )); then
-  echo "note: not in build/models: ${(j:, :)missing}. The app builds; Sky says it is unavailable, and Subject and Background offer the Subject models' download." >&2
+  echo "note: not in build/models: ${(j:, :)missing}. The app builds; Sky, Subject and Background offer the mask models' download." >&2
   echo "      Build the models with scripts/convert-da3-sky.zsh, scripts/convert-eomt.zsh, scripts/convert-s3od.zsh and scripts/convert-vitmatte.zsh (scripts/README.md)." >&2
 fi
 # Remove's four graphs and the prompt's fixed states (docs/remove-plan.md, 4.5), built once by scripts/convert-objectclear.zsh into

@@ -62,6 +62,9 @@ rm -rf "${src:?}"
 mkdir -p "$src" && tar -xzf "$work/downloads/da3-code/da3-code.tar.gz" -C "$src" --strip-components=1
 tree=$(cd "$src" && find . -type f -not -name '*.pyc' | LC_ALL=C sort | while read -r f; do shasum -a 256 "$f"; done | shasum -a 256 | cut -d' ' -f1)
 [[ $tree == $CODE_TREE_SHA256 ]] || fail "DA3 source tree digest $tree is not the pinned $CODE_TREE_SHA256"
+# DA3's LICENSE is kept in the recipes' folder as DA3-LICENSE, for the mask models' download and its licence screen, which are made without this
+# conversion (scripts/build-mask-models.zsh, scripts/build-app.sh): that copy has to be the pinned tree's own. It goes out with the others below.
+cmp -s "$src/LICENSE" "$recipe/licences/DA3-LICENSE" || fail "scripts/models/licences/DA3-LICENSE is not the LICENSE of the pinned DA3 source tree"
 
 # ---- convert, from a folder of its own with a scrubbed environment -----------------------------------------------------------
 tmp=$out/.$name.tmp.aimodel
@@ -86,7 +89,6 @@ mv "$tmp" "$out/$name.aimodel"
 # ---- licences and record -----------------------------------------------------------------------------------------------------
 mkdir -p "$out/licences"
 cp "$recipe"/licences/*(.) "$out/licences/"
-cp "$src/LICENSE" "$out/licences/DA3-LICENSE"
 "$venv/bin/python" -I - "$out/$name.manifest.json" "$RECIPE_ID" "$msha" "$(stat -f %z "$out/$name.aimodel/main.mlirb")" "$(du -sk "$out/$name.aimodel" | cut -f1)" \
   "$(sha "$recipe/requirements.lock")" "$(sha "$recipe/convert_da3_sky.py")" "$WEIGHTS_SHA256" "$CONFIG_SHA256" "$tree" "$canary_input" "$canary" \
   "$(printf '%.1f' $((t1 - t0)))" "$(sw_vers -buildVersion)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'

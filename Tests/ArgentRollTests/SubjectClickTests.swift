@@ -18,8 +18,8 @@ struct SubjectClickTests {
         try #require(await RollScanner.scan(MaskCanary.sample.deletingLastPathComponent()).frames.first { $0.name == MaskCanary.cc0 })
     }
 
-    /// A build without the Subject models: Subject and Background offer their download instead of a Vision stand-in, and a click that comes anyway fails
-    /// and says which model is missing, with no model loaded and no preparation.
+    /// A build without the mask models: Sky, Subject and Background offer their download, Subject and Background instead of a Vision stand-in, and a click
+    /// that comes anyway fails and says which model is missing, with no model loaded and no preparation.
     @Test func withoutItsModelsSubjectOffersTheDownloadAndNeverFallsBackToVision() async throws {
         let support = FileManager.default.temporaryDirectory.appendingPathComponent("argent-subject-lost-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
@@ -30,7 +30,9 @@ struct SubjectClickTests {
         let inference = MaskInference(engine: engine, turns: DecodeTurns())
         #expect(inference.availability(of: .subject) == .needsModels(BundledSmartMasks.needsModels(.subject)))
         #expect(inference.availability(of: .background) == .needsModels(BundledSmartMasks.needsModels(.background)))
-        #expect(inference.availability(of: .person).isAvailable, "Person needs no Subject model")
+        #expect(!models.isSkyAvailable && models.skyMissing != nil)
+        #expect(inference.availability(of: .sky) == .needsModels(BundledSmartMasks.needsModels(.sky)), "DA3 is in the download: Sky offers it")
+        #expect(inference.availability(of: .person).isAvailable, "Person needs no downloaded model")
         let frame = try await Self.frame()
         let stages = StageLog()
         let outcome = await inference.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default, stage: { stages.add($0) }).outcome.value
@@ -41,6 +43,15 @@ struct SubjectClickTests {
         case .cancelled: Issue.record("cancelled")
         }
         #expect(!engine.takeReleasedModels(), "nothing was loaded, so no settle is needed")
+        let skyStages = StageLog()
+        let skyOutcome = await inference.ask(.sky, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default, stage: { skyStages.add($0) }).outcome.value
+        #expect(!skyStages.all.contains { if case .preparing = $0 { true } else { false } }, "no preparing without models")
+        switch skyOutcome {
+        case .failed(let why): #expect(why.contains(BundledMaskModel.sky.rawValue), "\(why)")
+        case .found, .nothingFound: Issue.record("Sky made a selection without its models")
+        case .cancelled: Issue.record("cancelled")
+        }
+        #expect(await !models.skyRunner.isLoaded)
         await models.unloadAll()
     }
 

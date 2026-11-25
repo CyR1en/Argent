@@ -257,8 +257,15 @@ import Testing
             #expect(bench.photograph.entry("photograph.newMask.sky")?.isEnabled == false)
             #expect(bench.photograph.entry("photograph.newMask.person")?.isEnabled == true)
             bench.photograph.entry("photograph.newMask.subject")?.choose()
-            #expect(model.subjectModels.isShown && bench.masks.count == 2)
-            model.subjectModels.close()
+            #expect(model.maskModels.isShown && bench.masks.count == 2)
+            model.maskModels.close()
+            // Sky's row too, where it is DA3 that is missing and not something no download brings.
+            engine.lock.withLock { engine.availabilities[.sky] = .needsModels(BundledSmartMasks.needsModels(.sky)) }
+            model.smartMasks.modelsChanged()
+            #expect(bench.photograph.entry("photograph.newMask.sky")?.isEnabled == true)
+            bench.photograph.entry("photograph.newMask.sky")?.choose()
+            #expect(model.maskModels.isShown && bench.masks.count == 2)
+            model.maskModels.close()
             // A frame that cannot take a mask yet: nothing in New Mask can act.
             model.manualReadySources[bench.frame.url] = nil
             #expect(!model.canAdjust(bench.frame))

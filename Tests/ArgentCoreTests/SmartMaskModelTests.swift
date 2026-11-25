@@ -360,6 +360,9 @@ enum SmartMaskFixtures {
         try FileManager.default.removeItem(at: folder.appendingPathComponent(BundledMaskModel.sky.fileName, isDirectory: true))
         let models = MaskModels(directory: folder, ledgerFile: folder.appendingPathComponent("ledger.json"))
         #expect(!models.isSkyAvailable && models.isSubjectAvailable, "EoMT is Subject's gate, DA3 is Sky's alone")
+        // Sky says which model it lost, as Subject does: what a download that held Subject's three alone left a Mac with.
+        #expect(models.skyMissing?.description.contains(BundledMaskModel.sky.rawValue) == true && models.skyMissing?.description.contains(BundledMaskModel.sky.script) == true)
+        #expect(models.subjectMissing == nil)
     }
 
     @Test func aModelIsKnownByItsManifestAndItsFileByMainHash() throws {

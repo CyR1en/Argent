@@ -208,7 +208,7 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
     ) -> String? {
         if isDeveloping { return "developing frames" }
         if isImporting { return "importing a roll" }
-        if isDownloadingModels { return "downloading the Subject models" }
+        if isDownloadingModels { return "downloading the mask models" }
         if isMovingFrames { return "moving frames" }
         return nil
     }
@@ -218,7 +218,7 @@ final class UpdateController: NSObject, SPUUpdaterDelegate {
         return Self.activeWorkDescription(
             isDeveloping: model.isDeveloping,
             isImporting: model.importSession.isCopying,
-            isDownloadingModels: model.subjectModels.isRunning,
+            isDownloadingModels: model.maskModels.isRunning,
             isMovingFrames: model.frameMove != nil
         )
     }

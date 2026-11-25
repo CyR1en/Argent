@@ -4,10 +4,10 @@ import Foundation
 import Testing
 @testable import ArgentApp
 
-/// A smart-mask engine whose Sky this build cannot make, as a build without DA3 and EoMT: the other kinds answer as the session's
-/// fake engine does.
+/// A smart-mask engine whose Sky this Mac cannot make and no download brings, as a macOS without the Vision request Sky needs: the other
+/// kinds answer as the session's fake engine does. (A build without DA3 or EoMT offers their download instead: `MaskModelsDownloadTests`.)
 final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
-    static let reason = "Sky needs the sky and water models, and this build of Argent was made without them."
+    static let reason = "Sky needs a Vision request this version of macOS does not have."
     let lock = NSLock()
     var finds: [SmartKind] = []
 
@@ -755,7 +755,7 @@ final class SkylessSmartEngine: SmartMaskEngine, @unchecked Sendable {
         }
     }
 
-    /// Where this build cannot make a kind, its pasted mask's row says so, as the kind's tile does, and nothing is asked.
+    /// Where this Mac cannot make a kind, its pasted mask's row says so, as the kind's tile does, and nothing is asked.
     @Test func aKindThisBuildCannotMakeSaysSoInItsRow() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             let roll = try await open(fixture)
