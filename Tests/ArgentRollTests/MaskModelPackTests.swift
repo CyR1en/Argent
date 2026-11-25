@@ -404,13 +404,14 @@ struct MaskModelPackTests {
         let asked = inference.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default)
         await engine.waitUntilFinding()
 
+        let placementQueued = AsyncSignal()
         let installTask = Task {
             try await new.install(into: installed, coordinatePlacement: { place in
-                try await inference.serialized(place)
+                try await inference.serialized(onQueued: { placementQueued.signal() }, place)
             })
         }
-        // Give install time to unpack, verify, and block on inference.serialized.
-        try await Task.sleep(for: .milliseconds(150))
+        // Wait until unpack and verification finish and placement is actually queued behind Subject inference.
+        await placementQueued.wait()
         let noticeURL = installed.appendingPathComponent(MaskModelPack.licencesFolder).appendingPathComponent("NOTICE.txt")
         #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v1", "v1 files must stay untouched while Subject inference runs")
         #expect(FileManager.default.fileExists(atPath: installed.appendingPathComponent(BundledMaskModel.subject.fileName).path))
@@ -444,18 +445,19 @@ struct MaskModelPackTests {
         engine3.releaseFind()
         _ = await queuedAsk.outcome.value
 
-        // Cancelling a second install while an inference holds the queue cancels immediately without touching installed models.
+        // Cancelling a second install after placement is queued behind active inference cancels immediately without touching installed models.
         let engine2 = BlockingMaskEngine()
         let inference2 = MaskInference(engine: engine2, turns: DecodeTurns())
         let asked2 = inference2.ask(.subject, on: frame, sourceSHA256: String(repeating: "0", count: 64), lens: .default)
         await engine2.waitUntilFinding()
         let pack3 = try Self.makeSyntheticPack(in: work, name: "v3", noticeText: "notice v3")
+        let cancelPlacementQueued = AsyncSignal()
         let cancelledTask = Task {
             try await pack3.install(into: installed, coordinatePlacement: { place in
-                try await inference2.serialized(place)
+                try await inference2.serialized(onQueued: { cancelPlacementQueued.signal() }, place)
             })
         }
-        try await Task.sleep(for: .milliseconds(150))
+        await cancelPlacementQueued.wait()
         cancelledTask.cancel()
         await #expect(throws: CancellationError.self) { try await cancelledTask.value }
         #expect(try String(contentsOf: noticeURL, encoding: .utf8) == "notice v2", "cancelled install leaves v2 untouched")

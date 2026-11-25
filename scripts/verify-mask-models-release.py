@@ -16,6 +16,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 
 
 def parse_pins(repo_root: pathlib.Path) -> tuple[str, int, str]:
@@ -83,21 +84,14 @@ def head_content_length(url: str) -> int | None:
     return length
 
 
-def stream_verify(url: str, expected_bytes: int, expected_sha256: str) -> None:
-    head_len = head_content_length(url)
-    if head_len is not None and head_len != expected_bytes:
-        raise RuntimeError(
-            f"hosted mask models pack Content-Length is {head_len} bytes, expected {expected_bytes} ({url})"
-        )
-
+def _stream_once(url: str) -> tuple[int, str]:
+    # Never pass --retry to streaming curl: a mid-transfer retry appends fresh bytes
+    # to the same stdout stream, corrupting the byte count and SHA-256. Retries are
+    # handled per attempt in stream_verify so each retry starts with a fresh hash.
     proc = subprocess.Popen(
         [
             "curl",
             "-fsSL",
-            "--retry",
-            "3",
-            "--retry-delay",
-            "2",
             "--connect-timeout",
             "30",
             "--max-time",
@@ -123,8 +117,29 @@ def stream_verify(url: str, expected_bytes: int, expected_sha256: str) -> None:
     returncode = proc.wait()
     if returncode != 0:
         raise RuntimeError(f"failed downloading {url}: {stderr_text or f'curl exited with {returncode}'}")
+    return actual_bytes, digest.hexdigest()
 
-    actual_sha256 = digest.hexdigest()
+
+def stream_verify(url: str, expected_bytes: int, expected_sha256: str, attempts: int = 3, retry_delay: float = 2.0) -> None:
+    head_len = head_content_length(url)
+    if head_len is not None and head_len != expected_bytes:
+        raise RuntimeError(
+            f"hosted mask models pack Content-Length is {head_len} bytes, expected {expected_bytes} ({url})"
+        )
+
+    last_error: RuntimeError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            actual_bytes, actual_sha256 = _stream_once(url)
+            break
+        except RuntimeError as exc:
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(retry_delay)
+    else:
+        assert last_error is not None
+        raise last_error
+
     if actual_bytes != expected_bytes:
         raise RuntimeError(f"hosted mask models pack size is {actual_bytes} bytes, expected {expected_bytes} ({url})")
     if actual_sha256 != expected_sha256:

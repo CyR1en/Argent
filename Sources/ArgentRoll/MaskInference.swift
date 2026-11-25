@@ -413,6 +413,10 @@ public final class MaskInference: @unchecked Sendable {
     /// Cancelling the calling task while queued stops waiting immediately and skips `work`; once `work`
     /// has begun, cancellation waits for it to finish cleanly so file moves never race cleanup.
     public func serialized<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await serialized(onQueued: nil, work)
+    }
+
+    func serialized<T: Sendable>(onQueued: (@Sendable () -> Void)?, _ work: @escaping @Sendable () throws -> T) async throws -> T {
         try Task.checkCancellation()
         let engine = engine, turns = turns
         let state = SerializedState<T>()
@@ -449,6 +453,7 @@ public final class MaskInference: @unchecked Sendable {
                     return
                 }
                 queue.addOperation(operation)
+                onQueued?()
             }
         } onCancel: {
             operation.cancel()
