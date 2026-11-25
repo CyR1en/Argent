@@ -289,7 +289,7 @@ extension RollModel {
             // Only the frames developed: a frame outside the develop does not hold it up.
             let wanted = Set(developing)
             await retryUnreadManualRecipes(self.roll?.frames.filter { wanted.contains($0.url) } ?? [])
-            guard !Task.isCancelled, let roll = self.roll, let rollStock = currentStock?.id else {
+            guard !Task.isCancelled, let roll = self.roll, let rollStock = currentStock else {
                 abandon()
                 return
             }
@@ -297,6 +297,7 @@ extension RollModel {
             // the inspector and are saved separately from this immutable export snapshot.
             forgetChangedSources()
             let rollFrames = self.roll?.frames ?? roll.frames
+            let autoFilm = autoFilmSettings(for: rollFrames, stock: rollStock)
             let frames = rollFrames.filter { wanted.contains($0.url) }
             // A frame whose own stock is not installed fails with that reason, and its file stays as it is: it never develops
             // through the roll's stock in its place. Every other frame develops.
@@ -330,16 +331,15 @@ extension RollModel {
             }
             // Every frame is printed as auto development measured it on the sheet; frames
             // never shown are measured first, from the same 960-pixel decode, and the roll's settled
-            // decision is awaited, balanced now if it is not yet, so the files print what the sheet
-            // settles on (docs/research/auto/sequence-consistency.md, stage 4). The whole roll's,
-            // whichever frames develop: flags never change a print.
+            // decision is awaited and resolved with the captured film settings if they changed.
+            // The whole roll's, whichever frames develop: flags never change a print.
             isDevelopBalancing = !isBalanced
             await withTaskGroup(of: Void.self) { group in
                 for frame in rollFrames where !self.isMeasured(frame) {
                     group.addTask { await self.analyze(frame, priority: .high) }
                 }
             }
-            let settled = Task.isCancelled ? nil : await settledDecision()
+            let settled = Task.isCancelled ? nil : await settledDecision(for: autoFilm)
             isDevelopBalancing = false
             guard !Task.isCancelled else {
                 self.finishDevelop(frames, frames.map { _ in .stopped }, folder: folder, destination: destination, inputs: inputs, before: developedBefore)
@@ -364,7 +364,7 @@ extension RollModel {
                         guard let (stock, digest) = stocks[frame.url] else { throw CancellationError() }
                         let recipe = try Recipe.make(
                             frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: digest,
-                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock, analysis: analyses[frame.url],
+                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock.id, analysis: analyses[frame.url],
                             aim: aims[frame.url], grain: output.grain, halation: output.halation, sharpen: true,
                             previous: recipes[frame.url] ?? RecipeStore.checked(for: frame, library: library, check: .knownOnly)?.recipe,
                             manual: edits[frame.url], editRevision: revision, editLineage: recipes[frame.url]?.editLineage ?? lineages[frame.url] ?? lineage)

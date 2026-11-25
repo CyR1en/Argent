@@ -522,6 +522,44 @@ func writeSequenceHeader(_ url: URL, captured: String, iso: Int = 400, flash: Bo
         }
     }
 
+    @Test func aDevelopKeepsItsRatingWhenTheSheetRebalancesWhileItWaits() async throws {
+        try await Self.withRoll { fixture in
+            let model = fixture.model(), gate = MeasurementGate()
+            var jobs: [RollDeveloper.Job] = []
+            model.observeDevelopJobs = { made in
+                jobs = made
+                model.stopDevelop()
+            }
+            try await Self.open(fixture, in: model, through: gate)
+            defer { Self.close(model, gate) }
+            let frames = try #require(model.roll?.frames)
+            try await gate.waitUntilWaiting(for: frames.count)
+            let capturedControls = model.controls
+            model.startDevelop(to: fixture.folder.appendingPathComponent("Export"))
+            let developing = try #require(model.developTask)
+            let deadline = ContinuousClock.now + .seconds(10)
+            while !model.isDevelopBalancing, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+            try #require(model.isDevelopBalancing)
+
+            model.controls.ratedAt = .oneStopUnder
+            gate.openAll(frames)
+            await developing.value
+
+            let sheet = try #require(model.autoDecision)
+            #expect(sheet.record.controls?.roll.ratedAt == .oneStopUnder)
+            try #require(jobs.count == frames.count)
+            #expect(jobs.allSatisfy { $0.autoRevision != sheet.revision })
+
+            model.controls = capturedControls
+            let captured = try #require(await model.settledDecision())
+            for job in jobs {
+                let preview = Recipe.Render(settings: model.settings(for: job.frame, stock: model.stockIndex), grain: model.output.grain)
+                #expect(job.autoRevision == captured.revision)
+                #expect(job.recipe.render == preview, "\(job.frame.name)")
+            }
+        }
+    }
+
     @Test func theFirstPinWaitsForTheSettledDecisionAndIsNeverRebased() async throws {
         try await Self.withRoll { fixture in
             let model = fixture.model(), gate = MeasurementGate()

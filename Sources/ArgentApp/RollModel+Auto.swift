@@ -9,6 +9,25 @@ struct MeasurementFailure: Equatable {
     let source: SourceStamp?
 }
 
+/// The film inputs Auto reads for a roll, captured together before any wait.
+struct AutoFilmSettings {
+    let stock: Stock
+    let stockDigest: String
+    let controls: RollControls
+    let overrides: [URL: FrameControls]
+    let frameStocks: [URL: Stock]
+    let frameStockDigests: [URL: String]
+
+    func recordControls(for frames: [Frame]) -> AutoDecisions.Record.Controls? {
+        let method = AutoDecisions.method
+        guard AutoDecisions.readsStock(method) else { return nil }
+        return AutoDecisions.Record.Controls(stockID: stock.id, stockDigest: stockDigest, roll: controls,
+                                             frames: AutoDecisions.ownControls(frames, overrides),
+                                             frameStockDigests: method == .detail
+                                                ? AutoDecisions.names(frames, frameStockDigests) : nil)
+    }
+}
+
 /// The roll's settled Auto decision (`AutoDecisions`; docs/research/auto/sequence-consistency.md,
 /// "Stage 4 either way").
 ///
@@ -140,13 +159,13 @@ extension RollModel {
     func balanceIfReady() {
         guard !isBalanced, balanceTask == nil, let roll, !roll.frames.isEmpty, let stock = currentStock,
               manualRestoreTask == nil, roll.frames.allSatisfy(isMeasured) else { return }
-        let generation = balanceGeneration, digest = stockDigests[stockIndex]
+        let generation = balanceGeneration, film = autoFilmSettings(for: roll.frames, stock: stock)
         balanceTask = Task { [weak self] in
-            await self?.balance(roll.frames, stock: stock, stockDigest: digest, generation: generation)
+            await self?.balance(roll.frames, film: film, generation: generation)
         }
     }
 
-    private func balance(_ frames: [Frame], stock: Stock, stockDigest: String, generation: UInt64) async {
+    private func balance(_ frames: [Frame], film: AutoFilmSettings, generation: UInt64) async {
         // A method that reads spatial samples needs each frame's descriptor; a frame whose measurement a recipe
         // gave has none until the sheet's decode of it is described, its measurement kept. As many at
         // once as the previews decode.
@@ -168,29 +187,29 @@ extension RollModel {
             }
         }
         guard generation == balanceGeneration, !Task.isCancelled else { return }
+        let decision = await resolveAuto(frames, film: film)
+        guard generation == balanceGeneration, !Task.isCancelled else { return }
+        balanceTask = nil
+        publish(decision, keeping: true)
+    }
+
+    private func resolveAuto(_ frames: [Frame], film: AutoFilmSettings) async -> AutoDecisions.Decision {
         let failed = Set(measurementFailures.keys)
-        let frameStockDigests = autoStockDigests(frames)
-        let frameStocks = Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
-            frameStockDigests[frame.url].flatMap { _ in self.stock(for: frame).map { (frame.url, $0) } }
-        })
         let input = SequenceAims.Input(frames: frames, analyses: analyses.filter { !failed.contains($0.key) },
-                                       descriptors: descriptors, stock: stock, controls: controls, frameControls: overrides,
-                                       frameStocks: frameStocks)
+                                       descriptors: descriptors, stock: film.stock, controls: film.controls,
+                                       frameControls: film.overrides, frameStocks: film.frameStocks)
         let stamps = Dictionary(uniqueKeysWithValues: frames.map { frame in
             (frame.url, measurementFailures[frame.url].map(\.source) ?? measuredFrom[frame.url])
         })
-        let decision = await Task.detached(priority: .userInitiated) {
+        return await Task.detached(priority: .userInitiated) {
             // Each raw by its SHA-256 where it is known for the version measured, else by its stamp.
             let identities = Dictionary(uniqueKeysWithValues: frames.map { frame in
                 (frame.url, AutoDecisions.Identity(frame, stamp: stamps[frame.url] ?? nil))
             })
-            return AutoDecisions.decide(AutoDecisions.Snapshot(input: input, stockDigest: stockDigest,
+            return AutoDecisions.decide(AutoDecisions.Snapshot(input: input, stockDigest: film.stockDigest,
                                                                identities: identities, failed: failed,
-                                                               frameStockDigests: frameStockDigests))
+                                                               frameStockDigests: film.frameStockDigests))
         }.value
-        guard generation == balanceGeneration, !Task.isCancelled else { return }
-        balanceTask = nil
-        publish(decision, keeping: true)
     }
 
     /// Puts `decision`'s aims on every frame at once, and keeps it for the roll's next open.
@@ -251,6 +270,15 @@ extension RollModel {
         return nil
     }
 
+    /// Develop uses the live decision only if it matches the film settings captured for the jobs.
+    /// Otherwise reuse the settled measurements, but do not publish the export's decision to the sheet.
+    func settledDecision(for film: AutoFilmSettings) async -> AutoDecisions.Decision? {
+        guard let settled = await settledDecision(), !Task.isCancelled, let roll else { return nil }
+        let frames = roll.frames.filter { settled.aims[$0.url] != nil }
+        if settled.record.controls == film.recordControls(for: frames) { return settled }
+        return await resolveAuto(frames, film: film)
+    }
+
     /// Roll > Rebalance Roll: the roll balanced again from its frames' measurements as they are now,
     /// in place of the decision it settled on, this session or before, its failed frames measured
     /// again first. A new revision when anything it rests on differs; the same one otherwise. Its
@@ -273,11 +301,17 @@ extension RollModel {
         }
         guard let decision = autoDecision, let roll, let stock = currentStock else { return }
         let frames = roll.frames.filter { decision.aims[$0.url] != nil }
-        let now = AutoDecisions.Record.Controls(stockID: stock.id, stockDigest: stockDigests[stockIndex], roll: controls,
-                                                frames: AutoDecisions.ownControls(frames, overrides),
-                                                frameStockDigests: AutoDecisions.method == .detail
-                                                    ? AutoDecisions.names(frames, autoStockDigests(frames)) : nil)
+        let now = autoFilmSettings(for: frames, stock: stock).recordControls(for: frames)
         if decision.record.controls != now { unsettle() }
+    }
+
+    func autoFilmSettings(for frames: [Frame], stock: Stock) -> AutoFilmSettings {
+        let frameStockDigests = autoStockDigests(frames)
+        let frameStocks = Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
+            frameStockDigests[frame.url].flatMap { _ in self.stock(for: frame).map { (frame.url, $0) } }
+        })
+        return AutoFilmSettings(stock: stock, stockDigest: stockDigests[stockIndex], controls: controls,
+                                overrides: overrides, frameStocks: frameStocks, frameStockDigests: frameStockDigests)
     }
 
     private func autoStockDigests(_ frames: [Frame]) -> [URL: String] {
