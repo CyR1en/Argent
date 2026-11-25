@@ -11,11 +11,15 @@ release whose pinned pack is missing or mismatched.
 from __future__ import annotations
 
 import argparse
+import datetime
+import email.utils
 import hashlib
+import os
 import pathlib
 import re
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -84,58 +88,119 @@ def head_content_length(url: str) -> int | None:
     return length
 
 
+class _StreamError(RuntimeError):
+    def __init__(self, message: str, *, retryable: bool, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retryable = retryable
+        self.retry_after = retry_after
+
+
+def _parse_final_response_headers(raw: str) -> tuple[int | None, float | None]:
+    status: int | None = None
+    retry_after: float | None = None
+    for line in raw.splitlines():
+        low = line.lower()
+        if low.startswith("http/"):
+            parts = line.split()
+            status = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else None
+            retry_after = None
+        elif low.startswith("retry-after:"):
+            value = line.split(":", 1)[1].strip()
+            if value.isdigit():
+                retry_after = float(value)
+            else:
+                try:
+                    dt = email.utils.parsedate_to_datetime(value)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=datetime.timezone.utc)
+                    delta = (dt - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+                    retry_after = max(0.0, delta)
+                except (TypeError, ValueError):
+                    retry_after = None
+    return status, retry_after
+
+
 def _stream_once(url: str) -> tuple[int, str]:
     # Never pass --retry to streaming curl: a mid-transfer retry appends fresh bytes
     # to the same stdout stream, corrupting the byte count and SHA-256. Retries are
     # handled per attempt in stream_verify so each retry starts with a fresh hash.
-    proc = subprocess.Popen(
-        [
-            "curl",
-            "-fsSL",
-            "--connect-timeout",
-            "30",
-            "--max-time",
-            "600",
-            url,
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    assert proc.stdout is not None and proc.stderr is not None
+    fd, header_path = tempfile.mkstemp(prefix="mask-models-headers-", suffix=".txt")
+    os.close(fd)
+    try:
+        proc = subprocess.Popen(
+            [
+                "curl",
+                "-fsSL",
+                "-D",
+                header_path,
+                "--connect-timeout",
+                "30",
+                "--max-time",
+                "600",
+                url,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        assert proc.stdout is not None and proc.stderr is not None
 
-    digest = hashlib.sha256()
-    actual_bytes = 0
-    chunk_size = 8 << 20
-    while True:
-        chunk = proc.stdout.read(chunk_size)
-        if not chunk:
-            break
-        actual_bytes += len(chunk)
-        digest.update(chunk)
+        digest = hashlib.sha256()
+        actual_bytes = 0
+        chunk_size = 8 << 20
+        while True:
+            chunk = proc.stdout.read(chunk_size)
+            if not chunk:
+                break
+            actual_bytes += len(chunk)
+            digest.update(chunk)
 
-    stderr_text = proc.stderr.read().decode("utf-8", errors="replace").strip()
-    returncode = proc.wait()
-    if returncode != 0:
-        raise RuntimeError(f"failed downloading {url}: {stderr_text or f'curl exited with {returncode}'}")
-    return actual_bytes, digest.hexdigest()
+        stderr_text = proc.stderr.read().decode("utf-8", errors="replace").strip()
+        returncode = proc.wait()
+        if returncode != 0:
+            raw_headers = pathlib.Path(header_path).read_text(encoding="latin-1", errors="replace")
+            status, retry_after = _parse_final_response_headers(raw_headers)
+            # Retry transport/partial errors (including non-zero curl exit after 2xx), 408, 429, and 5xx;
+            # fail fast on permanent 4xx (e.g. 404).
+            retryable = status is None or status < 400 or status in (408, 429) or status >= 500
+            raise _StreamError(
+                f"failed downloading {url}: {stderr_text or f'curl exited with {returncode}'}",
+                retryable=retryable,
+                retry_after=retry_after,
+            )
+        return actual_bytes, digest.hexdigest()
+    finally:
+        try:
+            os.unlink(header_path)
+        except OSError:
+            pass
 
 
-def stream_verify(url: str, expected_bytes: int, expected_sha256: str, attempts: int = 3, retry_delay: float = 2.0) -> None:
+def stream_verify(
+    url: str,
+    expected_bytes: int,
+    expected_sha256: str,
+    attempts: int = 3,
+    retry_delay: float = 2.0,
+    max_retry_delay: float = 120.0,
+) -> None:
     head_len = head_content_length(url)
     if head_len is not None and head_len != expected_bytes:
         raise RuntimeError(
             f"hosted mask models pack Content-Length is {head_len} bytes, expected {expected_bytes} ({url})"
         )
 
-    last_error: RuntimeError | None = None
+    last_error: _StreamError | None = None
     for attempt in range(1, attempts + 1):
         try:
             actual_bytes, actual_sha256 = _stream_once(url)
             break
-        except RuntimeError as exc:
+        except _StreamError as exc:
             last_error = exc
-            if attempt < attempts:
-                time.sleep(retry_delay)
+            if not exc.retryable or attempt >= attempts:
+                raise
+            backoff = retry_delay * (2 ** (attempt - 1))
+            wait = exc.retry_after if exc.retry_after is not None else backoff
+            time.sleep(min(max(wait, retry_delay), max_retry_delay))
     else:
         assert last_error is not None
         raise last_error
