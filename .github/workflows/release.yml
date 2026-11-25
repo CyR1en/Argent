@@ -452,7 +452,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry_1.outputs.page_url || steps.deployment_retry_2.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       # Always deploys the newest gh-pages HEAD (which already contains every committed release manifest),
       # so even if multiple queued Pages deploys coalesce, no published release is ever dropped.
@@ -474,52 +474,67 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Upload Pages artifact
+        id: artifact
         uses: actions/upload-pages-artifact@v5
         with:
           name: github-pages-${{ github.run_attempt }}
           path: _site
           include-hidden-files: true
 
-      # actions/deploy-pages lists artifacts once via the internal Actions Results API without retrying,
-      # which can race against eventual consistency right after upload-pages-artifact finalizes in the
-      # same job (actions/deploy-pages#451). Pause briefly before the first attempt and retry with
-      # backoff only when an attempt fails before creating a deployment (no page_url emitted), so an
-      # active deployment always keeps the full default 10-minute deploy-pages timeout.
-      - name: Wait for Pages artifact propagation
-        run: sleep 5
-
+      # Deployed with the Pages REST API, not actions/deploy-pages. That action names the deployment after GITHUB_SHA, and
+      # Pages answers a build version it has seen with the earlier deployment: a release tagged on a commit whose nightly
+      # already deployed reported success and left the nightly's appcast up (v0.2.0). The gh-pages commit names the
+      # deployment instead, and it changes with every appcast change. The artifact's ID comes from upload-pages-artifact,
+      # so nothing is looked up through the Actions Results API, whose lag after an upload (actions/deploy-pages#451)
+      # needed retries.
       - name: Deploy to GitHub Pages
         id: deployment
-        continue-on-error: true
-        uses: actions/deploy-pages@v5
-        with:
-          artifact_name: github-pages-${{ github.run_attempt }}
-
-      - name: Wait before retrying Pages deploy (attempt 2)
-        if: ${{ success() && steps.deployment.outcome == 'failure' && steps.deployment.outputs.page_url == '' }}
-        run: sleep 10
-
-      - name: Retry deploy to GitHub Pages (attempt 2)
-        id: deployment_retry_1
-        if: ${{ success() && steps.deployment.outcome == 'failure' && steps.deployment.outputs.page_url == '' }}
-        continue-on-error: true
-        uses: actions/deploy-pages@v5
-        with:
-          artifact_name: github-pages-${{ github.run_attempt }}
-
-      - name: Wait before retrying Pages deploy (attempt 3)
-        if: ${{ success() && steps.deployment_retry_1.outcome == 'failure' && steps.deployment_retry_1.outputs.page_url == '' }}
-        run: sleep 20
-
-      - name: Retry deploy to GitHub Pages (attempt 3)
-        id: deployment_retry_2
-        if: ${{ success() && steps.deployment_retry_1.outcome == 'failure' && steps.deployment_retry_1.outputs.page_url == '' }}
-        uses: actions/deploy-pages@v5
-        with:
-          artifact_name: github-pages-${{ github.run_attempt }}
-
-      - name: Verify Pages deployment succeeded
-        if: ${{ success() && steps.deployment.outcome != 'success' && steps.deployment_retry_1.outcome != 'success' && steps.deployment_retry_2.outcome != 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact_id }}
         run: |
-          echo "::error::GitHub Pages deployment failed"
+          if [[ -z $ARTIFACT_ID ]]; then
+            echo "::error::upload-pages-artifact gave no artifact_id"
+            exit 1
+          fi
+          version=$(git -C pages rev-parse HEAD)
+          oidc=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          if [[ -z $oidc || $oidc == null ]]; then
+            echo "::error::no OIDC token; the job needs id-token: write"
+            exit 1
+          fi
+          echo "::add-mask::$oidc"
+
+          created=$(jq -n --argjson artifact "$ARTIFACT_ID" --arg version "$version" --arg oidc "$oidc" \
+              '{artifact_id: $artifact, pages_build_version: $version, oidc_token: $oidc, environment: "github-pages"}' \
+            | gh api -X POST "repos/$GH_REPO/pages/deployments" --input -)
+          id=$(jq -r '(.id // (.status_url // "" | split("/") | last)) | tostring' <<< "$created")
+          [[ -n $id && $id != null ]] || id=$version
+          echo "page_url=$(jq -r '.page_url // empty' <<< "$created")" >> "$GITHUB_OUTPUT"
+          echo "deploying gh-pages ${version::7} (artifact $ARTIFACT_ID) as deployment $id"
+
+          # The deployment's own 10-minute limit, as actions/deploy-pages gives it; a transient API error is retried.
+          deadline=$(( SECONDS + 600 ))
+          interval=5
+          errors=0
+          while (( SECONDS < deadline )); do
+            sleep "$interval"
+            if ! status=$(gh api "repos/$GH_REPO/pages/deployments/$id" --jq .status); then
+              (( ++errors < 10 )) && continue
+              echo "::error::could not read deployment $id's status"
+              gh api -X POST "repos/$GH_REPO/pages/deployments/$id/cancel" > /dev/null || true
+              exit 1
+            fi
+            case $status in
+              succeed) echo "deployed gh-pages ${version::7}"; exit 0 ;;
+              deployment_failed|deployment_content_failed|deployment_cancelled|deployment_lost)
+                echo "::error::Pages deployment $id ended with $status"
+                exit 1 ;;
+              *) echo "status: $status" ;;
+            esac
+            interval=$(( interval * 3 / 2 > 30 ? 30 : interval * 3 / 2 ))
+          done
+          gh api -X POST "repos/$GH_REPO/pages/deployments/$id/cancel" > /dev/null || true
+          echo "::error::Pages deployment $id did not finish in 10 minutes; cancelled"
           exit 1
