@@ -498,17 +498,34 @@ jobs:
             echo "::error::upload-pages-artifact gave no artifact_id"
             exit 1
           fi
+          if [[ -z ${ACTIONS_ID_TOKEN_REQUEST_URL:-} || -z ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-} ]]; then
+            echo "::error::no OIDC token request URL; the job needs id-token: write"
+            exit 1
+          fi
           version=$(git -C pages rev-parse HEAD)
-          oidc=$(curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
+          # Transient failures are retried, as actions/deploy-pages's toolkit does for the token and #33's steps did for the request.
+          oidc=$(curl -fsS --connect-timeout 15 --max-time 60 --retry 5 --retry-delay 2 --retry-all-errors \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r .value)
           if [[ -z $oidc || $oidc == null ]]; then
-            echo "::error::no OIDC token; the job needs id-token: write"
+            echo "::error::no OIDC token in the runner's response"
             exit 1
           fi
           echo "::add-mask::$oidc"
 
-          created=$(jq -n --argjson artifact "$ARTIFACT_ID" --arg version "$version" --arg oidc "$oidc" \
-              '{artifact_id: $artifact, pages_build_version: $version, oidc_token: $oidc, environment: "github-pages"}' \
-            | gh api -X POST "repos/$GH_REPO/pages/deployments" --input -)
+          # A repeated request names the same build version, so one Pages accepted before failing to answer is not deployed twice.
+          body=$(jq -n --argjson artifact "$ARTIFACT_ID" --arg version "$version" --arg oidc "$oidc" \
+            '{artifact_id: $artifact, pages_build_version: $version, oidc_token: $oidc, environment: "github-pages"}')
+          for attempt in 1 2 3; do
+            if created=$(gh api -X POST "repos/$GH_REPO/pages/deployments" --input - <<< "$body"); then
+              break
+            fi
+            if (( attempt == 3 )); then
+              echo "::error::could not create the Pages deployment"
+              exit 1
+            fi
+            echo "creating the deployment failed (attempt $attempt/3); retrying"
+            sleep $(( attempt * 10 ))
+          done
           id=$(jq -r '(.id // (.status_url // "" | split("/") | last)) | tostring' <<< "$created")
           [[ -n $id && $id != null ]] || id=$version
           echo "page_url=$(jq -r '.page_url // empty' <<< "$created")" >> "$GITHUB_OUTPUT"
@@ -520,6 +537,8 @@ jobs:
           errors=0
           while (( SECONDS < deadline )); do
             sleep "$interval"
+            # Backs off on a failed read too, so a brief API outage doesn't use up the error budget in under a minute.
+            interval=$(( interval * 3 / 2 > 30 ? 30 : interval * 3 / 2 ))
             if ! status=$(gh api "repos/$GH_REPO/pages/deployments/$id" --jq .status); then
               (( ++errors < 10 )) && continue
               echo "::error::could not read deployment $id's status"
@@ -533,7 +552,6 @@ jobs:
                 exit 1 ;;
               *) echo "status: $status" ;;
             esac
-            interval=$(( interval * 3 / 2 > 30 ? 30 : interval * 3 / 2 ))
           done
           gh api -X POST "repos/$GH_REPO/pages/deployments/$id/cancel" > /dev/null || true
           echo "::error::Pages deployment $id did not finish in 10 minutes; cancelled"
