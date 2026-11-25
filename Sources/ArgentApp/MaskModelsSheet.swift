@@ -19,6 +19,10 @@ final class MaskModelsDownload {
     private(set) var phase: Phase = .idle
     /// Whether the licence texts are open in place of the summary.
     var showsTexts = false
+    /// Whether the user dismissed the quiet background download notice on the Rolls page for this run.
+    var isNoticeDismissed = false
+    /// Whether an unseen failure or completion should draw attention on Settings' rail item until seen.
+    private(set) var hasUnseenFailure = false
     let pack: MaskModelPack
     /// Where it installs; a test gives its own.
     @ObservationIgnored var folder: () -> URL = { MaskModelPack.installedFolder }
@@ -42,22 +46,81 @@ final class MaskModelsDownload {
 
     var isRunning: Bool { if case .running = phase { true } else { false } }
 
+    /// Stable notice kind for animating the Rolls page foot notice without re-animating on download progress ticks.
+    enum NoticeKind: Equatable { case none, running, done, failed }
+
+    var noticeKind: NoticeKind {
+        guard !isNoticeDismissed else { return .none }
+        switch phase {
+        case .idle: return .none
+        case .running: return .running
+        case .done: return .done
+        case .failed: return .failed
+        }
+    }
+
+    /// Fraction 0...1 while running, for the Settings rail progress ring; `nil` when idle, done or failed.
+    var railFraction: Double? {
+        guard case .running(let step) = phase else { return nil }
+        switch step {
+        case .downloading(let fraction): return min(max(fraction, 0), 1) * 0.92
+        case .checking: return 0.95
+        case .unpacking: return 0.98
+        case .done: return 1
+        }
+    }
+
     func show() {
         showsTexts = false
+        hasUnseenFailure = false
         isShown = true
+    }
+
+    /// Opens the sheet directly on the full licence texts (e.g. from Settings › Mask models › Licences…).
+    func showLicences() {
+        showsTexts = true
+        hasUnseenFailure = false
+        isShown = true
+    }
+
+    /// Marks any background failure or completion notice as seen once the user opens Settings.
+    func markStatusSeen() {
+        hasUnseenFailure = false
+        if !isRunning, phase != .idle { isNoticeDismissed = true }
+    }
+
+    /// Clears a finished or failed state from Settings without needing the modal sheet open.
+    func clearOutcome() {
+        guard !isRunning else { return }
+        phase = .idle
+        hasUnseenFailure = false
+        isNoticeDismissed = true
+    }
+
+    /// Resets transient phase after installed models were removed in Settings.
+    func resetAfterRemoval() {
+        guard !isRunning else { return }
+        phase = .idle
+        hasUnseenFailure = false
+        isNoticeDismissed = true
     }
 
     /// Closes the screen; a download under way goes on, and an already-seen finished or failed state resets to idle.
     func close() {
         let wasShown = isShown
         isShown = false
-        if wasShown, !isRunning { phase = .idle }
+        if wasShown, !isRunning {
+            phase = .idle
+            hasUnseenFailure = false
+        }
     }
 
     func start() {
         guard !isRunning else { return }
         generation &+= 1
         let run = generation
+        isNoticeDismissed = false
+        hasUnseenFailure = false
         phase = .running(.downloading(0))
         let pack = pack, folder = folder(), installer = installer, beforeStart = beforeStart, previous = draining
         // The download holds the object while it runs: it is the app model's, which outlives it.
@@ -86,6 +149,8 @@ final class MaskModelsDownload {
         let running = task
         task = nil
         phase = .idle
+        hasUnseenFailure = false
+        isNoticeDismissed = true
         running?.cancel()
     }
 
@@ -134,7 +199,14 @@ final class MaskModelsDownload {
         guard run == generation else { return }
         task = nil
         phase = next
-        if next == .done { onInstalled() }
+        if case .failed = next, !isShown {
+            hasUnseenFailure = true
+            isNoticeDismissed = false
+        }
+        if next == .done {
+            hasUnseenFailure = false
+            onInstalled()
+        }
     }
 
     // MARK: Words
@@ -167,9 +239,17 @@ final class MaskModelsDownload {
     static let notCommercial = "This download as a whole is offered for non-commercial use only because of the first three models; Depth Anything 3 is under Apache 2.0. The full texts are installed beside the models."
 
     var sizeWords: String {
+        Self.formatBytes(pack.bytes)
+    }
+
+    var installedSizeWords: String {
+        Self.formatBytes(pack.installedBytes)
+    }
+
+    static func formatBytes(_ bytes: Int64) -> String {
         let f = ByteCountFormatter()
         f.countStyle = .file
-        return f.string(fromByteCount: pack.bytes)
+        return f.string(fromByteCount: bytes)
     }
 
     /// The bundled licence texts, in `scripts/models/mask-licences.txt` order (`scripts/build-app.sh` copies both).
@@ -376,15 +456,31 @@ struct MaskModelsSheet: View {
                         .accessibilityHidden(true)
                 }
         case .idle, .failed:
-            Button("Cancel") { download.close() }
-                .buttonStyle(.graphite(.secondary))
-                .keyboardShortcut(.cancelAction)
-                .fixedSize()
-            Button(download.phase == .idle ? "Agree and Download (\(download.sizeWords))" : "Try Again") { download.start() }
-                .buttonStyle(.graphite(.primary))
-                .keyboardShortcut(.defaultAction)
-                .fixedSize()
-                .help("Download the four models and install them for Argent only")
+            if download.phase == .idle && model.maskModelsInstallState != .notInstalled {
+                Button("Done") { download.close() }
+                    .buttonStyle(.graphite(.primary))
+                    .keyboardShortcut(.defaultAction)
+                    .fixedSize()
+                    .background {
+                        Button("Close") { download.close() }
+                            .keyboardShortcut(.cancelAction)
+                            .opacity(0)
+                            .frame(width: 0, height: 0)
+                            .focusable(false)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+            } else {
+                Button("Cancel") { download.close() }
+                    .buttonStyle(.graphite(.secondary))
+                    .keyboardShortcut(.cancelAction)
+                    .fixedSize()
+                Button(download.phase == .idle ? "Agree and Download (\(download.sizeWords))" : "Try Again") { download.start() }
+                    .buttonStyle(.graphite(.primary))
+                    .keyboardShortcut(.defaultAction)
+                    .fixedSize()
+                    .help("Download the four models and install them for Argent only")
+            }
         }
     }
 }

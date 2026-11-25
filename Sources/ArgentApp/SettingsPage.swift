@@ -7,43 +7,74 @@ struct SettingsPage: View {
     private static let pageInset: CGFloat = 44
 
     @Environment(RollModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pictures: [CGImage?] = []
+    @State private var isConfirmingModelRemoval = false
 
     var body: some View {
         let settings = AppearanceSettings.shared
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                PageHeading(title: "Settings", subtitle: "Changes are saved automatically")
-                sectionHeading("Appearance")
-                SettingsAppearance(settings: settings, pictures: pictures)
-                sectionHeading("Window shell", reset: InspectorReset(
-                    title: "Reset window shell", help: "Restore the default window shell settings",
-                    isEnabled: !settings.shellIsAtDefaults, action: settings.resetShell))
-                WindowShellCard(settings: settings)
-                sectionHeading("Frame view", reset: InspectorReset(
-                    title: "Reset frame view", help: "Restore the default surround, intensity and edge shadow",
-                    isEnabled: !settings.frameSurroundIsAtDefaults, action: settings.resetFrameSurround))
-                FrameSurroundCard(settings: settings, picture: pictures.first ?? nil)
-                sectionHeading("Rolls")
-                RollsBackdropCard(settings: settings)
-                sectionHeading("Develop")
-                DevelopMemoryCard(settings: model.developMemory)
-                sectionHeading("Updates")
-                UpdatesCard(updates: model.updates)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PageHeading(title: "Settings", subtitle: "Changes are saved automatically")
+                    sectionHeading("Appearance")
+                        .id(SettingsSection.appearance)
+                    SettingsAppearance(settings: settings, pictures: pictures)
+                    sectionHeading("Window shell", reset: InspectorReset(
+                        title: "Reset window shell", help: "Restore the default window shell settings",
+                        isEnabled: !settings.shellIsAtDefaults, action: settings.resetShell))
+                    WindowShellCard(settings: settings)
+                    sectionHeading("Frame view", reset: InspectorReset(
+                        title: "Reset frame view", help: "Restore the default surround, intensity and edge shadow",
+                        isEnabled: !settings.frameSurroundIsAtDefaults, action: settings.resetFrameSurround))
+                    FrameSurroundCard(settings: settings, picture: pictures.first ?? nil)
+                    sectionHeading("Rolls")
+                    RollsBackdropCard(settings: settings)
+                    sectionHeading("Mask models")
+                        .id(SettingsSection.maskModels)
+                    MaskModelsSettingsCard(isConfirmingRemoval: $isConfirmingModelRemoval)
+                    sectionHeading("Develop")
+                    DevelopMemoryCard(settings: model.developMemory)
+                    sectionHeading("Updates")
+                    UpdatesCard(updates: model.updates)
+                }
+                .frame(maxWidth: Self.columnWidth)
+                .padding(.horizontal, Self.pageInset)
+                .padding(.top, 36)
+                .padding(.bottom, 40)
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: Self.columnWidth)
-            .padding(.horizontal, Self.pageInset)
-            .padding(.top, 36)
-            .padding(.bottom, 40)
-            .frame(maxWidth: .infinity)
+            .scrollBounceBehavior(.basedOnSize)
+            .onAppear { scrollToPendingSection(proxy: proxy) }
+            .onChange(of: model.pendingSettingsSection) { scrollToPendingSection(proxy: proxy) }
         }
-        .scrollBounceBehavior(.basedOnSize)
         .overlay(alignment: .topTrailing) {
             CloseButton(help: "Close settings", bordered: true) { model.showWorkspacePage(.roll) }
                 .keyboardShortcut(.cancelAction)
+                .disabled(model.isSheetShown)
                 .padding(Graphite.Metric.edge)
         }
+        .alert("Remove Mask Models?", isPresented: $isConfirmingModelRemoval) {
+            Button("Remove", role: .destructive) {
+                Task { await model.removeDownloadedMaskModels() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Removes the downloaded mask models (\(model.maskModels.installedSizeWords)) and their compiled caches. Sky, Subject and Background will require downloading the models again.")
+        }
         .task(id: model.roll?.folder) { await loadPictures() }
+        .onAppear { model.maskModels.markStatusSeen() }
+        .onChange(of: model.maskModels.noticeKind) { _, _ in model.maskModels.markStatusSeen() }
+    }
+
+    private func scrollToPendingSection(proxy: ScrollViewProxy) {
+        guard let target = model.pendingSettingsSection else { return }
+        model.pendingSettingsSection = nil
+        if reduceMotion {
+            proxy.scrollTo(target, anchor: .top)
+        } else {
+            withAnimation(Graphite.Motion.surface) { proxy.scrollTo(target, anchor: .top) }
+        }
     }
 
     private func sectionHeading(_ title: String, reset: InspectorReset? = nil) -> some View {
@@ -65,19 +96,23 @@ struct SettingsPage: View {
     }
 }
 
-private struct SettingsRow<Control: View>: View {
+struct SettingsRow<Control: View>: View {
     let title: String
     let note: String
     var labelWidth: CGFloat?
+    var pill: String?
     @ViewBuilder let control: () -> Control
 
     var body: some View {
         HStack(spacing: Graphite.Metric.inspectorPadding) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: title)
-                    .font(Graphite.Typeface.row)
-                    .foregroundStyle(Graphite.text)
-                    .accessibilityHidden(true)
+                HStack(spacing: Graphite.Metric.s) {
+                    Text(verbatim: title)
+                        .font(Graphite.Typeface.row)
+                        .foregroundStyle(Graphite.text)
+                        .accessibilityHidden(true)
+                    if let pill { Pill(text: pill) }
+                }
                 Text(verbatim: note)
                     .font(Graphite.Typeface.small)
                     .foregroundStyle(Graphite.secondaryText)
@@ -93,7 +128,7 @@ private struct SettingsRow<Control: View>: View {
     }
 }
 
-private struct SettingsPercentField: View {
+struct SettingsPercentField: View {
     let title: String
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -228,7 +263,7 @@ private struct FrameSurroundCard: View {
 }
 
 /// Splits a card into a leading specimen and trailing rows whose height sizes the card.
-private struct SplitCardLayout: Layout {
+struct SplitCardLayout: Layout {
     let leadingFraction: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -285,6 +320,152 @@ private struct RollsBackdropCard: View {
         }
         .graphiteCard(cornerRadius: Graphite.Metric.m)
         .onScrollVisibilityChange(threshold: 0.01) { isVisible = $0 }
+    }
+}
+
+struct MaskModelsSettingsCard: View {
+    @Binding var isConfirmingRemoval: Bool
+    @Environment(RollModel.self) private var model
+
+    private static let modelsSummary = "S3OD-sod, EoMT, ViTMatte-S and Depth Anything 3 Mono-Large · Person uses macOS Vision"
+
+    var body: some View {
+        let download = model.maskModels
+        let installState = model.maskModelsInstallState
+        VStack(spacing: 0) {
+            switch download.phase {
+            case .running(let step):
+                runningRow(download: download, step: step)
+                SectionDivider()
+                licencesRow(note: "Non-commercial use for Sky, Subject and Background; Depth Anything 3 is under Apache 2.0")
+            case .failed(let why):
+                SettingsRow(title: "Download failed", note: why) {
+                    HStack(spacing: Graphite.Metric.s) {
+                        Button("Dismiss") { download.clearOutcome() }
+                            .buttonStyle(.graphite(.quiet))
+                            .fixedSize()
+                        Button("Try Again") { download.start() }
+                            .buttonStyle(.graphite(.secondary))
+                            .fixedSize()
+                    }
+                }
+                SectionDivider()
+                licencesRow(note: Self.modelsSummary)
+            case .idle, .done:
+                installedOrMissingBody(download: download, state: installState)
+            }
+        }
+        .graphiteCard(cornerRadius: Graphite.Metric.m)
+    }
+
+    private func runningRow(download: MaskModelsDownload, step: MaskModelPack.Step) -> some View {
+        HStack(spacing: Graphite.Metric.inspectorPadding) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: Graphite.Metric.s) {
+                    Text(verbatim: Self.stepTitle(step, sizeWords: download.sizeWords))
+                        .font(Graphite.Typeface.row)
+                        .foregroundStyle(Graphite.text)
+                    if case .downloading(let fraction) = step {
+                        Text(verbatim: fraction.formatted(.percent.precision(.fractionLength(0))))
+                            .font(Graphite.Typeface.small.monospacedDigit())
+                            .foregroundStyle(Graphite.secondaryText)
+                    }
+                }
+                switch step {
+                case .downloading(let fraction):
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(Graphite.text)
+                case .checking, .unpacking, .done:
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(Graphite.text)
+                }
+                Text("Downloading in the background. You can keep working while they install.")
+                    .font(Graphite.Typeface.small)
+                    .foregroundStyle(Graphite.secondaryText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Stop Download") { download.cancel() }
+                .buttonStyle(.graphite(.secondary))
+                .fixedSize()
+                .help("Cancel the download and remove any temporary files")
+        }
+        .padding(.horizontal, Graphite.Metric.inspectorPadding)
+        .padding(.vertical, 12)
+        .frame(minHeight: 74)
+    }
+
+    @ViewBuilder private func installedOrMissingBody(download: MaskModelsDownload, state: MaskModelsInstallState) -> some View {
+        switch state {
+        case .downloaded:
+            SettingsRow(title: "Installed",
+                        note: "Sky, Subject and Background are ready · \(download.installedSizeWords) on disk",
+                        pill: "Ready") {
+                HStack(spacing: Graphite.Metric.s) {
+                    Button("Licences…") { model.showMaskModelsLicences() }
+                        .buttonStyle(.graphite(.secondary))
+                        .fixedSize()
+                        .help("Read the mask models' licences")
+                    Button(model.isRemovingMaskModels ? "Removing…" : "Remove…") {
+                        isConfirmingRemoval = true
+                    }
+                    .buttonStyle(.graphite(.secondary))
+                    .fixedSize()
+                    .disabled(model.isRemovingMaskModels)
+                    .help("Remove the downloaded mask models and reclaim \(download.installedSizeWords)")
+                }
+            }
+            SectionDivider()
+            SettingsRow(title: "Included models",
+                        note: model.maskModelsRemovalError ?? Self.modelsSummary) {
+                EmptyView()
+            }
+        case .bundled:
+            SettingsRow(title: "Included in this build",
+                        note: "Sky, Subject and Background are ready",
+                        pill: "Ready") {
+                Button("Licences…") { model.showMaskModelsLicences() }
+                    .buttonStyle(.graphite(.secondary))
+                    .fixedSize()
+                    .help("Read the mask models' licences")
+            }
+            SectionDivider()
+            SettingsRow(title: "Included models", note: Self.modelsSummary) {
+                EmptyView()
+            }
+        case .notInstalled:
+            SettingsRow(title: "Not installed",
+                        note: "Sky, Subject and Background use four optional models (\(download.sizeWords), non-commercial use only). Person works with macOS Vision.") {
+                Button("Download…") { model.showMaskModels() }
+                    .buttonStyle(.graphite(.secondary))
+                    .fixedSize()
+                    .help("Review licences and download the mask models in the background")
+            }
+        case .unavailable(let why):
+            SettingsRow(title: "Unavailable", note: why) {
+                Button("Licences…") { model.showMaskModelsLicences() }
+                    .buttonStyle(.graphite(.secondary))
+                    .fixedSize()
+            }
+        }
+    }
+
+    private func licencesRow(note: String) -> some View {
+        SettingsRow(title: "Model licences", note: note) {
+            Button("Licences…") { model.showMaskModelsLicences() }
+                .buttonStyle(.graphite(.secondary))
+                .fixedSize()
+                .help("Read the mask models' licence texts")
+        }
+    }
+
+    static func stepTitle(_ step: MaskModelPack.Step, sizeWords: String) -> String {
+        switch step {
+        case .downloading: "Downloading \(sizeWords)…"
+        case .checking: "Checking the download…"
+        case .unpacking, .done: "Installing mask models…"
+        }
     }
 }
 

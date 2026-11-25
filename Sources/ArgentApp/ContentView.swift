@@ -104,18 +104,18 @@ struct ContentView: View {
 
     /// The Develop page's panel shows with its page.
     private var showsDevelopPanel: Bool {
-        model.workspacePage == .develop && model.roll != nil
+        !model.onboarding.isPresented && model.workspacePage == .develop && model.roll != nil
     }
 
     /// An import's panel shows while its frames are reviewed.
     private var showsImportPanel: Bool {
-        guard model.workspacePage == .importReview, case .reviewing = model.importSession else { return false }
+        guard !model.onboarding.isPresented, model.workspacePage == .importReview, case .reviewing = model.importSession else { return false }
         return true
     }
 
     /// The frame's inspector shows in the frame view with Adjust on.
     private var showsInspector: Bool {
-        model.adjustInspectorFrame != nil
+        !model.onboarding.isPresented && model.adjustInspectorFrame != nil
     }
 
     /// Where the workspace is in the window with no panel beside it: the room the contact sheet has, which the frame
@@ -150,7 +150,7 @@ struct ContentView: View {
             if model.workspacePage == .roll {
                 QuickDevelopLayer()
             }
-            // The mask models' licences and download, asked for by a Sky, Subject or Background tile.
+            // The mask models' licences and download, asked for by a Sky, Subject or Background tile or Settings.
             if model.maskModels.isShown {
                 Color.black.opacity(0.3)
                     .contentShape(Rectangle())
@@ -160,8 +160,14 @@ struct ContentView: View {
                 MaskModelsSheet()
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
+            // First-launch welcome and setup flow (or reopened via Help › Welcome to Argent…).
+            if model.onboarding.isPresented {
+                OnboardingView()
+                    .transition(.opacity.combined(with: .scale(scale: 0.99)))
+            }
         }
         .animation(reduceMotion ? nil : Graphite.Motion.panel, value: model.maskModels.isShown)
+        .animation(reduceMotion ? nil : Graphite.Motion.panel, value: model.onboarding.isPresented)
         .clipShape(shape)
         // Clicks too: a clip hides what runs past the workspace (a zoomed photograph, the frame view's
         // drag and taps) but would still let it take clicks over the title strip and the rail.

@@ -8,6 +8,12 @@ struct CurveGraphFocusRequest: Equatable {
     init(frame: URL) { self.frame = frame }
 }
 
+/// Sections of the Settings page that navigation can scroll directly to.
+enum SettingsSection: Hashable, Sendable {
+    case appearance
+    case maskModels
+}
+
 /// What fills the workspace beside the rail.
 enum WorkspacePage: Equatable, Sendable {
     /// The open roll: its contact sheet or one frame.
@@ -17,7 +23,7 @@ enum WorkspacePage: Equatable, Sendable {
     case develop
     /// The library's rolls, Import roll, and an import's copy under way.
     case rolls
-    /// Appearance and develop memory settings.
+    /// Appearance, mask models, develop memory and update settings.
     case settings
     /// A card or a folder being read, its frames reviewed, or an import that failed.
     case importReview
@@ -51,6 +57,30 @@ extension RollModel {
         setPage(page)
     }
 
+    /// Opens Settings and scrolls straight to `section`.
+    func showSettings(section: SettingsSection) {
+        pendingSettingsSection = section
+        if onboarding.isPresented { onboarding.complete() }
+        setPage(.settings)
+    }
+
+    /// Presents the onboarding flow over the workspace (first launch or Help › Welcome to Argent…).
+    func showOnboarding(startingAt step: OnboardingStep = .welcome) {
+        quickDevelop = nil
+        maskEditor.isPickerOpen = false
+        isImportSourceShown = false
+        maskModels.close()
+        onboarding.present(startingAt: step)
+    }
+
+    /// Starts the mask models download in the background (when not already installed) and finishes onboarding into the workspace.
+    func downloadMaskModelsAndFinishOnboarding() {
+        if maskModelsInstallState == .notInstalled {
+            maskModels.start()
+        }
+        onboarding.complete()
+    }
+
     /// Asks for `page`. Leaving the Rolls page for a roll still open lets go of the line about an
     /// open that failed there: the page has shown it, and over the roll it would only cover frames. The Import roll
     /// sheet goes with its page.
@@ -64,6 +94,7 @@ extension RollModel {
         if page != .roll { quickDevelop = nil }
         // The mask models' screen is the workspace's; a download under way goes on.
         if page != requestedPage { maskModels.close() }
+        if page == .settings { maskModels.markStatusSeen() }
         requestedPage = page
     }
 

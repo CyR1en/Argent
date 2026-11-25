@@ -73,6 +73,7 @@ struct RollsPage: View {
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: model.message)
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: model.offeredCard)
         .animation(reduceMotion ? nil : Graphite.Motion.panel, value: model.importNotice)
+        .animation(reduceMotion ? nil : Graphite.Motion.panel, value: model.maskModels.noticeKind)
         .onAppear {
             model.refreshLibraryAvailability()
             model.loadLibraryCovers(oldestFirst: oldestFirst)
@@ -799,9 +800,87 @@ private struct RollsFootNotice: View {
                         .font(Graphite.Typeface.label)
                 }
                 .footNotice()
+            } else if !model.onboarding.isPresented, !model.maskModels.isShown, !model.maskModels.isNoticeDismissed {
+                maskModelsNotice
             }
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    @ViewBuilder private var maskModelsNotice: some View {
+        let download = model.maskModels
+        switch download.phase {
+        case .running(let step):
+            HStack(spacing: Graphite.Metric.m) {
+                switch step {
+                case .downloading(let fraction):
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
+                case .checking, .unpacking, .done:
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
+                }
+                Text(verbatim: Self.maskModelsLine(step, sizeWords: download.sizeWords))
+                    .font(Graphite.Typeface.label.monospacedDigit())
+                    .lineLimit(1)
+                Button("Settings") { model.showSettings(section: .maskModels) }
+                    .buttonStyle(.graphite(.secondary, size: .small))
+                    .help("View mask model download progress in Settings")
+                CloseButton(help: "Hide this notice. The download continues in Settings.") {
+                    download.isNoticeDismissed = true
+                }
+            }
+            .footNotice()
+        case .done:
+            HStack(spacing: Graphite.Metric.m) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 16, weight: .light))
+                    .accessibilityHidden(true)
+                Text("Mask models installed · Sky, Subject and Background are ready")
+                    .font(Graphite.Typeface.label)
+                    .lineLimit(1)
+                Button("Settings") { model.showSettings(section: .maskModels) }
+                    .buttonStyle(.graphite(.secondary, size: .small))
+                CloseButton(help: "Hide this notice") {
+                    download.isNoticeDismissed = true
+                }
+            }
+            .footNotice()
+        case .failed:
+            HStack(spacing: Graphite.Metric.m) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 16, weight: .light))
+                    .accessibilityHidden(true)
+                Text("Mask models download failed")
+                    .font(Graphite.Typeface.label)
+                    .lineLimit(1)
+                Button("Try Again") { download.start() }
+                    .buttonStyle(.graphite(.secondary, size: .small))
+                Button("Settings") { model.showSettings(section: .maskModels) }
+                    .buttonStyle(.graphite(.secondary, size: .small))
+                CloseButton(help: "Hide this notice") {
+                    download.isNoticeDismissed = true
+                }
+            }
+            .footNotice()
+        case .idle:
+            EmptyView()
+        }
+    }
+
+    private static func maskModelsLine(_ step: MaskModelPack.Step, sizeWords: String) -> String {
+        switch step {
+        case .downloading(let fraction):
+            let pct = fraction.formatted(.percent.precision(.fractionLength(0)))
+            return "Downloading mask models (\(sizeWords)) · \(pct)"
+        case .checking:
+            return "Checking mask models…"
+        case .unpacking, .done:
+            return "Installing mask models…"
+        }
     }
 }
 

@@ -71,10 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         Automation.start(model: model)
         #endif
-        if !pending.isEmpty {
+        let hadPending = !pending.isEmpty
+        if hadPending {
             model.open(pending)
             pending = []
         }
+        model.onboarding.presentOnLaunchIfNeeded(hasPendingURLs: hadPending)
     }
 
     @MainActor func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -87,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // made here: a session that removed nothing has no queue. Cancel any mask models download so its staging folder cleans up.
             if quits {
                 await model.maskModels.cancelForQuit()
+                await model.maskModelRemovalTask?.value
                 await model.removalRuns.steps?.developWillStart()
             }
             sender.reply(toApplicationShouldTerminate: quits)
@@ -195,8 +198,10 @@ struct MenuState: Equatable {
     /// The mask models' licence and download screen is up over the workspace (`MaskModelsDownload.isShown`):
     /// as `isAskingToDevelop`, keys and menus leave the roll and frame under it alone.
     var isShowingMaskModels = false
-    /// Either modal sheet is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels }
+    /// First-launch onboarding is up over the workspace (`OnboardingController.isPresented`).
+    var isShowingOnboarding = false
+    /// Any modal sheet or overlay is up over the workspace.
+    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -260,9 +265,16 @@ struct ArgentCommands: Commands {
             Button("Settings…") {
                 // The page is the main window's: bring the window back if it was closed.
                 openWindow(id: "main")
+                if model.onboarding.isPresented { model.onboarding.complete() }
                 model.showWorkspacePage(.settings)
             }
             .keyboardShortcut(",")
+        }
+        CommandGroup(replacing: .help) {
+            Button("Welcome to Argent…") {
+                openWindow(id: "main")
+                model.showOnboarding()
+            }
         }
         CommandGroup(replacing: .newItem) {
             // Import Roll… copies a card's or a folder's frames into a new roll; Add Existing Folder… keeps a folder
@@ -475,23 +487,23 @@ struct ArgentCommands: Commands {
                 if model.isFrameOpen { model.zoomFrame(.zoomIn) } else { model.changeSize(by: 1) }
             }
             .keyboardShortcut("+")
-            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingMaskModels)
+            .disabled(state.openFrame == nil && !state.canGrow || !state.showsFrames || state.isShowingMaskModels || state.isShowingOnboarding)
             Button(state.openFrame == nil ? "Smaller Thumbnails" : "Zoom Out") {
                 if model.isFrameOpen { model.zoomFrame(.zoomOut) } else { model.changeSize(by: -1) }
             }
             .keyboardShortcut("-")
-            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingMaskModels)
+            .disabled(state.openFrame == nil && !state.canShrink || !state.showsFrames || state.isShowingMaskModels || state.isShowingOnboarding)
             Button("Actual Size") { model.zoomFrame(.actualSize) }
                 .keyboardShortcut("0")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             Button("Zoom to Fit") { model.zoomFrame(.fit) }
                 .keyboardShortcut("9")
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             Divider()
             // The split comparison of the neutral raw and film, the frame view's Compare.
             Toggle("Split Compare", isOn: Binding(get: { model.isSplitComparing }, set: { model.isSplitComparing = $0 }))
                 .keyboardShortcut("c", modifiers: [.command, .shift])
-                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels)
+                .disabled(state.openFrame == nil || state.page != .roll || state.isShowingMaskModels || state.isShowingOnboarding)
             // The inspector edits the open frame, and its curve graph takes the keys: not under the dialog.
             Toggle("Adjustments", isOn: Binding(get: { model.isAdjustmentsShown }, set: { model.isAdjustmentsShown = $0 }))
                 .keyboardShortcut("a", modifiers: [.command, .shift])

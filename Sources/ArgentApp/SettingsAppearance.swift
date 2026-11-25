@@ -6,6 +6,7 @@ struct SettingsAppearance: View {
 
     let settings: AppearanceSettings
     let pictures: [CGImage?]
+    var compact = false
 
     var body: some View {
         let theme = settings.theme
@@ -27,9 +28,9 @@ struct SettingsAppearance: View {
                 ThemeProof(mode: .light, version: theme.light, settings: settings, pictures: pictures)
                 ThemeProof(mode: .dark, version: settings.darkVersion(of: theme), settings: settings, pictures: pictures)
             }
-            .padding(.top, 14)
+            .padding(.top, compact ? 10 : 14)
             appearanceLine("Theme", note: "A theme brings both of its versions, and Mode says which shows") { EmptyView() }
-                .padding(.top, 22)
+                .padding(.top, compact ? 14 : 22)
             // Three equal columns, drawn at once: a lazy grid would have its scroll view move the page when a change
             // of theme lays it out again.
             let themes = ThemeCatalog.themes
@@ -44,7 +45,7 @@ struct SettingsAppearance: View {
                     }
                 }
             }
-            .padding(.top, Graphite.Metric.m)
+            .padding(.top, compact ? Graphite.Metric.s : Graphite.Metric.m)
         }
     }
 

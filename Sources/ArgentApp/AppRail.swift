@@ -66,10 +66,13 @@ struct AppRail: View {
             .disabled(model.roll == nil || page == .importReview)
             RailSeparator()
             item(.settings, title: "Settings", symbol: "gearshape", isSelected: here == .settings,
-                 help: "Settings: appearance and develop memory. Command-Comma.") {
+                 help: "Settings: appearance, mask models, develop memory and updates. Command-Comma.",
+                 progress: page == .settings ? nil : model.maskModelsFraction,
+                 wantsAttention: page != .settings && model.maskModelsWantsAttention) {
                 model.showWorkspacePage(page == .settings ? .roll : .settings)
             }
         }
+        .disabled(model.onboarding.isPresented)
         // Over the hover's fill and under the items: the lens of where you are.
         .background(alignment: .topLeading) {
             if let frame = frames[here] { lens(on: here, at: frame) }
