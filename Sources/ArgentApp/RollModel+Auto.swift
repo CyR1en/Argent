@@ -158,11 +158,21 @@ extension RollModel {
     /// failure, the saved choices are restored and a stock is in use, unless it is settled or doing so.
     func balanceIfReady() {
         guard !isBalanced, balanceTask == nil, let roll, !roll.frames.isEmpty, let stock = currentStock,
-              manualRestoreTask == nil, roll.frames.allSatisfy(isMeasured) else { return }
-        let generation = balanceGeneration, film = autoFilmSettings(for: roll.frames, stock: stock)
+              manualRestoreTask == nil else { return }
+        let frames = balanceFrames(in: roll)
+        guard frames.allSatisfy(isMeasured) else { return }
+        let generation = balanceGeneration, film = autoFilmSettings(for: frames, stock: stock)
         balanceTask = Task { [weak self] in
-            await self?.balance(roll.frames, film: film, generation: generation)
+            await self?.balance(frames, film: film, generation: generation)
         }
+    }
+
+    private func balanceFrames(in roll: Roll) -> [Frame] {
+        guard let decision = autoDecision else { return roll.frames }
+        let projected = roll.frames.filter {
+            !(measurementFailures[$0.url] == MeasurementFailure(source: nil) && decision.aims[$0.url] == nil)
+        }
+        return projected.isEmpty ? roll.frames : projected
     }
 
     private func balance(_ frames: [Frame], film: AutoFilmSettings, generation: UInt64) async {
@@ -317,8 +327,8 @@ extension RollModel {
         let perFrameOnly = decision.record.controls?.stockDigest == film.stockDigest
             && decision.record.controls?.roll == film.controls
         let hasDescriptors = measureFrame != nil || frames.allSatisfy { analyses[$0.url] == nil || descriptors[$0.url] != nil }
-        if AutoDecisions.method == .detail, manualRestoreTask == nil, roll.frames.allSatisfy(isMeasured),
-           frames.count == roll.frames.count, hasDescriptors, perFrameOnly || frames.count <= 64 {
+        if AutoDecisions.method == .detail, manualRestoreTask == nil, !frames.isEmpty, frames.allSatisfy(isMeasured),
+           hasDescriptors, perFrameOnly || frames.count <= 64 {
             let (input, failed, stamps) = autoInputs(frames, film: film)
             publish(AutoDecisions.decide(Self.autoSnapshot(frames: frames, input: input, failed: failed, stamps: stamps, film: film)), keeping: true)
             return
