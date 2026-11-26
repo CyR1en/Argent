@@ -17,7 +17,9 @@ public struct RemovalPatch: Sendable, Equatable {
         public static let limit = 1 << 16
         public let x: Int, y: Int, width: Int, height: Int
         public init(x: Int, y: Int, width: Int, height: Int) throws {
-            guard x >= 0, y >= 0, width > 0, height > 0, x + width <= Self.limit, y + height <= Self.limit else {
+            // By subtraction, so a box that names an `x` near `Int.max` is refused rather than trapping on `x + width`.
+            guard x >= 0, y >= 0, width > 0, height > 0, width <= Self.limit, height <= Self.limit,
+                  x <= Self.limit - width, y <= Self.limit - height else {
                 throw RemovalError.invalid("a patch's box lies inside the frame")
             }
             self.x = x; self.y = y; self.width = width; self.height = height
@@ -163,7 +165,10 @@ public struct RemovalPatch: Sendable, Equatable {
         }
         guard PatchRef.sideRange.contains(header.width), PatchRef.sideRange.contains(header.height),
               header.rgb >= 0, header.object >= 0, header.effects >= 0,
-              data.count == start + length + header.rgb + header.object + header.effects else {
+              // By subtraction, so lengths near `Int.max` are refused rather than trapping on their sum.
+              header.rgb <= data.count - (start + length),
+              header.object <= data.count - (start + length) - header.rgb,
+              header.effects == data.count - (start + length) - header.rgb - header.object else {
             throw RemovalError.invalid("a patch file's planes are not the length its header says")
         }
         let count = header.width * header.height
