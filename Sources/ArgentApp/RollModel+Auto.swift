@@ -317,7 +317,8 @@ extension RollModel {
         let perFrameOnly = decision.record.controls?.stockDigest == film.stockDigest
             && decision.record.controls?.roll == film.controls
         let hasDescriptors = measureFrame != nil || frames.allSatisfy { analyses[$0.url] == nil || descriptors[$0.url] != nil }
-        if AutoDecisions.method == .detail, hasDescriptors, perFrameOnly || frames.count <= 64 {
+        if AutoDecisions.method == .detail, manualRestoreTask == nil, roll.frames.allSatisfy(isMeasured),
+           frames.count == roll.frames.count, hasDescriptors, perFrameOnly || frames.count <= 64 {
             let (input, failed, stamps) = autoInputs(frames, film: film)
             publish(AutoDecisions.decide(Self.autoSnapshot(frames: frames, input: input, failed: failed, stamps: stamps, film: film)), keeping: true)
             return

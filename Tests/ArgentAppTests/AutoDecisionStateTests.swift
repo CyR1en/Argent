@@ -269,6 +269,43 @@ func writeSequenceHeader(_ url: URL, captured: String, iso: Int = 400, flash: Bo
         }
     }
 
+    @Test func ratingChangesOnReopenWaitForAllMeasurementsBeforeReplacingTheKeptDecision() async throws {
+        try await Self.withRoll { fixture in
+            let first = fixture.model(), gate = MeasurementGate()
+            try await Self.open(fixture, in: first, through: gate)
+            gate.openAll(try #require(first.roll?.frames))
+            let kept = try #require(await first.settledDecision())
+            await first.decisionSave?.value
+            Self.close(first, gate)
+
+            let again = fixture.model(), waiting = MeasurementGate()
+            var published: [String] = []
+            again.observeAutoDecision = { published.append($0.revision) }
+            try await Self.open(fixture, in: again, through: waiting)
+            defer { Self.close(again, waiting) }
+            let frames = try #require(again.roll?.frames)
+            try await waiting.waitUntilWaiting(for: frames.count)
+            waiting.release(frames[0].url)
+            while !again.isMeasured(frames[0]) { await Task.yield() }
+            try #require(again.isBalanced && again.autoDecision?.revision == kept.revision)
+            try #require(frames.dropFirst().allSatisfy { !again.isMeasured($0) })
+
+            again.controls.ratedAt = .oneStopUnder
+            #expect(!again.isBalanced && published == [kept.revision])
+            #expect(again.printAim(for: frames[0]) == kept.aims[frames[0].url])
+            await again.decisionSave?.value
+            let store = AutoDecisionStore(library: fixture.library)
+            #expect(store.record(for: fixture.roll) == kept.record)
+
+            waiting.openAll(frames)
+            let next = try #require(await again.settledDecision())
+            #expect(next.revision != kept.revision && published == [kept.revision, next.revision])
+            #expect(next.failed.isEmpty && next.record.controls?.roll.ratedAt == .oneStopUnder)
+            await again.decisionSave?.value
+            #expect(store.record(for: fixture.roll) == next.record)
+        }
+    }
+
     @Test func aReplacedRawMakesANewRevision() async throws {
         try await Self.withRoll { fixture in
             let model = fixture.model(), gate = MeasurementGate()
