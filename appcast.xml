@@ -6,15 +6,15 @@
     <description>Updates for Argent.</description>
     <language>en</language>
     <item>
-      <title>Nightly 2026-11-25 (2166ebf)</title>
+      <title>Nightly 2026-11-26 (c416a00)</title>
       <guid isPermaLink="false">argent-nightly</guid>
-      <pubDate>Wed, 25 Nov 2026 15:20:23 +0000</pubDate>
+      <pubDate>Thu, 26 Nov 2026 02:36:02 +0000</pubDate>
       <sparkle:channel>nightly</sparkle:channel>
-      <sparkle:version>1410</sparkle:version>
-      <sparkle:shortVersionString>0.2.0 nightly (2166ebf)</sparkle:shortVersionString>
+      <sparkle:version>1430</sparkle:version>
+      <sparkle:shortVersionString>0.2.0 nightly (c416a00)</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
-      <description>&lt;p&gt;Nightly 2026-11-25 (2166ebf) — &lt;a href="https://github.com/CyR1en/Argent/releases/tag/nightly"&gt;View release notes on GitHub&lt;/a&gt;.&lt;/p&gt;</description>
-      <enclosure url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg" length="83222327" type="application/octet-stream" sparkle:edSignature="bW+76swXqzbTZeubSyL83bCRWkjQ1+TJfgTePliokNKdqc2oEheoR+CHR2UgTBXnj0E6EVFbUU+E9Eetl+fXBA==" />
+      <description>&lt;p&gt;Nightly 2026-11-26 (c416a00) — &lt;a href="https://github.com/CyR1en/Argent/releases/tag/nightly"&gt;View release notes on GitHub&lt;/a&gt;.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/CyR1en/Argent/releases/download/nightly/Argent-nightly.dmg" length="83222328" type="application/octet-stream" sparkle:edSignature="BgAusuRDdBNiPnMFROrQKxtdbvZC51pca7mo5KO0uUbXZU0+M0PPFsqCm4LxYSpcE3nIvpbZog5VKVDXuXupBA==" />
     </item>
     <item>
       <title>Argent 0.2.0</title>
