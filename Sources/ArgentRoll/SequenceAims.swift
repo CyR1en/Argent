@@ -22,15 +22,18 @@ public enum SequenceAims {
         /// The roll's controls, and each frame's own where it has any.
         public var controls: RollControls
         public var frameControls: [URL: FrameControls]
+        public var frameStocks: [URL: Stock]
 
         public init(frames: [Frame], analyses: [URL: ExposureAnalysis], descriptors: [URL: SequenceDescriptor],
-                    stock: Stock, controls: RollControls, frameControls: [URL: FrameControls] = [:]) {
+                    stock: Stock, controls: RollControls, frameControls: [URL: FrameControls] = [:],
+                    frameStocks: [URL: Stock] = [:]) {
             self.frames = frames
             self.analyses = analyses
             self.descriptors = descriptors
             self.stock = stock
             self.controls = controls
             self.frameControls = frameControls
+            self.frameStocks = frameStocks
         }
 
         /// What `url` develops with.
@@ -43,6 +46,8 @@ public enum SequenceAims {
     public enum Method: String, Sendable, Codable, CaseIterable {
         /// Roll smoothing as shipped (`RollSmoothing.aims`): the comparison.
         case control
+        /// Roll smoothing followed by the stock-aware textured detail check.
+        case detail
         /// Candidate A: frames grouped by links, and roll smoothing's pull and cap applied to their
         /// levels once each is expressed at the group's exposure (the link shifts;
         /// `smoothedLevels`).
@@ -202,7 +207,7 @@ public enum SequenceAims {
 
     /// The roll's aims by `method`, the candidates on the links `SequenceEvidence` finds.
     public static func resolve(_ input: Input, method: Method, parameters: Parameters = Parameters()) -> Result {
-        resolve(input, links: method == .control ? [] : SequenceEvidence.links(input, parameters: parameters),
+        resolve(input, links: method == .control || method == .detail ? [] : SequenceEvidence.links(input, parameters: parameters),
                 method: method, parameters: parameters)
     }
 
@@ -211,8 +216,17 @@ public enum SequenceAims {
     /// frame from its own level (`ownLevel`), moves only frames that a usable link joins
     /// (`usableLinks`; for B, also with a point to print) and gives every frame roll smoothing's cast.
     static func resolve(_ input: Input, links: [Link], method: Method, parameters: Parameters) -> Result {
-        let smoothed = RollSmoothing.aims(input.frames, analyses: input.analyses)
-        guard method != .control else {
+        var smoothed = RollSmoothing.aims(input.frames, analyses: input.analyses)
+        if method == .detail {
+            for frame in input.frames {
+                guard let baseline = smoothed[frame.url], let descriptor = input.descriptors[frame.url],
+                      let analysis = input.analyses[frame.url] else { continue }
+                smoothed[frame.url] = AutoDetail.protect(baseline, descriptor: descriptor, analysis: analysis,
+                                                       stock: input.frameStocks[frame.url] ?? input.stock,
+                                                       controls: input.controls(for: frame.url), iso: frame.info.iso)
+            }
+        }
+        guard method != .control && method != .detail else {
             return Result(aims: smoothed, initial: input.analyses.mapValues { AutoPrint.levelStops($0) })
         }
         let own = input.frames.map { frame in input.analyses[frame.url].map { ownLevel($0, parameters: parameters) } }

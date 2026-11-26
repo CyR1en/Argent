@@ -237,7 +237,7 @@ public enum ExposureAnalyzer {
             let faces = FaceMeter.detections(frame.texture, workingSpace: workingSpace)
             analysis.faces = FaceMeter.meter(faces, grid: grid)
         }
-        return (analysis, SequenceDescriptor(grid: grid))
+        return (analysis, SequenceDescriptor(grid: grid, noise: noise))
     }
 
     /// Analyses `texture`, an `rgba16Float` frame in the working space.

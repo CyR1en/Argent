@@ -3,7 +3,7 @@ import Foundation
 /// A coarse picture of the decode Auto measured, built from the same analysis grid as its
 /// `ExposureAnalysis` (`ExposureAnalyzer.measure`): for telling whether nearby frames of a roll
 /// show the same subject in the same light, and for rendering the regions they share through the
-/// print (docs/auto-exposure-consistency-plan.md, steps 1 to 3). Placement does not read it yet.
+/// print (docs/auto-exposure-consistency-plan.md, steps 1 to 3).
 ///
 /// It has `longSide` cells on its long side and the grid's aspect on its short side, rounded to
 /// the nearest cell and one at least; a grid with no more than `longSide` cells on its long side is
@@ -14,7 +14,7 @@ import Foundation
 public struct SequenceDescriptor: Sendable, Equatable {
     /// Changes when what a descriptor holds changes, so a cache knows its value is stale.
     /// 2026-10-22-1: the first.
-    public static let version = "2026-10-22-1"
+    public static let version = "2026-11-25-1"
     /// The cells on the descriptor's long side.
     public static let longSide = 64
 
@@ -32,9 +32,12 @@ public struct SequenceDescriptor: Sendable, Equatable {
     /// each floored at `ExposureAnalyzer.floorStops` as the level is. Zero on a flat cell, and the
     /// same a stop brighter or darker while the light stays over the floor.
     public var detail: [Float]
+    /// Calibrated only for supported decoders and RAW modes.
+    public var noise: DecodedNoise?
 
     /// The descriptor of an analysis grid.
-    public init(grid: ExposureAnalyzer.Grid) {
+    public init(grid: ExposureAnalyzer.Grid, noise: DecodedNoise? = nil) {
+        self.noise = noise
         let gridWidth = grid.width, gridHeight = grid.height
         if gridWidth < 1 || gridHeight < 1 {
             (width, height) = (0, 0)

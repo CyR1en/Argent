@@ -28,6 +28,7 @@ struct DevelopInputs: Equatable {
     let sources: [URL: SourceStamp]
     /// The revision of the roll's settled decision; `nil` while the roll is not settled.
     var autoRevision: String?
+    var autoAims: [URL: PrintAim]?
 
     @MainActor init(_ model: RollModel, frames: [URL]? = nil) {
         let developed = Set(frames ?? model.shownFrames.map(\.url))
@@ -37,7 +38,24 @@ struct DevelopInputs: Equatable {
         output = model.output
         manualEdits = model.manualEdits.filter { developed.contains($0.key) }
         sources = model.sourceVersions.filter { developed.contains($0.key) }
-        autoRevision = model.isBalanced ? model.autoDecision?.revision : nil
+        if AutoDecisions.method == .detail {
+            autoRevision = nil
+            autoAims = model.isBalanced ? model.autoDecision?.aims.filter { developed.contains($0.key) } : nil
+        } else {
+            autoRevision = model.isBalanced ? model.autoDecision?.revision : nil
+            autoAims = nil
+        }
+    }
+
+    mutating func setSettled(_ decision: AutoDecisions.Decision, frames: [URL]) {
+        if AutoDecisions.method == .detail {
+            let developed = Set(frames)
+            autoRevision = nil
+            autoAims = decision.aims.filter { developed.contains($0.key) }
+        } else {
+            autoRevision = decision.revision
+            autoAims = nil
+        }
     }
 }
 
@@ -59,6 +77,7 @@ struct DevelopedFrame: Equatable {
     /// (`RollDeveloper.output`).
     var output: OutputSettings
     var autoRevision: String?
+    var autoAim: PrintAim?
     var own: FrameControls?
     var edit: ManualEdit?
     var source: SourceStamp?
@@ -69,6 +88,7 @@ struct DevelopedFrame: Equatable {
         controls = inputs.controls
         output = inputs.output.with(inputs.overrides[raw], hasHalation: hasHalation)
         autoRevision = inputs.autoRevision
+        autoAim = inputs.autoAims?[raw]
         own = inputs.overrides[raw]
         edit = inputs.manualEdits[raw]
         source = inputs.sources[raw]
@@ -289,7 +309,7 @@ extension RollModel {
             // Only the frames developed: a frame outside the develop does not hold it up.
             let wanted = Set(developing)
             await retryUnreadManualRecipes(self.roll?.frames.filter { wanted.contains($0.url) } ?? [])
-            guard !Task.isCancelled, let roll = self.roll, let rollStock = currentStock?.id else {
+            guard !Task.isCancelled, let roll = self.roll, let rollStock = currentStock else {
                 abandon()
                 return
             }
@@ -297,6 +317,7 @@ extension RollModel {
             // the inspector and are saved separately from this immutable export snapshot.
             forgetChangedSources()
             let rollFrames = self.roll?.frames ?? roll.frames
+            let autoFilm = autoFilmSettings(for: rollFrames, stock: rollStock)
             let frames = rollFrames.filter { wanted.contains($0.url) }
             // A frame whose own stock is not installed fails with that reason, and its file stays as it is: it never develops
             // through the roll's stock in its place. Every other frame develops.
@@ -330,16 +351,15 @@ extension RollModel {
             }
             // Every frame is printed as auto development measured it on the sheet; frames
             // never shown are measured first, from the same 960-pixel decode, and the roll's settled
-            // decision is awaited, balanced now if it is not yet, so the files print what the sheet
-            // settles on (docs/research/auto/sequence-consistency.md, stage 4). The whole roll's,
-            // whichever frames develop: flags never change a print.
+            // decision is awaited and resolved with the captured film settings if they changed.
+            // The whole roll's, whichever frames develop: flags never change a print.
             isDevelopBalancing = !isBalanced
             await withTaskGroup(of: Void.self) { group in
                 for frame in rollFrames where !self.isMeasured(frame) {
                     group.addTask { await self.analyze(frame, priority: .high) }
                 }
             }
-            let settled = Task.isCancelled ? nil : await settledDecision()
+            let settled = Task.isCancelled ? nil : await settledDecision(for: autoFilm)
             isDevelopBalancing = false
             guard !Task.isCancelled else {
                 self.finishDevelop(frames, frames.map { _ in .stopped }, folder: folder, destination: destination, inputs: inputs, before: developedBefore)
@@ -350,7 +370,7 @@ extension RollModel {
                 abandon()
                 return
             }
-            inputs.autoRevision = settled.revision
+            inputs.setSettled(settled, frames: frames.map(\.url))
             // The model that removes objects is sent away first, and is gone before the develop's gate reads the footprint; its
             // runs wait for the develop and go on when it ends, however it ends.
             await self.removalsYieldToDevelop()
@@ -364,7 +384,7 @@ extension RollModel {
                         guard let (stock, digest) = stocks[frame.url] else { throw CancellationError() }
                         let recipe = try Recipe.make(
                             frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: digest,
-                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock, analysis: analyses[frame.url],
+                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock.id, analysis: analyses[frame.url],
                             aim: aims[frame.url], grain: output.grain, halation: output.halation, sharpen: true,
                             previous: recipes[frame.url] ?? RecipeStore.checked(for: frame, library: library, check: .knownOnly)?.recipe,
                             manual: edits[frame.url], editRevision: revision, editLineage: recipes[frame.url]?.editLineage ?? lineages[frame.url] ?? lineage)
@@ -508,11 +528,13 @@ extension RollModel {
     var developMarks: [URL: DevelopMark] {
         var marks: [URL: DevelopMark] = [:]
         if !developedFrames.isEmpty, let folder = developDestination {
-            let revision = isBalanced ? autoDecision?.revision : nil
+            let byAim = AutoDecisions.method == .detail
+            let revision = !byAim && isBalanced ? autoDecision?.revision : nil
+            let aims = byAim && isBalanced ? autoDecision?.aims : nil
             for (raw, made) in developedFrames
             where made.destination == folder && made.stockIndex == stockIndex && made.controls == controls
                 && made.output == output.with(overrides[raw], hasHalation: hasHalation(stockIndex: stockIndex, own: overrides[raw]))
-                && made.autoRevision == revision && made.own == overrides[raw]
+                && made.autoRevision == revision && made.autoAim == aims?[raw] && made.own == overrides[raw]
                 && made.edit == manualEdits[raw] && made.source == sourceVersions[raw] {
                 marks[raw] = .developed
             }

@@ -541,7 +541,7 @@ public final class FilmPreviews: @unchecked Sendable {
     private static func describe(_ decoded: LinearFrame, info: ARWFrameInfo) -> SequenceDescriptor {
         let noise = DecodedNoise.appleDecode(model: info.model, iso: info.iso, pins: decoded.pins)
         return SequenceDescriptor(grid: ExposureAnalyzer.grid(pixels: ExposureAnalyzer.pixels(of: decoded.texture),
-                                                              width: decoded.width, height: decoded.height, noise: noise))
+                                                              width: decoded.width, height: decoded.height, noise: noise), noise: noise)
     }
 
     /// Sets a frame's measurement from its recipe, checked against the raw at version `source`,

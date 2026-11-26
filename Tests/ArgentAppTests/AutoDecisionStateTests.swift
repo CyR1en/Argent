@@ -269,6 +269,43 @@ func writeSequenceHeader(_ url: URL, captured: String, iso: Int = 400, flash: Bo
         }
     }
 
+    @Test func ratingChangesOnReopenWaitForAllMeasurementsBeforeReplacingTheKeptDecision() async throws {
+        try await Self.withRoll { fixture in
+            let first = fixture.model(), gate = MeasurementGate()
+            try await Self.open(fixture, in: first, through: gate)
+            gate.openAll(try #require(first.roll?.frames))
+            let kept = try #require(await first.settledDecision())
+            await first.decisionSave?.value
+            Self.close(first, gate)
+
+            let again = fixture.model(), waiting = MeasurementGate()
+            var published: [String] = []
+            again.observeAutoDecision = { published.append($0.revision) }
+            try await Self.open(fixture, in: again, through: waiting)
+            defer { Self.close(again, waiting) }
+            let frames = try #require(again.roll?.frames)
+            try await waiting.waitUntilWaiting(for: frames.count)
+            waiting.release(frames[0].url)
+            while !again.isMeasured(frames[0]) { await Task.yield() }
+            try #require(again.isBalanced && again.autoDecision?.revision == kept.revision)
+            try #require(frames.dropFirst().allSatisfy { !again.isMeasured($0) })
+
+            again.controls.ratedAt = .oneStopUnder
+            #expect(!again.isBalanced && published == [kept.revision])
+            #expect(again.printAim(for: frames[0]) == kept.aims[frames[0].url])
+            await again.decisionSave?.value
+            let store = AutoDecisionStore(library: fixture.library)
+            #expect(store.record(for: fixture.roll) == kept.record)
+
+            waiting.openAll(frames)
+            let next = try #require(await again.settledDecision())
+            #expect(next.revision != kept.revision && published == [kept.revision, next.revision])
+            #expect(next.failed.isEmpty && next.record.controls?.roll.ratedAt == .oneStopUnder)
+            await again.decisionSave?.value
+            #expect(store.record(for: fixture.roll) == next.record)
+        }
+    }
+
     @Test func aReplacedRawMakesANewRevision() async throws {
         try await Self.withRoll { fixture in
             let model = fixture.model(), gate = MeasurementGate()
@@ -519,6 +556,44 @@ func writeSequenceHeader(_ url: URL, captured: String, iso: Int = 400, flash: Bo
                 #expect(job.recipe.printLevel == decision.aims[job.frame.url]?.level)
             }
             #expect(model.lastDevelop?.wasStopped == true && model.developPhase == .idle)
+        }
+    }
+
+    @Test func aDevelopKeepsItsRatingWhenTheSheetRebalancesWhileItWaits() async throws {
+        try await Self.withRoll { fixture in
+            let model = fixture.model(), gate = MeasurementGate()
+            var jobs: [RollDeveloper.Job] = []
+            model.observeDevelopJobs = { made in
+                jobs = made
+                model.stopDevelop()
+            }
+            try await Self.open(fixture, in: model, through: gate)
+            defer { Self.close(model, gate) }
+            let frames = try #require(model.roll?.frames)
+            try await gate.waitUntilWaiting(for: frames.count)
+            let capturedControls = model.controls
+            model.startDevelop(to: fixture.folder.appendingPathComponent("Export"))
+            let developing = try #require(model.developTask)
+            let deadline = ContinuousClock.now + .seconds(10)
+            while !model.isDevelopBalancing, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+            try #require(model.isDevelopBalancing)
+
+            model.controls.ratedAt = .oneStopUnder
+            gate.openAll(frames)
+            await developing.value
+
+            let sheet = try #require(model.autoDecision)
+            #expect(sheet.record.controls?.roll.ratedAt == .oneStopUnder)
+            try #require(jobs.count == frames.count)
+            #expect(jobs.allSatisfy { $0.autoRevision != sheet.revision })
+
+            model.controls = capturedControls
+            let captured = try #require(await model.settledDecision())
+            for job in jobs {
+                let preview = Recipe.Render(settings: model.settings(for: job.frame, stock: model.stockIndex), grain: model.output.grain)
+                #expect(job.autoRevision == captured.revision)
+                #expect(job.recipe.render == preview, "\(job.frame.name)")
+            }
         }
     }
 

@@ -101,4 +101,51 @@ import Testing
             #expect(resolved.failed.contains(frames[2].url))
         }
     }
+
+    @Test func deletingABridgingRawThenChangingRatingKeepsSurvivorsSeparate() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-auto-cull-bridge-\(UUID().uuidString)")
+        let roll = folder.appendingPathComponent("Roll"), stocks = folder.appendingPathComponent("Stocks")
+        let library = folder.appendingPathComponent("Library")
+        try FileManager.default.createDirectory(at: roll, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stocks, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try AutoDecisionStateTests.writeToyStock("toy", in: stocks)
+        let times = ["2026:10:01 12:00:00", "2026:10:01 12:01:30", "2026:10:01 12:03:00"]
+        let names = ["DSC01.ARW", "DSC02.ARW", "DSC03.ARW"]
+        for i in names.indices {
+            try writeSequenceHeader(roll.appendingPathComponent(names[i]), captured: times[i], tail: Data("bridge-\(i)".utf8))
+        }
+        let model = RollModel(bookmarks: BookmarkStore(file: folder.appendingPathComponent("bookmarks.json"), securityScoped: false),
+                              stocksDirectory: stocks, decisions: AutoDecisionStore(library: library),
+                              flagStore: FlagStore(library: library), recipeLibrary: library,
+                              previewCache: folder.appendingPathComponent("Cache"), digestsFile: nil)
+        let gate = MeasurementGate()
+        gate.analyses = [
+            names[0]: ExposureAnalysis(meanStops: -1.0, validWeight: 1, grayEstimate: [0.2, 0, -0.2]),
+            names[1]: ExposureAnalysis(meanStops: 0.0, validWeight: 1, grayEstimate: [0, 0, 0]),
+            names[2]: ExposureAnalysis(meanStops: 1.0, validWeight: 1, grayEstimate: [-0.2, 0, 0.2]),
+        ]
+        model.measureFrame = { await gate.measure($0) }
+        await model.open(roll)
+        if let restoration = model.manualRestoreTask { await restoration.value }
+        defer { AutoDecisionStateTests.close(model, gate) }
+        let frames = try #require(model.roll?.frames)
+        gate.openAll(frames)
+        let original = try #require(await model.settledDecision())
+        #expect(original.aims[frames[0].url] != AutoDecisions.ownAim(gate.analyses[names[0]]!))
+        #expect(original.aims[frames[2].url] != AutoDecisions.ownAim(gate.analyses[names[2]]!))
+
+        try FileManager.default.removeItem(at: frames[1].url)
+        #expect(model.forgetChangedSources())
+        #expect(model.isBalanced && model.autoDecision?.aims[frames[1].url] == nil)
+
+        model.controls.ratedAt = .oneStopUnder
+        let updated = try #require(await model.settledDecision())
+        #expect(updated.record.frames.map(\.fileName) == [names[0], names[2]])
+        #expect(updated.aims[frames[1].url] == nil && updated.failed.isEmpty)
+        #expect(updated.aims[frames[0].url] == AutoDecisions.ownAim(gate.analyses[names[0]]!))
+        #expect(updated.aims[frames[2].url] == AutoDecisions.ownAim(gate.analyses[names[2]]!))
+        await model.balanceTask?.value
+        await model.decisionSave?.value
+    }
 }
