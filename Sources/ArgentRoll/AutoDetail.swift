@@ -21,7 +21,7 @@ enum AutoDetail {
         var clamped: Int = 0
         var reversed: Int = 0
         var separations: [Float] = []
-        var isAtRisk: Bool { deficit >= 0.4 }
+        var isAtRisk: Bool { deficit >= 0.5 }
 
         func protects(_ prior: Self) -> Bool {
             clamped <= prior.clamped && reversed <= prior.reversed && deficit <= prior.deficit + 0.15
@@ -65,7 +65,7 @@ enum AutoDetail {
         shadows = shadows.count >= minimum ? distributed(shadows, limit: 128) : []
         guard !highlights.isEmpty || !shadows.isEmpty else { return prior }
 
-        let mids = distributed(patches.compactMap { $0 }.filter { abs($0.stops - prior.level) < 1 }, limit: 32)
+        let mids = distributed(patches.compactMap { $0 }.filter { abs($0.stops - prior.level) <= 0.35 }, limit: 32)
         let faces = analysis.faces.compactMap { face -> Patch? in
             guard (face.confidence ?? 0) >= 0.7, (face.skinArea ?? 0) >= 0.01, (face.clipped ?? 1) < 0.1,
                   let skin = face.skin, skin.count == 3 else { return nil }
@@ -79,16 +79,26 @@ enum AutoDetail {
         let dark = measure(shadows, with: original)
         guard bright.isAtRisk || dark.isAtRisk else { return prior }
 
-        let subject = (mids + faces).map { ($0, lightness(original.sample($0.rgb, baseStops: $0.stops).rgb)) }
-        func improves(_ aim: PrintAim, bright currentBright: Tail, dark currentDark: Tail) -> (Tail, Tail)? {
-            guard let response = predict(aim), subject.allSatisfy({ p, baseline in
-                abs(lightness(response.sample(p.rgb, baseStops: p.stops).rgb) - baseline) <= 1.5
+        let midBase = mids.map { ($0, lightness(original.sample($0.rgb, baseStops: $0.stops).rgb)) }
+        let faceBase = faces.map { ($0, lightness(original.sample($0.rgb, baseStops: $0.stops).rgb)) }
+        func enoughGain(before: Float, after: Float) -> Bool {
+            before - after >= min(max(0.10 * before, 0.05), 0.10)
+        }
+        func improves(_ aim: PrintAim, bright currentBright: Tail, dark currentDark: Tail, maxMidShift: Float = 3.5) -> (Tail, Tail)? {
+            guard let response = predict(aim), faceBase.allSatisfy({ p, baseline in
+                abs(lightness(response.sample(p.rgb, baseStops: p.stops).rgb) - baseline) <= 2.0
             }) else { return nil }
+            if !midBase.isEmpty {
+                let meanShift = midBase.reduce(Float.zero) { sum, item in
+                    sum + abs(lightness(response.sample(item.0.rgb, baseStops: item.0.stops).rgb) - item.1)
+                } / Float(midBase.count)
+                guard meanShift <= maxMidShift else { return nil }
+            }
             let newBright = measure(highlights, with: response), newDark = measure(shadows, with: response)
             guard newBright.protects(bright), newDark.protects(dark),
                   newBright.protects(currentBright), newDark.protects(currentDark),
-                  (currentBright.isAtRisk && newBright.deficit <= currentBright.deficit - 0.25)
-                    || (currentDark.isAtRisk && newDark.deficit <= currentDark.deficit - 0.25) else { return nil }
+                  (currentBright.isAtRisk && enoughGain(before: currentBright.deficit, after: newBright.deficit))
+                    || (currentDark.isAtRisk && enoughGain(before: currentDark.deficit, after: newDark.deficit)) else { return nil }
             return (newBright, newDark)
         }
 
@@ -99,7 +109,7 @@ enum AutoDetail {
                 var candidate = aim
                 candidate.burn = min(prior.burn + move, FittedTone.burnLimit)
                 if candidate != aim, let result = improves(candidate, bright: brightNow, dark: darkNow),
-                   result.0.deficit <= brightNow.deficit - 0.25 {
+                   enoughGain(before: brightNow.deficit, after: result.0.deficit) {
                     aim = candidate
                     (brightNow, darkNow) = result
                     break
@@ -111,7 +121,7 @@ enum AutoDetail {
                 var candidate = aim
                 candidate.dodge = min(prior.dodge + move, FittedTone.dodgeLimit)
                 if candidate != aim, let result = improves(candidate, bright: brightNow, dark: darkNow),
-                   result.1.deficit <= darkNow.deficit - 0.25 {
+                   enoughGain(before: darkNow.deficit, after: result.1.deficit) {
                     aim = candidate
                     (brightNow, darkNow) = result
                     break
@@ -121,7 +131,7 @@ enum AutoDetail {
         if aim == prior, bright.isAtRisk != dark.isAtRisk {
             var candidate = prior
             candidate.level = min(max(prior.level + (bright.isAtRisk ? 0.125 : -0.125), -AutoPrint.bound), AutoPrint.bound)
-            if candidate != prior, improves(candidate, bright: bright, dark: dark) != nil { return candidate }
+            if candidate != prior, improves(candidate, bright: bright, dark: dark, maxMidShift: 2.5) != nil { return candidate }
         }
         return aim
     }

@@ -169,7 +169,7 @@ extension RollModel {
         // A method that reads spatial samples needs each frame's descriptor; a frame whose measurement a recipe
         // gave has none until the sheet's decode of it is described, its measurement kept. As many at
         // once as the previews decode.
-        if AutoDecisions.readsDescriptors(AutoDecisions.method), let films {
+        if AutoDecisions.readsDescriptors(AutoDecisions.method), measureFrame == nil, let films {
             var missing = frames.filter { analyses[$0.url] != nil && descriptors[$0.url] == nil }.makeIterator()
             await withTaskGroup(of: (Frame, SequenceDescriptor?).self) { group in
                 for _ in 0..<FilmPreviews.concurrentDecodes {
@@ -193,7 +193,7 @@ extension RollModel {
         publish(decision, keeping: true)
     }
 
-    private func resolveAuto(_ frames: [Frame], film: AutoFilmSettings) async -> AutoDecisions.Decision {
+    private func autoInputs(_ frames: [Frame], film: AutoFilmSettings) -> (input: SequenceAims.Input, failed: Set<URL>, stamps: [URL: SourceStamp?]) {
         let failed = Set(measurementFailures.keys)
         let input = SequenceAims.Input(frames: frames, analyses: analyses.filter { !failed.contains($0.key) },
                                        descriptors: descriptors, stock: film.stock, controls: film.controls,
@@ -201,14 +201,24 @@ extension RollModel {
         let stamps = Dictionary(uniqueKeysWithValues: frames.map { frame in
             (frame.url, measurementFailures[frame.url].map(\.source) ?? measuredFrom[frame.url])
         })
+        return (input, failed, stamps)
+    }
+
+    private nonisolated static func autoSnapshot(frames: [Frame], input: SequenceAims.Input, failed: Set<URL>,
+                                                 stamps: [URL: SourceStamp?], film: AutoFilmSettings) -> AutoDecisions.Snapshot {
+        // Each raw by its SHA-256 where it is known for the version measured, else by its stamp.
+        let identities = Dictionary(uniqueKeysWithValues: frames.map { frame in
+            (frame.url, AutoDecisions.Identity(frame, stamp: stamps[frame.url] ?? nil))
+        })
+        return AutoDecisions.Snapshot(input: input, stockDigest: film.stockDigest,
+                                      identities: identities, failed: failed,
+                                      frameStockDigests: film.frameStockDigests)
+    }
+
+    private func resolveAuto(_ frames: [Frame], film: AutoFilmSettings) async -> AutoDecisions.Decision {
+        let (input, failed, stamps) = autoInputs(frames, film: film)
         return await Task.detached(priority: .userInitiated) {
-            // Each raw by its SHA-256 where it is known for the version measured, else by its stamp.
-            let identities = Dictionary(uniqueKeysWithValues: frames.map { frame in
-                (frame.url, AutoDecisions.Identity(frame, stamp: stamps[frame.url] ?? nil))
-            })
-            return AutoDecisions.decide(AutoDecisions.Snapshot(input: input, stockDigest: film.stockDigest,
-                                                               identities: identities, failed: failed,
-                                                               frameStockDigests: film.frameStockDigests))
+            AutoDecisions.decide(Self.autoSnapshot(frames: frames, input: input, failed: failed, stamps: stamps, film: film))
         }.value
     }
 
@@ -301,8 +311,18 @@ extension RollModel {
         }
         guard let decision = autoDecision, let roll, let stock = currentStock else { return }
         let frames = roll.frames.filter { decision.aims[$0.url] != nil }
-        let now = autoFilmSettings(for: frames, stock: stock).recordControls(for: frames)
-        if decision.record.controls != now { unsettle() }
+        let film = autoFilmSettings(for: frames, stock: stock)
+        let now = film.recordControls(for: frames)
+        guard decision.record.controls != now else { return }
+        let perFrameOnly = decision.record.controls?.stockDigest == film.stockDigest
+            && decision.record.controls?.roll == film.controls
+        let hasDescriptors = measureFrame != nil || frames.allSatisfy { analyses[$0.url] == nil || descriptors[$0.url] != nil }
+        if AutoDecisions.method == .detail, hasDescriptors, perFrameOnly || frames.count <= 64 {
+            let (input, failed, stamps) = autoInputs(frames, film: film)
+            publish(AutoDecisions.decide(Self.autoSnapshot(frames: frames, input: input, failed: failed, stamps: stamps, film: film)), keeping: true)
+            return
+        }
+        unsettle()
     }
 
     func autoFilmSettings(for frames: [Frame], stock: Stock) -> AutoFilmSettings {

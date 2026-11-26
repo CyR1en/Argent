@@ -280,11 +280,12 @@ import Testing
 
     @Test func removeFromRollAsksThenMovesTheFramesToTheTrashAndTheRollLetsThemGo() async throws {
         try await Self.withModel { model, frames, fixture in
-            let decision = try #require(await model.settledDecision())
-            let aims = AutoDecisionStateTests.bits(model.printAims, frames)
+            _ = try #require(await model.settledDecision())
             FlagStateTests.flag(model, [1, 3])
             try Data("recipe".utf8).write(to: RecipeStore.besideRaw(frames[3].url))
             model.setRatedAt(.oneStopUnder, for: frames[4])
+            let decision = try #require(await model.settledDecision())
+            let aims = AutoDecisionStateTests.bits(model.printAims, frames)
             model.select(frames[2])
             model.select(frames[4], .range)
             #expect(model.menuState.canChangeFrames && model.canChangeFrames(model.selectedFrames))
