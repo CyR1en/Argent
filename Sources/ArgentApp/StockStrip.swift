@@ -244,6 +244,7 @@ enum StockCharacter {
     }
 
     private static let lines: [String: String] = [
+        "argent-neutral": "camera colour, moderate contrast, soft highlights, open shadows",
         "kodak-portra-400": "warm neutral skin, soft highlight roll-off",
         "kodak-portra-160": "lowest contrast, pastel skin, very fine grain",
         "kodak-portra-800": "more contrast, visible grain, warmer shadows",

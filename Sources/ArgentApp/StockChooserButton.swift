@@ -65,6 +65,7 @@ private struct FilmCanister: View {
 
     private var label: Color {
         switch stockID {
+        case "argent-neutral": Color(white: 0.62)
         case "kodak-portra-160": Color(red: 0.73, green: 0.75, blue: 0.54)
         case "kodak-portra-800": Color(red: 0.80, green: 0.63, blue: 0.52)
         case "kodak-gold-200": Color(red: 0.90, green: 0.70, blue: 0.36)
