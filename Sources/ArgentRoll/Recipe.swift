@@ -35,17 +35,38 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
         }
     }
 
-    /// The developed file's longer side. Since 2026-10-29 every develop is full size and the app
-    /// offers no other (the owner's choice, a quality slider in its place); the field stays so that a
-    /// develop recorded at 4096 or 2048 px no longer matches, and the frame is made again full size.
+    /// The developed file's longer side. Full size keeps the camera's full resolution; the
+    /// Instagram presets write sRGB-ready social dimensions (1080 px feed / 1350 px 4:5 portrait).
+    /// Legacy 4096 and 2048 cases stay decodable so older recipes still open.
     public enum Size: Int, Sendable, Codable, CaseIterable {
         case full = 0
         case longEdge4096 = 4096
         case longEdge2048 = 2048
+        case instagramPortrait = 1350
+        case instagramFeed = 1080
+
+        /// The sizes offered in the Develop panel's Size menu.
+        public static let pickerOptions: [Size] = [.full, .instagramFeed, .instagramPortrait]
 
         public var longEdge: Int? { self == .full ? nil : rawValue }
 
-        public var title: String { self == .full ? "Full size" : "\(rawValue) px long edge" }
+        /// Filename suffix appended to social-sized exports so they never overwrite full-size files.
+        public var fileSuffix: String {
+            switch self {
+            case .instagramFeed: return "-1080px"
+            case .instagramPortrait: return "-1350px"
+            case .full, .longEdge4096, .longEdge2048: return ""
+            }
+        }
+
+        public var title: String {
+            switch self {
+            case .full: return "Full size"
+            case .instagramFeed: return "Instagram (1080 px)"
+            case .instagramPortrait: return "Instagram Vertical (1350 px)"
+            case .longEdge4096, .longEdge2048: return "\(rawValue) px long edge"
+            }
+        }
     }
 
     /// Grain, in the stock panel and on the Develop page.
@@ -56,6 +77,26 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
         public var title: String { self == .natural ? "Natural" : "Off" }
         /// The render's multiple of the stock's grain.
         public var amount: Float { self == .natural ? 1 : 0 }
+    }
+
+    /// One-click social export presets: sRGB JPEG at quality 90 sized for Instagram.
+    public static let instagramFeed = OutputSettings(format: .jpeg, size: .instagramFeed, space: .sRGB, grain: .off, quality: 90)
+    public static let instagramPortrait = OutputSettings(format: .jpeg, size: .instagramPortrait, space: .sRGB, grain: .off, quality: 90)
+
+    /// Returns a copy configured for an Instagram sRGB JPEG export at `size` (quality 90) while
+    /// preserving the roll's existing `grain` and `halation` settings.
+    public func applyingInstagramPreset(_ size: Size) -> OutputSettings {
+        var copy = self
+        copy.format = .jpeg
+        copy.size = size
+        copy.space = .sRGB
+        copy.quality = 90
+        return copy
+    }
+
+    /// Whether these settings match one of the Instagram sRGB JPEG presets.
+    public var isInstagramPreset: Bool {
+        format == .jpeg && space == .sRGB && (size == .instagramFeed || size == .instagramPortrait)
     }
 
     /// The quality a new develop starts from, JPEG's former 92.

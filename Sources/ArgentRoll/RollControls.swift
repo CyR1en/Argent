@@ -89,7 +89,14 @@ public struct RollControls: Sendable, Equatable, Hashable, Codable {
     /// does; Neutral prints the daylight reference, and Warm and Cool are a fixed step from it.
     public func settings(for stock: Stock, aim: PrintAim = PrintAim()) -> DevelopSettings {
         let ratedISO = stock.boxSpeed * exp2(-Float(ratedAt.stops))
-        let filtration = labBalance == .auto ? AutoBalance.correction(for: aim.cast) : .zero
+        let filtration: SIMD3<Float>
+        if labBalance == .auto {
+            filtration = NeutralAuto.isNeutral(stock)
+                ? NeutralAuto.whiteBalanceCorrection(for: aim.cast)
+                : AutoBalance.correction(for: aim.cast)
+        } else {
+            filtration = .zero
+        }
         let exposure = SIMD3<Float>(repeating: Float(ratedAt.stops) + aim.level) + filtration
         return DevelopSettings(ratedAt: ratedAt == .boxSpeed ? nil : ratedISO,
                                labBalance: labBalance.printBalance + Self.grayCompensation(stock, exposureStops: exposure),
