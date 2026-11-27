@@ -35,6 +35,7 @@ struct ImportEjectTarget: Equatable {
 /// What the last import came to, on the Rolls page: where its frames went, how many, how many were left at the
 /// source, and the source's volume when it can be ejected.
 struct ImportNotice: Equatable {
+    let id = UUID()
     let roll: UUID?
     let folder: URL
     let copied: Int
@@ -435,21 +436,27 @@ extension RollModel {
     /// not eject says why.
     @discardableResult
     func ejectImportSource() -> Task<Void, Never>? {
-        guard let target = importNotice?.ejectable else { return nil }
+        enum Outcome: Sendable {
+            case refused, ejected, failed(String)
+        }
+        guard let notice = importNotice, let target = notice.ejectable else { return nil }
         return Task {
-            let failure = await Task.detached(priority: .userInitiated) { [importVolumeID, ejectVolume] () -> String? in
-                guard importVolumeID(target.volume) == target.id else { return nil }
+            let outcome = await Task.detached(priority: .userInitiated) { [importVolumeID, ejectVolume] () -> Outcome in
+                guard importVolumeID(target.volume) == target.id else { return .refused }
                 do {
                     try ejectVolume(target.volume)
-                    return nil
+                    return .ejected
                 } catch {
-                    return error.localizedDescription
+                    return .failed(error.localizedDescription)
                 }
             }.value
-            if let failure {
+            switch outcome {
+            case .refused:
+                if importNotice?.id == notice.id { importNotice?.ejectable = nil }
+            case .ejected:
+                if importNotice?.id == notice.id { importNotice = nil }
+            case .failed(let failure):
                 message = "Could not eject \(target.name): \(failure)"
-            } else if importNotice?.ejectable == target {
-                importNotice?.ejectable = nil
             }
         }
     }

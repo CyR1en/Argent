@@ -750,7 +750,7 @@ import Testing
     }
 
     enum SourceMount: CaseIterable {
-        case unchanged, missing, replaced, reportedUnmount, unidentified
+        case unchanged, unmountedDuringEject, missing, replaced, reportedUnmount, unidentified
     }
 
     @Test(arguments: SourceMount.allCases) func importNoticeOnlyEjectsItsSource(_ mount: SourceMount) async throws {
@@ -759,9 +759,17 @@ import Testing
             let source = card.volume.appendingPathComponent("DCIM/100MSDCF")
             let identity = Mutex<String?>(mount == .unidentified ? nil : "source")
             let ejected = Mutex<[URL]>([])
+            let release = DispatchSemaphore(value: 0)
+            let (started, signal) = AsyncStream<Void>.makeStream()
             model.importSourceVolume = { $0 == source ? card.volume : nil }
             model.importVolumeID = { url in url == card.volume ? identity.withLock { $0 } : nil }
-            model.ejectVolume = { volume in ejected.withLock { $0.append(volume) } }
+            model.ejectVolume = { volume in
+                ejected.withLock { $0.append(volume) }
+                if mount == .unmountedDuringEject {
+                    signal.yield(())
+                    release.wait()
+                }
+            }
             model.startImport(folder: source)
             await model.importTask?.value
             try #require(model.importSession.review?.canCopy == true)
@@ -772,7 +780,7 @@ import Testing
             #expect((notice.ejectable != nil) == (mount != .unidentified))
 
             switch mount {
-            case .unchanged, .unidentified: break
+            case .unchanged, .unmountedDuringEject, .unidentified: break
             case .missing: identity.withLock { $0 = nil }
             case .replaced: identity.withLock { $0 = "replacement" }
             case .reportedUnmount:
@@ -780,11 +788,29 @@ import Testing
                 #expect(model.importNotice?.ejectable == nil)
                 // Even if the same disk has already come back, its old action is gone.
             }
-            await model.ejectImportSource()?.value
-            #expect(ejected.withLock { $0 } == (mount == .unchanged ? [card.volume] : []))
-            #expect(model.importNotice?.ejectable == nil)
-            #expect(model.importNotice?.text == notice.text)
-            #expect(model.importNotice?.roll == roll)
+            let work = model.ejectImportSource()
+            if mount == .unmountedDuringEject {
+                Task {
+                    await work?.value
+                    signal.finish()
+                }
+                for await _ in started {
+                    model.importCardRemoved(card.volume)
+                    #expect(model.importNotice?.ejectable == nil)
+                    release.signal()
+                    break
+                }
+            }
+            await work?.value
+            let succeeded = mount == .unchanged || mount == .unmountedDuringEject
+            #expect(ejected.withLock { $0 } == (succeeded ? [card.volume] : []))
+            if succeeded {
+                #expect(model.importNotice == nil)
+            } else {
+                #expect(model.importNotice?.ejectable == nil)
+                #expect(model.importNotice?.text == notice.text)
+                #expect(model.importNotice?.roll == roll)
+            }
         }
     }
 
