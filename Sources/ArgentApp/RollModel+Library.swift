@@ -13,6 +13,25 @@ struct ImportDrive: Identifiable, Equatable {
     var id: URL { volume }
 }
 
+struct ImportEjectTarget: Equatable {
+    let volume: URL
+    let id: String
+    let name: String
+
+    init(volume: URL, id: String) {
+        self.volume = volume
+        self.id = id
+        name = (try? volume.resourceValues(forKeys: [.volumeLocalizedNameKey]).volumeLocalizedName) ?? volume.lastPathComponent
+    }
+
+    static func volumeID(at url: URL) -> String? {
+        let fresh = URL(fileURLWithPath: url.path, isDirectory: true)
+        let values = try? fresh.resourceValues(forKeys: [.volumeURLKey, .volumeUUIDStringKey])
+        guard values?.volume?.path == fresh.path else { return nil }
+        return values?.volumeUUIDString
+    }
+}
+
 /// What the last import came to, on the Rolls page: where its frames went, how many, how many were left at the
 /// source, and the source's volume when it can be ejected.
 struct ImportNotice: Equatable {
@@ -23,12 +42,10 @@ struct ImportNotice: Equatable {
     let source: String
     let isFolder: Bool
     /// The source's volume, when it is a card or a removable drive: the notice offers to eject it.
-    let ejectable: URL?
+    var ejectable: ImportEjectTarget?
 
     /// The ejectable volume's name, as Finder shows it.
-    var ejectName: String? {
-        ejectable.map { (try? $0.resourceValues(forKeys: [.volumeLocalizedNameKey]).volumeLocalizedName) ?? $0.lastPathComponent }
-    }
+    var ejectName: String? { ejectable?.name }
 
     @MainActor var text: String {
         let into = "\(RollModel.framesText(copied)) imported into \(folder.lastPathComponent)"
@@ -416,29 +433,31 @@ extension RollModel {
 
     /// The notice's Eject: the source's volume is unmounted and ejected; nothing on it is changed. A volume that will
     /// not eject says why.
-    func ejectImportSource() {
-        guard let volume = importNotice?.ejectable else { return }
-        let name = importNotice?.ejectName ?? volume.lastPathComponent
-        Task {
-            let failure = await Task.detached(priority: .userInitiated) { () -> String? in
+    @discardableResult
+    func ejectImportSource() -> Task<Void, Never>? {
+        guard let target = importNotice?.ejectable else { return nil }
+        return Task {
+            let failure = await Task.detached(priority: .userInitiated) { [importVolumeID, ejectVolume] () -> String? in
+                guard importVolumeID(target.volume) == target.id else { return nil }
                 do {
-                    try NSWorkspace.shared.unmountAndEjectDevice(at: volume)
+                    try ejectVolume(target.volume)
                     return nil
                 } catch {
                     return error.localizedDescription
                 }
             }.value
             if let failure {
-                message = "Could not eject \(name): \(failure)"
-            } else if importNotice?.ejectable == volume {
-                importNotice = nil
+                message = "Could not eject \(target.name): \(failure)"
+            } else if importNotice?.ejectable == target {
+                importNotice?.ejectable = nil
             }
         }
     }
 
     /// The volume `url` is on, when it is a card or a removable drive Argent may offer to eject.
     static func ejectableVolume(of url: URL) -> URL? {
-        guard let volume = try? url.resourceValues(forKeys: [.volumeURLKey]).volume, CardScanner.isCardLike(volume) else { return nil }
+        let fresh = URL(fileURLWithPath: url.path)
+        guard let volume = try? fresh.resourceValues(forKeys: [.volumeURLKey]).volume, CardScanner.isCardLike(volume) else { return nil }
         return volume
     }
 }

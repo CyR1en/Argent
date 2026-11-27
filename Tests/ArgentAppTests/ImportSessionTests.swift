@@ -2,6 +2,7 @@ import ArgentCore
 import CoreGraphics
 import Foundation
 import ImageIO
+import Synchronization
 import Testing
 @testable import ArgentApp
 @testable import ArgentRoll
@@ -746,6 +747,45 @@ import Testing
         review.name = "   "
         #expect(review.folderName == day)
         #expect(ImportReview.defaultName(firstCapture: Date(timeIntervalSince1970: 1_800_000_000)) == "2027-01-15")
+    }
+
+    enum SourceMount: CaseIterable {
+        case unchanged, missing, replaced, reportedUnmount, unidentified
+    }
+
+    @Test(arguments: SourceMount.allCases) func importNoticeOnlyEjectsItsSource(_ mount: SourceMount) async throws {
+        try await Self.withCopy(frames: 1) { model, card, _ in
+            model.importSettings.isCulling = false
+            let source = card.volume.appendingPathComponent("DCIM/100MSDCF")
+            let identity = Mutex<String?>(mount == .unidentified ? nil : "source")
+            let ejected = Mutex<[URL]>([])
+            model.importSourceVolume = { $0 == source ? card.volume : nil }
+            model.importVolumeID = { url in url == card.volume ? identity.withLock { $0 } : nil }
+            model.ejectVolume = { volume in ejected.withLock { $0.append(volume) } }
+            model.startImport(folder: source)
+            await model.importTask?.value
+            try #require(model.importSession.review?.canCopy == true)
+            model.startCopy()
+            await model.importTask?.value
+            let notice = try #require(model.importNotice)
+            let roll = try #require(notice.roll)
+            #expect((notice.ejectable != nil) == (mount != .unidentified))
+
+            switch mount {
+            case .unchanged, .unidentified: break
+            case .missing: identity.withLock { $0 = nil }
+            case .replaced: identity.withLock { $0 = "replacement" }
+            case .reportedUnmount:
+                model.importCardRemoved(card.volume)
+                #expect(model.importNotice?.ejectable == nil)
+                // Even if the same disk has already come back, its old action is gone.
+            }
+            await model.ejectImportSource()?.value
+            #expect(ejected.withLock { $0 } == (mount == .unchanged ? [card.volume] : []))
+            #expect(model.importNotice?.ejectable == nil)
+            #expect(model.importNotice?.text == notice.text)
+            #expect(model.importNotice?.roll == roll)
+        }
     }
 
     /// A folder chosen in the panel is imported as a card is: its frames are "left in the folder", its roll may be on its
