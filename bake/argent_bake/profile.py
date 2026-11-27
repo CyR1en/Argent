@@ -29,6 +29,7 @@ from .unmixing import unmix
 LAYERS = ("red", "green", "blue")  # the layer each curve belongs to, by the light it records
 DYES = ("cyan", "magenta", "yellow")  # the dye each layer forms, in the same order
 SCHEMAS = (1, 2)
+STOCK_ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 MEASURED_STATUSES = ("datasheet", "fitted")
 SOURCED_STATUSES = (*MEASURED_STATUSES, "approximation")
 CURVE_FALL_TOLERANCE = 0.05  # density a curve may fall by between samples before the profile is refused
@@ -161,7 +162,11 @@ def load_profile(source) -> StockProfile:
     else:
         data = source
 
-    name = data.get("id", "<unnamed>")
+    name = data.get("id")
+    if not isinstance(name, str) or not STOCK_ID_PATTERN.fullmatch(name):
+        location = f"profile {source}" if isinstance(source, (str, Path)) else "profile"
+        raise ProfileError(f"{location}: id must be a non-empty string of lowercase ASCII letters and digits, "
+                           "optionally separated by hyphens")
     status = data.get("status", "")
     if status == "placeholder":
         raise ProfileError(
@@ -395,7 +400,7 @@ def load_profile(source) -> StockProfile:
         if not isinstance(variant, dict):
             raise ProfileError(f"profile {name}: each print variant must be an object")
         variant_id, label, medium = (variant.get(key) for key in ("id", "displayName", "paper"))
-        if (not isinstance(variant_id, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", variant_id)
+        if (not isinstance(variant_id, str) or not STOCK_ID_PATTERN.fullmatch(variant_id)
                 or variant_id in used_ids):
             raise ProfileError(f"profile {name}: print variant needs a unique stock id")
         if (not isinstance(label, str) or not label.strip() or not isinstance(medium, str)

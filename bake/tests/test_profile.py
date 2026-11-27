@@ -20,6 +20,21 @@ def test_the_synthetic_profile_loads_through_the_same_path_as_a_file(tmp_path):
     assert from_file.sensitivity.shape == (81, 3) and from_file.dyes.shape == (81, 3) and from_file.base.shape == (81,)
 
 
+@pytest.mark.parametrize("fields", [
+    pytest.param({}, id="missing"),
+    pytest.param({"id": ["synthetic-v0"]}, id="array"),
+    pytest.param({"id": 7}, id="integer"),
+    pytest.param({"id": None}, id="null"),
+    pytest.param({"id": "../outside"}, id="invalid-string"),
+])
+def test_invalid_primary_stock_ids_are_refused(fields):
+    data = synthetic.profile_dict()
+    del data["id"]
+    data.update(fields)
+    with pytest.raises(ProfileError, match="id must be"):
+        load_profile(data)
+
+
 def test_explicit_dyes_are_normalized_to_a_unit_peak_and_the_base_is_clear():
     profile = synthetic.profile()
     assert profile.dyes.max(axis=0) == pytest.approx(np.ones(3))

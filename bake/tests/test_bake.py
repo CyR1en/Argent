@@ -341,6 +341,24 @@ class TestCommandLine:
             assert len(captured.err.splitlines()) == 1
             assert captured.err.startswith(f"error: cannot read profile {path}:")
 
+    @pytest.mark.parametrize("stock_id", [["synthetic-v0"], 7, None], ids=["array", "integer", "null"])
+    @pytest.mark.parametrize("command", ["check", "bake"])
+    def test_invalid_primary_stock_id_fails_cleanly(self, tmp_path, capsys, stock_id, command):
+        path = tmp_path / "invalid.json"
+        path.write_text(json.dumps(dict(synthetic.profile_dict(), id=stock_id)))
+        out = tmp_path / "baked"
+        args = [command, "--profile", str(path)]
+        if command == "bake":
+            args += ["--size", "2", "--out", str(out)]
+
+        assert main(args) == 2
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert len(captured.err.splitlines()) == 1
+        assert captured.err.startswith(f"error: profile {path}: id must be")
+        assert not (out / "stock.json").exists()
+
     @pytest.mark.parametrize("document", [b"[]", b"null", b"\xff\xfe{", b"{"])
     def test_bake_all_continues_after_invalid_profile_document(self, tmp_path, capsys, monkeypatch, document):
         import argent_bake.__main__ as cli
@@ -362,6 +380,25 @@ class TestCommandLine:
         assert "wrote" in captured.out
         assert (out / "synthetic-v0" / "stock.json").is_file()
         assert (out / "synthetic-v0" / "print.lut3d").is_file()
+
+    def test_bake_all_continues_after_invalid_primary_stock_id(self, tmp_path, capsys, monkeypatch):
+        import argent_bake.__main__ as cli
+
+        stocks = tmp_path / "stocks"
+        stocks.mkdir()
+        invalid = stocks / "a-invalid.json"
+        invalid.write_text(json.dumps(dict(synthetic.profile_dict(), id=["synthetic-v0"])))
+        (stocks / "z-valid.json").write_text(json.dumps(synthetic.profile_dict()))
+        monkeypatch.setattr(cli, "STOCKS_DIR", stocks)
+        out = tmp_path / "baked"
+
+        assert main(["bake", "--all", "--size", "2", "--out", str(out)]) == 2
+
+        captured = capsys.readouterr()
+        assert len(captured.err.splitlines()) == 1
+        assert captured.err.startswith(f"error: profile {invalid}: id must be")
+        manifests = {path.parent.name for path in out.glob("*/stock.json")}
+        assert manifests == {"argent-neutral", "synthetic-v0"}
 
     def test_bake_reports_working_directory_output_cleanly(self, tmp_path, capsys, monkeypatch):
         monkeypatch.chdir(tmp_path)
