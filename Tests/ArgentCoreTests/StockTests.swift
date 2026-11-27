@@ -89,6 +89,21 @@ import Testing
         #expect(tabbed.print.values == spaced.print.values)
     }
 
+    @Test func fallsBackToACRLFCube() throws {
+        let directory = try ToyStock.write(size: 2)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let lf = try Stock.load(from: directory)
+        for name in ["negative.cube", "print.cube"] {
+            let url = directory.appendingPathComponent(name)
+            try String(contentsOf: url, encoding: .utf8).replacingOccurrences(of: "\n", with: "\r\n")
+                .write(to: url, atomically: true, encoding: .utf8)
+        }
+
+        let crlf = try Stock.load(from: directory)
+        #expect(crlf.negative.values == lf.negative.values)
+        #expect(crlf.print.values == lf.print.values)
+    }
+
     @Test func prefersTheBinaryFileOverTheCube() throws {
         let directory = try ToyStock.write(size: 9, binary: true)
         defer { try? FileManager.default.removeItem(at: directory) }
