@@ -391,6 +391,22 @@ class TestCommandLine:
         assert out.read_text() == "keep me"
         assert list(tmp_path.iterdir()) == [out]
 
+    @pytest.mark.parametrize("source", ["--synthetic", "--neutral", "--all"])
+    def test_bake_reports_output_symlink_loop_cleanly(self, tmp_path, capsys, source):
+        out = tmp_path / "loop"
+        out.symlink_to(out.name)
+
+        assert main(["bake", source, "--size", "2", "--out", str(out)]) == 2
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "Traceback" not in captured.err
+        assert len(captured.err.splitlines()) == 1
+        assert captured.err.startswith("error:")
+        assert str(out) in captured.err
+        assert out.readlink() == Path(out.name)
+        assert list(tmp_path.iterdir()) == [out]
+
     def test_bake_all_continues_after_blocked_stock_output(self, tmp_path, capsys, monkeypatch):
         import argent_bake.__main__ as cli
 

@@ -21,7 +21,7 @@ import numpy as np
 
 from . import __version__
 from .bake import (MANIFEST_FILE, NEGATIVE_BINARY, NEGATIVE_FILE, PRINT_BINARY, PRINT_FILE, SCHEMA,
-                   BakeResult, _rounded, _stock_output)
+                   BakeResult, _resolve_output, _rounded, _stock_output)
 from .cube import write_binary, write_cube
 from .encoding import LogEncoding
 from .negative import FILM_LOG_ENCODING, MID_GRAY
@@ -99,7 +99,7 @@ def _decode_grid(grid: np.ndarray, encoding: LogEncoding) -> np.ndarray:
 def bake_neutral(out_dir, size: int = 65, encoding: LogEncoding | None = None) -> BakeResult:
     """Bake the Neutral digital stock into `out_dir` using the standard schema-2 stock contract."""
     out = Path(out_dir)
-    target = out.resolve()
+    target = _resolve_output(out)
     if target.exists() and Path.cwd().resolve().is_relative_to(target):
         raise ValueError(f"refusing to rebake {target}: it is the current working directory or contains it")
 

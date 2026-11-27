@@ -63,6 +63,13 @@ def _rounded(values, places: int = 6) -> list:
     return [round(float(v), places) for v in np.asarray(values).ravel()]
 
 
+def _resolve_output(out: Path) -> Path:
+    try:
+        return out.resolve()
+    except RuntimeError as error:
+        raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), out) from error
+
+
 def _exchange_directories(staging: Path, out: Path) -> None:
     libc = ctypes.CDLL(None, use_errno=True)
     source, target = os.fsencode(staging), os.fsencode(out)
@@ -121,7 +128,7 @@ def bake_stock(profile: StockProfile, paper: PaperModel, out_dir, size: int = 65
         raise ValueError(f"profile {profile.id} prints onto {profile.paper!r}, not {paper.name!r}")
 
     out = Path(out_dir)
-    target = out.resolve()
+    target = _resolve_output(out)
     if target.exists() and Path.cwd().resolve().is_relative_to(target):
         raise ValueError(f"refusing to rebake {target}: it is the current working directory or contains it")
 

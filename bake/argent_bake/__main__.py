@@ -97,6 +97,8 @@ def main(argv=None) -> int:
         if args.neutral:
             return _bake_neutral(args.out, args.size)
         if args.all:
+            from .bake import _resolve_output
+
             paths = sorted((p for p in STOCKS_DIR.iterdir() if p.name.endswith(".json") and p.is_file()),
                            key=lambda p: p.name) if STOCKS_DIR.is_dir() else []
             if not paths:
@@ -104,7 +106,7 @@ def main(argv=None) -> int:
                 return 2
             out_dir = Path(args.out)
             try:
-                out_dir.resolve().mkdir(parents=True, exist_ok=True)
+                _resolve_output(out_dir).mkdir(parents=True, exist_ok=True)
             except OSError as error:
                 return _output_error(out_dir, error)
             failures = 0
