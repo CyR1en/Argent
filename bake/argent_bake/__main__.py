@@ -15,6 +15,11 @@ def _size(value: str) -> int:
     return size
 
 
+def _output_error(out_dir, error: OSError) -> int:
+    print(f"error: cannot bake to {out_dir}: {error}", file=sys.stderr)
+    return 2
+
+
 def _bake_one(profile, out_dir, size: int) -> int:
     """Bake one loaded profile into `out_dir`, printing what the bake found. Returns the exit code.
 
@@ -36,6 +41,8 @@ def _bake_one(profile, out_dir, size: int) -> int:
     except (CalibrationError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
+    except OSError as error:
+        return _output_error(out_dir, error)
     print(f"wrote {result.directory} (negative and print {result.size}^3, density range {result.density_range})")
     print("daylight filtration, log10 exposure: " + " ".join(f"{v:.3f}" for v in result.filtration))
     print("paper exposure per unit dye, log10: " + " ".join(f"{v:.3f}" for v in result.exposure_per_unit))
@@ -54,6 +61,8 @@ def _bake_neutral(out_dir, size: int) -> int:
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
+    except OSError as error:
+        return _output_error(out_dir, error)
     print(f"wrote {result.directory} (negative and print {result.size}^3, density range {result.density_range})")
     return 0
 
@@ -93,9 +102,14 @@ def main(argv=None) -> int:
             if not paths:
                 print(f"error: no profiles in {STOCKS_DIR}", file=sys.stderr)
                 return 2
+            out_dir = Path(args.out)
+            try:
+                out_dir.resolve().mkdir(parents=True, exist_ok=True)
+            except OSError as error:
+                return _output_error(out_dir, error)
             failures = 0
             baked_ids = {neutral.STOCK_ID}
-            failures += _bake_neutral(Path(args.out) / neutral.STOCK_ID, args.size) != 0
+            failures += _bake_neutral(out_dir / neutral.STOCK_ID, args.size) != 0
             for path in paths:
                 try:
                     with as_file(path) as profile_path:
@@ -110,7 +124,7 @@ def main(argv=None) -> int:
                         failures += 1
                         continue
                     baked_ids.add(stock.id)
-                    failures += _bake_one(stock, Path(args.out) / stock.id, args.size) != 0
+                    failures += _bake_one(stock, out_dir / stock.id, args.size) != 0
             return 2 if failures else 0
         try:
             profile = synthetic.profile() if args.synthetic else load_profile(args.profile)
