@@ -261,13 +261,14 @@ public final class RollDeveloper: @unchecked Sendable {
     /// or an unrelated file gets a number, "DSC00601 2.jpg".
     public static func files(for jobs: [Job], in destination: URL, output: OutputSettings) -> [URL] {
         let ext = output.encoding.fileExtension
+        let suffix = output.size.fileSuffix
         var taken = Set<String>()
         let folder = destination.canonicalPath
         let recorded: [URL?] = jobs.map { job in
-            for develop in latestOutputs(of: job) where develop.output.format == output.format {
+            for develop in latestOutputs(of: job) where develop.output.format == output.format && develop.output.size == output.size {
                 let file = URL(fileURLWithPath: develop.file)
                 guard file.deletingLastPathComponent().canonicalPath == folder,
-                      file.pathExtension.lowercased() == ext, isNamed(file, after: job.frame),
+                      file.pathExtension.lowercased() == ext, isNamed(file, after: job.frame, suffix: suffix),
                       canReuseOutput(develop),
                       taken.insert(file.lastPathComponent.lowercased()).inserted else { continue }
                 return destination.appendingPathComponent(file.lastPathComponent)
@@ -276,10 +277,11 @@ public final class RollDeveloper: @unchecked Sendable {
         }
         return zip(jobs, recorded).map { job, recorded in
             if let recorded { return recorded }
-            let own = Set(latestOutputs(of: job).filter(canReuseOutput).map(\.file.canonicalPath))
+            let own = Set(latestOutputs(of: job).filter { $0.output.size == output.size && canReuseOutput($0) }.map(\.file.canonicalPath))
+            let baseName = job.frame.name + suffix
             var number = 1
             while true {
-                let name = number == 1 ? job.frame.name : "\(job.frame.name) \(number)"
+                let name = number == 1 ? baseName : "\(baseName) \(number)"
                 let url = destination.appendingPathComponent(name).appendingPathExtension(ext)
                 let free = !FileManager.default.fileExists(atPath: url.path) || own.contains(url.canonicalPath)
                 if free, taken.insert(url.lastPathComponent.lowercased()).inserted { return url }
@@ -291,10 +293,11 @@ public final class RollDeveloper: @unchecked Sendable {
     /// Whether `file` has a name a develop of `frame` gives: the frame's, numbered or not, but not a
     /// raw's beside it, as a twin "DSC1 2" is. A receipt of another name is another raw's, as one a
     /// build before 2026-10-22 merged into a twin's record is.
-    private static func isNamed(_ file: URL, after frame: Frame) -> Bool {
+    private static func isNamed(_ file: URL, after frame: Frame, suffix: String = "") -> Bool {
         let stem = file.deletingPathExtension().lastPathComponent
-        if stem == frame.name { return true }
-        guard stem.hasPrefix(frame.name + " "), let number = Int(stem.dropFirst(frame.name.count + 1)), number > 1 else { return false }
+        let baseName = frame.name + suffix
+        if stem == baseName { return true }
+        guard stem.hasPrefix(baseName + " "), let number = Int(stem.dropFirst(baseName.count + 1)), number > 1 else { return false }
         let raw = frame.url.deletingLastPathComponent().appendingPathComponent(stem).appendingPathExtension(frame.url.pathExtension)
         return !FileManager.default.fileExists(atPath: raw.path)
     }

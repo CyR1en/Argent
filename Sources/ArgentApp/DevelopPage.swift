@@ -357,12 +357,12 @@ struct DevelopOutputRows: View {
         VStack(spacing: Graphite.Metric.m) {
             row("Preset") {
                 HStack(spacing: Graphite.Metric.xs) {
-                    Button("Instagram") { output = .instagramFeed }
+                    Button("Instagram") { output = output.applyingInstagramPreset(.instagramFeed) }
                         .buttonStyle(.graphite(output.size == .instagramFeed && output.isInstagramPreset ? .primary : .secondary, size: .small))
-                        .help("One-click sRGB JPEG at 1080 px (quality 90) for Instagram")
-                    Button("4:5 Portrait") { output = .instagramPortrait }
+                        .help("One-click sRGB JPEG at 1080 px long edge (quality 90) for Instagram")
+                    Button("1350 px") { output = output.applyingInstagramPreset(.instagramPortrait) }
                         .buttonStyle(.graphite(output.size == .instagramPortrait && output.isInstagramPreset ? .primary : .secondary, size: .small))
-                        .help("One-click sRGB JPEG at 1350 px (quality 90) for Instagram 4:5 portrait")
+                        .help("One-click sRGB JPEG at 1350 px long edge (quality 90) for vertical Instagram posts; preserves camera aspect ratio")
                 }
             }
             row("Format") { OutputPicker.format($output) }

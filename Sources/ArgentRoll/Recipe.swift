@@ -50,11 +50,20 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
 
         public var longEdge: Int? { self == .full ? nil : rawValue }
 
+        /// Filename suffix appended to social-sized exports so they never overwrite full-size files.
+        public var fileSuffix: String {
+            switch self {
+            case .instagramFeed: return "-1080px"
+            case .instagramPortrait: return "-1350px"
+            case .full, .longEdge4096, .longEdge2048: return ""
+            }
+        }
+
         public var title: String {
             switch self {
             case .full: return "Full size"
             case .instagramFeed: return "Instagram (1080 px)"
-            case .instagramPortrait: return "Instagram Portrait (1350 px)"
+            case .instagramPortrait: return "Instagram Vertical (1350 px)"
             case .longEdge4096, .longEdge2048: return "\(rawValue) px long edge"
             }
         }
@@ -73,6 +82,17 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
     /// One-click social export presets: sRGB JPEG at quality 90 sized for Instagram.
     public static let instagramFeed = OutputSettings(format: .jpeg, size: .instagramFeed, space: .sRGB, grain: .off, quality: 90)
     public static let instagramPortrait = OutputSettings(format: .jpeg, size: .instagramPortrait, space: .sRGB, grain: .off, quality: 90)
+
+    /// Returns a copy configured for an Instagram sRGB JPEG export at `size` (quality 90) while
+    /// preserving the roll's existing `grain` and `halation` settings.
+    public func applyingInstagramPreset(_ size: Size) -> OutputSettings {
+        var copy = self
+        copy.format = .jpeg
+        copy.size = size
+        copy.space = .sRGB
+        copy.quality = 90
+        return copy
+    }
 
     /// Whether these settings match one of the Instagram sRGB JPEG presets.
     public var isInstagramPreset: Bool {

@@ -99,5 +99,16 @@ private func makeStock(id: String, displayName: String = "Test") -> Stock {
         let encoded = try JSONEncoder().encode(feed)
         let decoded = try JSONDecoder().decode(OutputSettings.self, from: encoded)
         #expect(decoded == feed)
+
+        // Applying an Instagram preset preserves roll grain and halation choices.
+        let customRoll = OutputSettings(format: .tiff16, size: .full, space: .displayP3, grain: .natural, quality: 100, halation: 0)
+        let social = customRoll.applyingInstagramPreset(.instagramPortrait)
+        #expect(social.format == .jpeg && social.space == .sRGB && social.size == .instagramPortrait && social.quality == 90)
+        #expect(social.grain == .natural && social.halation == 0)
+
+        // Social sizes suffix filenames so they never overwrite full-size JPEGs.
+        #expect(OutputSettings.Size.full.fileSuffix == "")
+        #expect(OutputSettings.Size.instagramFeed.fileSuffix == "-1080px")
+        #expect(OutputSettings.Size.instagramPortrait.fileSuffix == "-1350px")
     }
 }
