@@ -17,6 +17,11 @@ import SwiftUI
                    help: "The color space the developed files are written in, its profile embedded. Previews show the film in it too")
     }
 
+    static func size(_ output: Binding<OutputSettings>) -> some View {
+        OutputMenu(title: "Size", selection: output.size, options: OutputSettings.Size.pickerOptions, name: \.title,
+                   help: "Full camera resolution, or Instagram-sized sRGB dimensions (1080 px feed or 1350 px 4:5 portrait)")
+    }
+
     /// Grain: its two choices side by side, the stock panel's and the Roll menu's own.
     static func grain(_ output: Binding<OutputSettings>) -> some View {
         GraphiteSegmented(selection: output.grain,

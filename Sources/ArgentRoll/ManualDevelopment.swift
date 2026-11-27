@@ -216,7 +216,7 @@ public enum DevelopmentResolver {
                                                        referenceStops: baseline.aim.level, version: edit.curveVersion)
         } else {
             settings = controls.settings(for: stock, aim: aim)
-            settings.manual = .identity
+            settings.manual = NeutralAuto.autoManualSettings(for: stock, referenceStops: aim.level)
         }
         settings.grain = grain
         settings.grainSeed = grainSeed

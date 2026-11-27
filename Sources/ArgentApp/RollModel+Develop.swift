@@ -140,8 +140,9 @@ extension RollModel {
     static func savedOutput() -> OutputSettings {
         var output = UserDefaults.standard.data(forKey: outputKey).flatMap { try? JSONDecoder().decode(OutputSettings.self, from: $0) }
             ?? OutputSettings()
-        // Every develop is full size since 2026-10-29, whatever size was saved before.
-        output.size = .full
+        if !OutputSettings.Size.pickerOptions.contains(output.size) {
+            output.size = .full
+        }
         return output
     }
 
