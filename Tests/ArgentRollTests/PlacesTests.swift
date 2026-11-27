@@ -27,6 +27,7 @@ import Testing
         // A card with only JPEGs and companions is not offered.
         try Data().write(to: dcim.appendingPathComponent("100MSDCF/DSC00001.JPG"))
         try Data().write(to: dcim.appendingPathComponent("100MSDCF/._DSC00002.ARW"))
+        try Data().write(to: dcim.appendingPathComponent("102MSDCF"))
         #expect(CardScanner.card(on: volume) == nil)
         try Data().write(to: dcim.appendingPathComponent("100MSDCF/DSC00002.ARW"))
         try Data().write(to: dcim.appendingPathComponent("10161006/DSC00003.arw"))
@@ -54,6 +55,29 @@ import Testing
         #expect(CardScanner.card(on: volume)?.rawCount == 1)
         try FileManager.default.removeItem(at: dcim)
         #expect(CardScanner.card(on: volume) == nil)
+    }
+
+    @Test func aCardWithAnUnreadableDCFFolderIsOfferedUncounted() throws {
+        let volume = try temporaryFolder()
+        let fileManager = FileManager.default
+        let unreadable = volume.appendingPathComponent("DCIM/100MSDCF")
+        defer {
+            try? fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unreadable.path)
+            try? fileManager.removeItem(at: volume)
+        }
+        try fileManager.createDirectory(at: unreadable, withIntermediateDirectories: true)
+        try Data().write(to: unreadable.appendingPathComponent("DSC00001.ARW"))
+        try fileManager.setAttributes([.posixPermissions: 0], ofItemAtPath: unreadable.path)
+        let uncounted = Card(volume: volume, name: "Untitled", rawCount: nil)
+        #expect(CardScanner.card(on: volume, name: "Untitled") == uncounted)
+
+        let readable = volume.appendingPathComponent("DCIM/101MSDCF")
+        try fileManager.createDirectory(at: readable, withIntermediateDirectories: false)
+        try Data().write(to: readable.appendingPathComponent("DSC00002.ARW"))
+        #expect(CardScanner.card(on: volume, name: "Untitled") == uncounted)
+
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: unreadable.path)
+        #expect(CardScanner.card(on: volume)?.rawCount == 2)
     }
 
     /// A full card, 500 raws and 500 JPEGs over two folders, is two directory listings.
