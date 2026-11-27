@@ -11,18 +11,25 @@ import Foundation
 public enum NeutralAuto {
     public static let stockID = "argent-neutral"
 
-    /// Share of green-against-magenta cast removed (fluorescent / LED tint is never mood).
-    public static let greenMagentaShare: Float = 0.85
-    /// Bound on green-against-magenta correction, in stops.
-    public static let greenMagentaLimit: Float = 0.40
-    /// Share of cool (blue) cast removed, bounded by `coolLimit` stops.
-    public static let coolShare: Float = 0.80
-    public static let coolLimit: Float = 0.65
+    /// Small green-against-magenta shifts within `greenMagentaDeadband` stops (~6 mired) are
+    /// normal scene/foliage bounce and left untouched so neutral walls and skin never turn pink.
+    public static let greenMagentaDeadband: Float = 0.06
+    /// Share of green-against-magenta cast above the deadband removed (fluorescent / LED tint).
+    public static let greenMagentaShare: Float = 0.60
+    /// Bound on green-against-magenta correction, in stops (~26 mired).
+    public static let greenMagentaLimit: Float = 0.25
+    /// Small red-against-blue shifts within `redBlueDeadband` stops (~12 mired) are normal
+    /// daylight/sky variance and left untouched so blue skies and neutral walls keep camera color.
+    public static let redBlueDeadband: Float = 0.12
+    /// Share of cool (blue) cast above the deadband removed, bounded by `coolLimit` stops so
+    /// bright blue skies do not warm sunny landscapes into yellow.
+    public static let coolShare: Float = 0.45
+    public static let coolLimit: Float = 0.35
     /// Mild warm casts below `warmMoodKnee` stops are trimmed at `mildWarmShare`; stronger warm
     /// casts (golden hour, sunset) taper smoothly toward `warmMoodLimit` so the scene stays warm.
-    public static let mildWarmShare: Float = 0.75
+    public static let mildWarmShare: Float = 0.55
     public static let warmMoodKnee: Float = 0.45
-    public static let warmMoodLimit: Float = 0.42
+    public static let warmMoodLimit: Float = 0.32
 
     /// Subtle auto polish applied to Neutral when no manual edit overrides Presence.
     public static let polishVibrance: Float = 12
@@ -36,18 +43,24 @@ public enum NeutralAuto {
         stock.id == stockID
     }
 
-    /// The share of `cast` Neutral's Auto white balance takes out: cleans green-magenta and cool
-    /// casts firmly, trims mild indoor warmth, and preserves golden-hour / sunset warmth.
+    /// The share of `cast` Neutral's Auto white balance takes out: ignores minor foliage/daylight
+    /// variance inside its deadbands, cleans genuine fluorescent and cold casts gently without
+    /// warming blue skies, trims mild indoor warmth, and preserves golden-hour / sunset warmth.
     public static func whiteBalanceCorrection(for cast: SIMD3<Float>) -> SIMD3<Float> {
         let (redBlue, greenMagenta) = AutoBalance.axes(cast)
-        let gm = min(max(greenMagentaShare * greenMagenta, -greenMagentaLimit), greenMagentaLimit)
+        let gmExcess = max(abs(greenMagenta) - greenMagentaDeadband, 0)
+        let gmSign: Float = greenMagenta >= 0 ? 1 : -1
+        let gm = gmSign * min(greenMagentaShare * gmExcess, greenMagentaLimit)
         let rb: Float
-        if redBlue <= 0 {
-            rb = max(coolShare * redBlue, -coolLimit)
+        if abs(redBlue) <= redBlueDeadband {
+            rb = 0
+        } else if redBlue < 0 {
+            let coolExcess = -redBlue - redBlueDeadband
+            rb = -min(coolShare * coolExcess, coolLimit)
         } else if redBlue <= warmMoodKnee {
-            rb = mildWarmShare * redBlue
+            rb = mildWarmShare * (redBlue - redBlueDeadband)
         } else {
-            let base = mildWarmShare * warmMoodKnee
+            let base = mildWarmShare * (warmMoodKnee - redBlueDeadband)
             let headroom = max(warmMoodLimit - base, 0)
             let excess = redBlue - warmMoodKnee
             let soft = headroom > 0 ? headroom * (excess / (excess + headroom / mildWarmShare)) : 0

@@ -13,29 +13,34 @@ private func makeStock(id: String, displayName: String = "Test") -> Stock {
 
 @Suite struct NeutralAutoTests {
     @Test func moodPreservingWhiteBalanceRemovesTintAndCoolCastsWhileKeepingSunsetWarm() {
-        // Fluorescent green cast is firmly removed (85%, up to 0.40 stops).
+        // Minor foliage/ambient green-magenta variance within deadband does NOT push pink/magenta.
+        let foliageBounce = AutoBalance.cast(redBlue: 0, greenMagenta: 0.05)
+        let foliageFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: foliageBounce))
+        #expect(abs(foliageFix.greenMagenta) < 1e-5)
+
+        // Genuine fluorescent green cast above deadband is cleaned without over-correcting.
         let greenCast = AutoBalance.cast(redBlue: 0, greenMagenta: 0.30)
         let greenFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: greenCast))
-        #expect(abs(greenFix.greenMagenta - 0.255) < 1e-4)
+        #expect(abs(greenFix.greenMagenta - 0.60 * (0.30 - 0.06)) < 1e-4)
         #expect(abs(greenFix.redBlue) < 1e-5)
 
-        // Cool blue cast is cleanly warmed (80%, up to 0.65 stops).
+        // Cool blue cast above deadband is gently warmed (45%, up to 0.35 stops) without killing blue skies.
         let coolCast = AutoBalance.cast(redBlue: -0.60, greenMagenta: 0)
         let coolFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: coolCast))
-        #expect(abs(coolFix.redBlue + 0.48) < 1e-4)
+        #expect(abs(coolFix.redBlue + 0.45 * (0.60 - 0.12)) < 1e-4)
 
-        // Mild warm indoor cast is trimmed gently (75%).
+        // Mild warm indoor cast above deadband is trimmed gently (55%).
         let mildWarm = AutoBalance.cast(redBlue: 0.30, greenMagenta: 0)
         let mildFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: mildWarm))
-        #expect(abs(mildFix.redBlue - 0.225) < 1e-4)
+        #expect(abs(mildFix.redBlue - 0.55 * (0.30 - 0.12)) < 1e-4)
 
-        // Strong sunset warmth (130 mired = +1.24 stops) stays predominantly warm (> 65% kept),
+        // Strong sunset warmth (130 mired = +1.24 stops) stays predominantly warm (> 74% kept),
         // while keeping more warmth than film AutoBalance (which removes 0.57 stops).
         let sunset = AutoBalance.cast(redBlue: 1.24, greenMagenta: 0)
         let sunsetFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: sunset))
         let remainingWarmth = 1.24 - sunsetFix.redBlue
         #expect(sunsetFix.redBlue <= NeutralAuto.warmMoodLimit + 1e-5)
-        #expect(remainingWarmth > 0.80)
+        #expect(remainingWarmth > 0.92)
         #expect(sunsetFix.redBlue < AutoBalance.axes(AutoBalance.correction(for: sunset)).redBlue)
     }
 
