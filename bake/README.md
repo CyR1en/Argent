@@ -198,6 +198,7 @@ The bake copies `status` into the manifest; `argent-spike` prints a note for any
 `fitted`. `displayName` is the name the app shows (Portra 400 for `kodak-portra-400`);
 `modelledFilm` ("Kodak Portra 400") appears in the app's descriptive line. Recipes refer to
 stocks by id.
+Stock and print variant `id` values use lowercase ASCII letters and digits, optionally separated by hyphens (e.g. `portra-400`).
 
 ## The gates
 
