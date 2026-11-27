@@ -475,6 +475,9 @@ extension RollModel {
     private func beginImport(_ card: Card, isFolder: Bool) {
         isImportSourceShown = false
         importNotice = nil
+        importEjectTarget = importSourceVolume(card.volume).flatMap { volume in
+            importVolumeID(volume).map { ImportEjectTarget(volume: volume, id: $0) }
+        }
         importsFolder = isFolder
         maskEditor.reset()
         if requestedPage == .settings { requestedPage = .roll }
@@ -545,8 +548,11 @@ extension RollModel {
     }
 
     func importCardRemoved(_ volume: URL) {
+        let path = volume.canonicalPath
+        if importNotice?.ejectable?.volume.canonicalPath == path { importNotice?.ejectable = nil }
+        if importEjectTarget?.volume.canonicalPath == path { importEjectTarget = nil }
         guard let card = importSession.card, !importSession.isOpeningItsRoll,
-              card.volume.canonicalPath == volume.canonicalPath || card.volume.canonicalPath.hasPrefix(volume.canonicalPath + "/")
+              card.volume.canonicalPath == path || card.volume.canonicalPath.hasPrefix(path + "/")
         else { return }
         if case .copying = importSession { return cancelCopy() }
         let imported: ImportedFrames? = if case .reviewing(let review) = importSession { review.stop?.imported } else { nil }
@@ -685,7 +691,8 @@ extension RollModel {
         library = bookmarks.rolls
         guard run == importRun else { return }
         importNotice = ImportNotice(roll: entry?.id, folder: folder, copied: total, left: review.count(.left), source: card.name,
-                                    isFolder: importsFolder, ejectable: Self.ejectableVolume(of: card.volume))
+                                    isFolder: importsFolder, ejectable: importEjectTarget)
+        importEjectTarget = nil
         importSession = .idle
         importCovers = []
         if !importsFolder {
@@ -732,6 +739,7 @@ extension RollModel {
 
     private func endImportScan() {
         importRun += 1
+        importEjectTarget = nil
         importTask?.cancel()
         importTask = nil
     }

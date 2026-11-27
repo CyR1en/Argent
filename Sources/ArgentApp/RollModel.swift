@@ -341,6 +341,14 @@ final class RollModel {
     var importsFolder = false
     @ObservationIgnored var importTask: Task<Void, Never>?
     @ObservationIgnored var importRun = 0
+    @ObservationIgnored var importEjectTarget: ImportEjectTarget?
+    @ObservationIgnored var importSourceVolume: (URL) -> URL? = { RollModel.ejectableVolume(of: $0) }
+    @ObservationIgnored var importVolumeID: @Sendable (URL) -> String? = {
+        ImportEjectTarget.volumeID(at: $0)
+    }
+    @ObservationIgnored var ejectVolume: @Sendable (URL) throws -> Void = {
+        try NSWorkspace.shared.unmountAndEjectDevice(at: $0)
+    }
     @ObservationIgnored let importThumbnails = ThumbnailLoader(costLimit: 128 << 20, largeCostLimit: 0)
     @ObservationIgnored var keeperCopy: CopyKeepers = { try await KeeperCopy.run($0, to: $1, progress: $2) }
     /// The copy for an import from a folder, whose roll may be made on the folder's own disk.
