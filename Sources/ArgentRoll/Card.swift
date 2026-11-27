@@ -6,10 +6,9 @@ public struct Card: Sendable, Equatable, Identifiable {
     public let volume: URL
     /// The volume's name as Finder shows it, usually "Untitled" for a card the camera formatted.
     public let name: String
-    /// ARW files in the card's DCF folders, or `nil` when its DCIM folder is there but cannot be
-    /// listed: macOS asks before an app reads a removable volume it was not given, and a refusal,
-    /// or a sandbox without the app's /Volumes exception, leaves the folder unreadable while it can
-    /// still be seen (docs/research/camera.md, section 4).
+    /// ARW files in the card's DCF folders, or `nil` when DCIM or one of its DCF folders cannot
+    /// be listed. macOS may let an app see a removable volume's folders even when the app cannot
+    /// list them (docs/research/camera.md, section 4).
     public let rawCount: Int?
 
     public var id: URL { volume }
@@ -32,8 +31,8 @@ public enum CardScanner {
 
     /// The card on `volume`, if it is one: a DCIM folder whose DCF folders hold ARW files.
     /// Reads two directory levels and never a file, so it costs a few milliseconds even on a
-    /// full card. A DCIM folder it may see but not list is a card of unknown count; `nil` for
-    /// anything else.
+    /// full card. If DCIM or a DCF folder is visible but cannot be listed, the card has an unknown
+    /// count; `nil` if no card is found.
     public static func card(on volume: URL, name: String? = nil) -> Card? {
         let fileManager = FileManager.default
         let dcim = volume.appendingPathComponent("DCIM", isDirectory: true)
@@ -49,9 +48,10 @@ public enum CardScanner {
         }
         var count = 0
         for folder in folders where isDCFFolder(folder.lastPathComponent) {
-            guard (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
-                  let files = try? fileManager.contentsOfDirectory(atPath: folder.path)
-            else { continue }
+            guard (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+            guard let files = try? fileManager.contentsOfDirectory(atPath: folder.path) else {
+                return Card(volume: volume, name: shown, rawCount: nil)
+            }
             count += files.filter { !$0.hasPrefix(".") && ($0 as NSString).pathExtension.lowercased() == "arw" }.count
         }
         guard count > 0 else { return nil }
