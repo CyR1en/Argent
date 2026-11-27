@@ -750,7 +750,7 @@ import Testing
     }
 
     enum SourceMount: CaseIterable {
-        case unchanged, unmountedDuringEject, missing, replaced, reportedUnmount, unidentified
+        case unchanged, unmountedDuringEject, missing, replaced, replacedDuringImport, reportedUnmount, unidentified
     }
 
     @Test(arguments: SourceMount.allCases) func importNoticeOnlyEjectsItsSource(_ mount: SourceMount) async throws {
@@ -771,6 +771,7 @@ import Testing
                 }
             }
             model.startImport(folder: source)
+            if mount == .replacedDuringImport { identity.withLock { $0 = "replacement" } }
             await model.importTask?.value
             try #require(model.importSession.review?.canCopy == true)
             model.startCopy()
@@ -780,7 +781,7 @@ import Testing
             #expect((notice.ejectable != nil) == (mount != .unidentified))
 
             switch mount {
-            case .unchanged, .unmountedDuringEject, .unidentified: break
+            case .unchanged, .unmountedDuringEject, .replacedDuringImport, .unidentified: break
             case .missing: identity.withLock { $0 = nil }
             case .replaced: identity.withLock { $0 = "replacement" }
             case .reportedUnmount:
