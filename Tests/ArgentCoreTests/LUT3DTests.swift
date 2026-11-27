@@ -78,6 +78,12 @@ import Testing
         #expect(row == "0 0")
     }
 
+    @Test func cubeCommentCanContainAFormFeed() throws {
+        let lut = LUT3D.identity(size: 2)
+        let text = "# comment\u{000C}still a comment\n" + lut.cubeText(title: "identity")
+        #expect(try LUT3D.parseCube(text).values == lut.values)
+    }
+
     @Test func tabSeparatedCubeMatchesSpaceSeparatedCube() throws {
         let spaced = LUT3D.identity(size: 2).cubeText(title: "identity")
         let expected = try LUT3D.parseCube(spaced).values

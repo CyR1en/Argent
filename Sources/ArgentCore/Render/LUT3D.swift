@@ -156,7 +156,8 @@ public struct LUT3D: Sendable {
     public static func parseCube(_ text: String, encoding: LogEncoding = LogEncoding()) throws -> LUT3D {
         var size = 0
         var values: [Float] = []
-        for (index, rawLine) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
+        let lines = text.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" }
+        for (index, rawLine) in lines.enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
