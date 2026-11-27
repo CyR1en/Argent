@@ -611,7 +611,7 @@ do {
             + "loaded in \(loadMilliseconds) ms"
         if stock.status == "approximation" {
             note = "stock status is \"approximation\": uses proxy data and is not fitted to scans"
-        } else if stock.status != "fitted" {
+        } else if stock.status != "fitted" && stock.status != "digital" {
             note = "stock status is \"\(stock.status)\": it exercises the pipeline and is not a look"
         }
     } else {

@@ -46,6 +46,18 @@ def _bake_one(profile, out_dir, size: int) -> int:
     return 0
 
 
+def _bake_neutral(out_dir, size: int) -> int:
+    from .neutral import bake_neutral
+
+    try:
+        result = bake_neutral(out_dir, size)
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(f"wrote {result.directory} (negative and print {result.size}^3, density range {result.density_range})")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="argent-bake", description="Bake Argent stock LUTs.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -53,10 +65,12 @@ def main(argv=None) -> int:
     bake = sub.add_parser("bake", help="bake a stock profile into a folder the app loads")
     source = bake.add_mutually_exclusive_group(required=True)
     source.add_argument("--profile", help="stock profile JSON, for example stocks/portra400.json")
+    source.add_argument("--neutral", action="store_true",
+                        help="bake the Neutral digital stock (camera colour with pleasing tone curve)")
     source.add_argument("--synthetic", action="store_true",
                         help="bake the synthetic stock, which exercises the pipeline and is not a look")
     source.add_argument("--all", action="store_true",
-                        help="bake every profile and its print variants into OUT/<id>/")
+                        help="bake every profile, its print variants, and Neutral into OUT/<id>/")
     bake.add_argument("--print-variant", help="bake this print variant id instead of the default --profile")
     bake.add_argument("--size", type=_size, default=65, help="LUT size per axis (default: 65)")
     bake.add_argument("--out", required=True, help="output folder")
@@ -65,12 +79,14 @@ def main(argv=None) -> int:
     check.add_argument("--profile", required=True, help="stock profile JSON")
 
     args = parser.parse_args(argv)
-    from . import synthetic
+    from . import neutral, synthetic
     from .profile import ProfileError, load_profile
 
     if args.command == "bake":
         if args.print_variant is not None and not args.profile:
             bake.error("--print-variant requires --profile")
+        if args.neutral:
+            return _bake_neutral(args.out, args.size)
         if args.all:
             paths = sorted((p for p in STOCKS_DIR.iterdir() if p.name.endswith(".json") and p.is_file()),
                            key=lambda p: p.name) if STOCKS_DIR.is_dir() else []
@@ -78,7 +94,8 @@ def main(argv=None) -> int:
                 print(f"error: no profiles in {STOCKS_DIR}", file=sys.stderr)
                 return 2
             failures = 0
-            baked_ids = set()
+            baked_ids = {neutral.STOCK_ID}
+            failures += _bake_neutral(Path(args.out) / neutral.STOCK_ID, args.size) != 0
             for path in paths:
                 try:
                     with as_file(path) as profile_path:

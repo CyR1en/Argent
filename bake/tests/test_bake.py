@@ -396,9 +396,10 @@ class TestCommandLine:
     def test_bake_all_writes_one_folder_per_stock(self, tmp_path, capsys):
         assert main(["bake", "--all", "--size", "5", "--out", str(tmp_path / "all")]) == 0
         folders = sorted(p.name for p in (tmp_path / "all").iterdir())
-        assert folders == ["cinestill-800t", "fujifilm-c200", "fujifilm-pro-400h", "fujifilm-superia-400", "kodak-colorplus-200",
-                           "kodak-ektar-100", "kodak-gold-200", "kodak-portra-160", "kodak-portra-160-natural", "kodak-portra-400",
-                           "kodak-portra-800", "kodak-ultramax-400", "kodak-vision3-500t", "kodak-vision3-500t-cinema"]
+        assert folders == ["argent-neutral", "cinestill-800t", "fujifilm-c200", "fujifilm-pro-400h", "fujifilm-superia-400",
+                           "kodak-colorplus-200", "kodak-ektar-100", "kodak-gold-200", "kodak-portra-160",
+                           "kodak-portra-160-natural", "kodak-portra-400", "kodak-portra-800", "kodak-ultramax-400",
+                           "kodak-vision3-500t", "kodak-vision3-500t-cinema"]
         for folder in folders:
             assert sorted(p.name for p in (tmp_path / "all" / folder).iterdir()) == [
                 "negative.cube", "negative.lut3d", "print.cube", "print.lut3d", "stock.json"]

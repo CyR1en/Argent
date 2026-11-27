@@ -5,6 +5,7 @@ import Foundation
 /// order. Recipes and caches refer to stocks by id.
 public enum StockLibrary {
     public static let order = [
+        "argent-neutral",
         "kodak-portra-160", "kodak-portra-160-natural", "kodak-portra-400", "kodak-portra-800",
         "kodak-ektar-100", "kodak-gold-200", "kodak-colorplus-200", "kodak-ultramax-400",
         "fujifilm-pro-400h", "fujifilm-c200", "fujifilm-superia-400",

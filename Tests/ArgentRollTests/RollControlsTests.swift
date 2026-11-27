@@ -100,10 +100,14 @@ private func identityStock(boxSpeed: Float = 400) throws -> Stock {
         let stocks = StockLibrary.load(from: try #require(Self.bakedStock).deletingLastPathComponent()).stocks
         #expect(stocks.map(\.id) == StockLibrary.order)
         #expect(stocks.map(\.displayName) == [
+            "Neutral",
             "Portra 160", "Portra Natural", "Portra 400", "Portra 800",
             "Ektar 100", "Gold 200", "ColorPlus 200", "UltraMax 400",
             "Pro 400H", "C200", "Superia 400", "Tungsten 500", "Cinema 500", "Tungsten 800",
         ])
+        let neutral = try #require(stocks.first { $0.id == "argent-neutral" })
+        #expect(neutral.status == "digital" && neutral.afterLine == nil)
+        #expect(neutral.grain == nil && neutral.halation == nil)
         let films = [
             "Kodak Portra 160", "Kodak Portra 400", "Kodak Portra 800", "Kodak Ektar 100", "Kodak Gold 200",
             "Kodak UltraMax 400", "Fujifilm Fujicolor Pro 400H", "Fujifilm Fujicolor C200", "Fujifilm Fujicolor Superia X-TRA 400",
