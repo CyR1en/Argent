@@ -265,7 +265,7 @@ public final class RollDeveloper: @unchecked Sendable {
         var taken = Set<String>()
         let folder = destination.canonicalPath
         let recorded: [URL?] = jobs.map { job in
-            for develop in latestOutputs(of: job) where develop.output.format == output.format && develop.output.size == output.size {
+            for develop in latestOutputs(of: job) where develop.output.format == output.format && develop.output.size.fileSuffix == suffix {
                 let file = URL(fileURLWithPath: develop.file)
                 guard file.deletingLastPathComponent().canonicalPath == folder,
                       file.pathExtension.lowercased() == ext, isNamed(file, after: job.frame, suffix: suffix),
@@ -277,7 +277,7 @@ public final class RollDeveloper: @unchecked Sendable {
         }
         return zip(jobs, recorded).map { job, recorded in
             if let recorded { return recorded }
-            let own = Set(latestOutputs(of: job).filter { $0.output.size == output.size && canReuseOutput($0) }.map(\.file.canonicalPath))
+            let own = Set(latestOutputs(of: job).filter { $0.output.size.fileSuffix == suffix && canReuseOutput($0) }.map(\.file.canonicalPath))
             let baseName = job.frame.name + suffix
             var number = 1
             while true {
