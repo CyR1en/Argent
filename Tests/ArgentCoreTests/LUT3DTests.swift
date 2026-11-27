@@ -49,6 +49,35 @@ import Testing
         #expect(lut.sample(encoded: SIMD3<Float>(0.5, 0.25, 1)) == SIMD3<Float>(0.5, 0.25, 1))
     }
 
+    @Test func crlfCubeMatchesLFCube() throws {
+        let text = """
+        LUT_3D_SIZE 2
+        0 0 0
+        1 0 0
+        0 1 0
+        1 1 0
+        0 0 1
+        1 0 1
+        0 1 1
+        1 1 1
+        """
+        let lf = try LUT3D.parseCube(text)
+        let crlf = try LUT3D.parseCube(text.replacingOccurrences(of: "\n", with: "\r\n"))
+        #expect(crlf.size == lf.size)
+        #expect(crlf.values == lf.values)
+    }
+
+    @Test func crlfCubeCountsBlankAndCommentLinesInErrors() throws {
+        let text = "LUT_3D_SIZE 2\r\n\r\n# bad row follows\r\n0 0\r\n"
+        let error = #expect(throws: LUTError.self) { try LUT3D.parseCube(text) }
+        guard case .malformedCube(let line, let row) = error else {
+            Issue.record("expected malformedCube, got \(String(describing: error))")
+            return
+        }
+        #expect(line == 4)
+        #expect(row == "0 0")
+    }
+
     @Test func tabSeparatedCubeMatchesSpaceSeparatedCube() throws {
         let spaced = LUT3D.identity(size: 2).cubeText(title: "identity")
         let expected = try LUT3D.parseCube(spaced).values
