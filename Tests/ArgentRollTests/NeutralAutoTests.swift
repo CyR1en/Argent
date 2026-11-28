@@ -58,6 +58,21 @@ private func makeStock(id: String, displayName: String = "Test") -> Stock {
         #expect(NeutralAuto.whiteBalanceCorrection(for: .zero) == .zero)
     }
 
+    @Test func legacyWhiteBalanceKeepsItsRecordedDeadbandsSharesAndLimits() {
+        let cases: [(Float, Float, Float, Float)] = [
+            (0.10, -0.05, 0, 0),
+            (0.30, -0.20, 0.099, -0.084),
+            (-0.60, 0.30, -0.216, 0.144),
+            (-1.50, 0.80, -0.35, 0.25),
+        ]
+        for (redBlue, greenMagenta, expectedRedBlue, expectedGreenMagenta) in cases {
+            let cast = AutoBalance.cast(redBlue: redBlue, greenMagenta: greenMagenta)
+            let correction = AutoBalance.axes(NeutralAuto.legacyWhiteBalanceCorrection(for: cast))
+            #expect(abs(correction.redBlue - expectedRedBlue) < 1e-5)
+            #expect(abs(correction.greenMagenta - expectedGreenMagenta) < 1e-5)
+        }
+    }
+
     @Test func sunsetStrengthPrintKeepsPlainNeutralWarmth() {
         let neutral = makeStock(id: NeutralAuto.stockID, displayName: "Neutral")
         // Red-blue cast measured on the public DSC09550 beach sunset.
