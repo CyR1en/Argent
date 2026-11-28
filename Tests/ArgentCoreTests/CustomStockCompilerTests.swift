@@ -100,6 +100,33 @@ import Testing
         }
     }
 
+    @Test func bakedHalationRemainsEditableAfterItsBaseStrengthDrops() throws {
+        let id = "user-halation-base"
+        var baseSpec = CustomStockSpec()
+        baseSpec.halation.enabled = true
+        baseSpec.halation.strength = 0.08
+        let base = try CustomStockCompiler.compile(baseSpec, id: id, name: "Base", size: 17)
+        let recipe = try CustomStockSpec(baking: base, settings: .init(halation: true, halationAmount: 1.5))
+        let saved = try compile(recipe, base: base)
+        let strength = try #require(saved.halation?.strength)
+        let data = try JSONEncoder().encode(recipe)
+        var legacy = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var halation = try #require(legacy["halation"] as? [String: Any])
+        halation.removeValue(forKey: "inheritedStrengthCeiling")
+        legacy["halation"] = halation
+
+        baseSpec.halation.strength = 0.02
+        let editedBase = try CustomStockCompiler.compile(baseSpec, id: id, name: "Base", size: 17)
+        for persisted in [data, try JSONSerialization.data(withJSONObject: legacy)] {
+            var reopened = try JSONDecoder().decode(CustomStockSpec.self, from: persisted)
+            #expect(reopened.halationStrengthRange.contains(strength))
+            reopened.characterLine = "Edited description"
+            let resaved = try compile(reopened, base: editedBase)
+            #expect(resaved.characterLine == "Edited description")
+            #expect(resaved.halation?.strength == strength)
+        }
+    }
+
     @Test func bakedExposureMovesTheInputDomainInBothDirections() throws {
         let foundation = try compile(.init())
         let encoding = foundation.negative.encoding

@@ -60,13 +60,30 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
     }
 
     public struct Halation: Codable, Equatable, Sendable {
+        fileprivate static let authoringMaximum: Float = 0.08
+
         public var enabled = false
         public var strength: Float = 0.035
         public var greenShare: Float = 0.25
         public var radiusMicrometres: Float = 150
+        fileprivate var inheritedStrengthCeiling: Float?
 
-        public static func strengthRange(inheriting stock: Stock?) -> ClosedRange<Float> {
-            0...max(0.08, (stock?.halation?.strength ?? 0) * 2)
+        public init() {}
+
+        private enum CodingKeys: String, CodingKey {
+            case enabled, strength, greenShare, radiusMicrometres, inheritedStrengthCeiling
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try values.decode(Bool.self, forKey: .enabled)
+            strength = try values.decode(Float.self, forKey: .strength)
+            greenShare = try values.decode(Float.self, forKey: .greenShare)
+            radiusMicrometres = try values.decode(Float.self, forKey: .radiusMicrometres)
+            inheritedStrengthCeiling = try values.decodeIfPresent(Float.self, forKey: .inheritedStrengthCeiling)
+            if inheritedStrengthCeiling == nil && strength > Self.authoringMaximum {
+                inheritedStrengthCeiling = strength
+            }
         }
     }
 
@@ -103,6 +120,14 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
 
     public init(base: Base = .neutral) { self.base = base }
 
+    public var halationStrengthRange: ClosedRange<Float> {
+        let maximum = Halation.authoringMaximum
+        if case .derived = base {
+            return 0...max(maximum, halation.inheritedStrengthCeiling ?? maximum)
+        }
+        return 0...maximum
+    }
+
     public func defaultMonochromeMixer(inheriting stock: Stock?) -> SIMD3<Float>? {
         switch base {
         case .neutral: return nil
@@ -121,6 +146,9 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
         if let h = stock.halation {
             halation.enabled = true
             halation.strength = h.strength
+            if h.strength * 2 > Halation.authoringMaximum {
+                halation.inheritedStrengthCeiling = min(Float.greatestFiniteMagnitude, h.strength * 2)
+            }
             halation.greenShare = h.greenShare
             halation.radiusMicrometres = min(max(h.radiusMicrometres, 60), 350)
         }

@@ -225,7 +225,7 @@ struct StockBuilderSheet: View {
             }
             Toggle("Halation", isOn: $spec.halation.enabled)
             if spec.halation.enabled {
-                slider("Strength", $spec.halation.strength, CustomStockSpec.Halation.strengthRange(inheriting: base))
+                slider("Strength", $spec.halation.strength, spec.halationStrengthRange)
                 slider("Green Share", $spec.halation.greenShare, 0...1)
                 slider("Radius (µm)", $spec.halation.radiusMicrometres, 60...350)
             }

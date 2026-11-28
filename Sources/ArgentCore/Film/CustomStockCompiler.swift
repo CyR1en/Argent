@@ -7,6 +7,7 @@ public enum CustomStockCompiler {
     public static func compile(_ spec: CustomStockSpec, id: String, name: String, base: Stock? = nil,
                                size: Int = saveSize) throws -> Stock {
         guard (2...128).contains(size) else { throw LUTError.badSize(size) }
+        try validate(spec)
         let foundation: Stock?
         switch spec.base {
         case .neutral: foundation = nil
@@ -15,7 +16,6 @@ public enum CustomStockCompiler {
             guard let base, base.id == stockID else { throw StockError.badValue("Missing base stock: \(stockID)") }
             foundation = base
         }
-        try validate(spec, foundation: foundation)
         let analytical = if case .derived = spec.base { false } else { true }
         let encoding = foundation?.negative.encoding ?? LogEncoding()
         let densityRange = foundation?.densityRange ?? encoding.range * log10(Float(2))
@@ -183,7 +183,7 @@ public enum CustomStockCompiler {
         return GrainTable(amounts: base.amounts, sigma48: rows)
     }
 
-    private static func validate(_ spec: CustomStockSpec, foundation: Stock?) throws {
+    private static func validate(_ spec: CustomStockSpec) throws {
         func check(_ value: Float, _ range: ClosedRange<Float>, _ label: String) throws {
             guard value.isFinite, range.contains(value) else { throw StockError.badValue("Invalid \(label)") }
         }
@@ -214,7 +214,7 @@ public enum CustomStockCompiler {
         }
         try check(spec.grain.strength, 0...2, "grain strength")
         try check(spec.grain.shadowBias, -1...1, "grain shadow bias")
-        try check(spec.halation.strength, CustomStockSpec.Halation.strengthRange(inheriting: foundation), "halation strength")
+        try check(spec.halation.strength, spec.halationStrengthRange, "halation strength")
         try check(spec.halation.greenShare, 0...1, "halation green share")
         try check(spec.halation.radiusMicrometres, 60...350, "halation radius")
         if let look = spec.frameLook {
