@@ -1,8 +1,8 @@
-import ArgentCore
 import ArgentRoll
 import Foundation
 import Testing
 @testable import ArgentApp
+@testable import ArgentCore
 
 @MainActor @Suite(.serialized) struct RollModelPresetTests {
     private func withRoll(_ work: (RollModel, [Frame]) async throws -> Void) async throws {
@@ -71,6 +71,68 @@ import Testing
             #expect(model.manualAdjustments(for: source).lens == lens && model.adjustmentsClipboard == nil)
             undo.undo()
             #expect(frames.map(model.pasteUndoState(for:)) == before && !undo.canUndo)
+        }
+    }
+
+    @Test(arguments: [true, false])
+    func stockChangingPastePinsTheNewStocksAutoAim(usePreset: Bool) async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            var printLUT = LUT3D.identity(size: 17)
+            printLUT.values = printLUT.values.map { 0.04 + 0.92 * min(max(($0 - 0.375) / 0.5, 0), 1) }
+            for (id, lut) in [("toy", LUT3D.identity(size: 2)), ("compressed", printLUT)] {
+                let stock = Stock(id: id, displayName: id, status: "synthetic", boxSpeed: 400,
+                                  densityRange: 1.5, exposurePerUnit: SIMD3(repeating: 0.35),
+                                  negative: LUT3D.identity(size: 2), print: lut)
+                try stock.write(to: fixture.stocks.appendingPathComponent(id))
+            }
+            let side = 128
+            let light = (0..<(side * side)).map { pixel in
+                let x = pixel % side
+                let stops: Float = (x / 2) % 2 == 0 ? 3.5 : 4
+                return SIMD3(repeating: 0.18 * exp2(stops + (x % 2 == 0 ? -0.08 : 0.08)))
+            }
+            let descriptor = SequenceDescriptor(grid: ExposureAnalyzer.Grid(width: side, height: side, step: 1,
+                frameWidth: side, frameHeight: side, light: light, all: light,
+                unclipped: Array(repeating: 1, count: light.count), weight: Array(repeating: 1, count: light.count)))
+            var analysis = ExposureAnalysis(meanStops: 0, validWeight: 1, grayEstimate: [0, 0, 0])
+            analysis.histogram = Array(repeating: 0, count: ExposureAnalysis.histogramBins)
+            analysis.histogram[10] = 1
+            let model = fixture.model(), gate = MeasurementGate()
+            for name in AutoDecisionStateTests.names { gate.analyses[name] = analysis }
+            try await AutoDecisionStateTests.open(fixture, in: model, through: gate)
+            defer { AutoDecisionStateTests.close(model, gate) }
+            let frames = try #require(model.roll?.frames)
+            let source = frames[0], target = frames[1]
+            model.stockIndex = try #require(model.films?.stocks.firstIndex { $0.id == "toy" })
+            let compressed = try #require(model.films?.stocks.firstIndex { $0.id == "compressed" })
+            model.descriptors[target.url] = descriptor
+            gate.openAll(frames)
+            _ = try #require(await model.settledDecision())
+            model.setStock(compressed, for: source)
+            await model.prepareManualAdjustments(for: source)
+            model.recordVisibleAutomatic(for: source, stock: compressed, aim: model.printAim(for: source),
+                                         settings: model.settings(for: source, stock: compressed))
+            model.setManualAdjustments(try ManualAdjustments(exposureEV: 0.5), for: source)
+            let oldAim = try #require(await model.settledDecision()?.aims[target.url])
+            #expect(model.manualEdits[target.url] == nil)
+
+            let report: PasteReport
+            if usePreset {
+                let preset = model.makePreset(from: source, name: "Compressed", includedParts: [.stock, .light])
+                report = try #require(await model.applyPreset(preset, to: target)?.value)
+            } else {
+                model.copyAdjustments(from: source)
+                let clipboard = try #require(model.adjustmentsClipboard)
+                report = try #require(await model.paste(clipboard, parts: .all, to: [target], batch: false)?.value)
+            }
+
+            #expect(report.pasted == [target.url])
+            let edit = try #require(model.manualEdits[target.url])
+            let newAim = try #require(await model.settledDecision()?.aims[target.url])
+            try #require(newAim.burn > oldAim.burn)
+            #expect(edit.baseline.stockID == "compressed" && edit.baseline.origin == .auto)
+            #expect(edit.baseline.aim == newAim)
+            try await model.flushManualSaves()
         }
     }
 }

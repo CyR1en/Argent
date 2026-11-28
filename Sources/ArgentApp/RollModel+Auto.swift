@@ -176,6 +176,15 @@ extension RollModel {
     }
 
     private func balance(_ frames: [Frame], film: AutoFilmSettings, generation: UInt64) async {
+        await prepareAutoDescriptors(for: frames, generation: generation)
+        guard generation == balanceGeneration, !Task.isCancelled else { return }
+        let decision = await resolveAuto(frames, film: film)
+        guard generation == balanceGeneration, !Task.isCancelled else { return }
+        balanceTask = nil
+        publish(decision, keeping: true)
+    }
+
+    func prepareAutoDescriptors(for frames: [Frame], generation: UInt64) async {
         // A method that reads spatial samples needs each frame's descriptor; a frame whose measurement a recipe
         // gave has none until the sheet's decode of it is described, its measurement kept. As many at
         // once as the previews decode.
@@ -196,11 +205,16 @@ extension RollModel {
                 }
             }
         }
-        guard generation == balanceGeneration, !Task.isCancelled else { return }
-        let decision = await resolveAuto(frames, film: film)
-        guard generation == balanceGeneration, !Task.isCancelled else { return }
-        balanceTask = nil
-        publish(decision, keeping: true)
+    }
+
+    /// Preview the post-change decision without changing the roll or publishing intermediate choices.
+    func autoAims(applying proposed: [URL: FrameControls]) -> [URL: PrintAim]? {
+        guard isBalanced, let decision = autoDecision, let roll, let stock = currentStock else { return nil }
+        let frames = balanceFrames(in: roll)
+        let film = autoFilmSettings(for: frames, stock: stock, applying: proposed)
+        guard decision.record.controls != film.recordControls(for: frames) else { return nil }
+        let (input, failed, stamps) = autoInputs(frames, film: film)
+        return AutoDecisions.decide(Self.autoSnapshot(frames: frames, input: input, failed: failed, stamps: stamps, film: film)).aims
     }
 
     private func autoInputs(_ frames: [Frame], film: AutoFilmSettings) -> (input: SequenceAims.Input, failed: Set<URL>, stamps: [URL: SourceStamp?]) {
@@ -336,18 +350,22 @@ extension RollModel {
         unsettle()
     }
 
-    func autoFilmSettings(for frames: [Frame], stock: Stock) -> AutoFilmSettings {
-        let frameStockDigests = autoStockDigests(frames)
+    func autoFilmSettings(for frames: [Frame], stock: Stock, applying proposed: [URL: FrameControls]? = nil) -> AutoFilmSettings {
+        let own = proposed ?? overrides
+        let frameStockDigests = autoStockDigests(frames, applying: own)
         let frameStocks = Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
-            frameStockDigests[frame.url].flatMap { _ in self.stock(for: frame).map { (frame.url, $0) } }
+            frameStockDigests[frame.url].flatMap { _ in
+                films?.stocks[safe: stockIndex(own: own[frame.url])].map { (frame.url, $0) }
+            }
         })
         return AutoFilmSettings(stock: stock, stockDigest: stockDigests[stockIndex], controls: controls,
-                                overrides: overrides, frameStocks: frameStocks, frameStockDigests: frameStockDigests)
+                                overrides: own, frameStocks: frameStocks, frameStockDigests: frameStockDigests)
     }
 
-    private func autoStockDigests(_ frames: [Frame]) -> [URL: String] {
-        Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
-            let index = stockIndex(for: frame)
+    private func autoStockDigests(_ frames: [Frame], applying proposed: [URL: FrameControls]? = nil) -> [URL: String] {
+        let own = proposed ?? overrides
+        return Dictionary(uniqueKeysWithValues: frames.compactMap { frame in
+            let index = stockIndex(own: own[frame.url])
             return index == stockIndex ? nil : (frame.url, stockDigests[index])
         })
     }
