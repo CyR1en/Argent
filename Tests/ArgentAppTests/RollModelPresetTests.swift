@@ -74,29 +74,34 @@ import Testing
         }
     }
 
+    private func highlightFixture(in stocks: URL) throws -> (SequenceDescriptor, ExposureAnalysis) {
+        var printLUT = LUT3D.identity(size: 17)
+        printLUT.values = printLUT.values.map { 0.04 + 0.92 * min(max(($0 - 0.375) / 0.5, 0), 1) }
+        for (id, lut) in [("toy", LUT3D.identity(size: 2)), ("compressed", printLUT)] {
+            let stock = Stock(id: id, displayName: id, status: "synthetic", boxSpeed: 400,
+                              densityRange: 1.5, exposurePerUnit: SIMD3(repeating: 0.35),
+                              negative: LUT3D.identity(size: 2), print: lut)
+            try stock.write(to: stocks.appendingPathComponent(id))
+        }
+        let side = 128
+        let light = (0..<(side * side)).map { pixel in
+            let x = pixel % side
+            let stops: Float = (x / 2) % 2 == 0 ? 3.5 : 4
+            return SIMD3(repeating: 0.18 * exp2(stops + (x % 2 == 0 ? -0.08 : 0.08)))
+        }
+        let descriptor = SequenceDescriptor(grid: ExposureAnalyzer.Grid(width: side, height: side, step: 1,
+            frameWidth: side, frameHeight: side, light: light, all: light,
+            unclipped: Array(repeating: 1, count: light.count), weight: Array(repeating: 1, count: light.count)))
+        var analysis = ExposureAnalysis(meanStops: 0, validWeight: 1, grayEstimate: [0, 0, 0])
+        analysis.histogram = Array(repeating: 0, count: ExposureAnalysis.histogramBins)
+        analysis.histogram[10] = 1
+        return (descriptor, analysis)
+    }
+
     @Test(arguments: [true, false])
     func stockChangingPastePinsTheNewStocksAutoAim(usePreset: Bool) async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
-            var printLUT = LUT3D.identity(size: 17)
-            printLUT.values = printLUT.values.map { 0.04 + 0.92 * min(max(($0 - 0.375) / 0.5, 0), 1) }
-            for (id, lut) in [("toy", LUT3D.identity(size: 2)), ("compressed", printLUT)] {
-                let stock = Stock(id: id, displayName: id, status: "synthetic", boxSpeed: 400,
-                                  densityRange: 1.5, exposurePerUnit: SIMD3(repeating: 0.35),
-                                  negative: LUT3D.identity(size: 2), print: lut)
-                try stock.write(to: fixture.stocks.appendingPathComponent(id))
-            }
-            let side = 128
-            let light = (0..<(side * side)).map { pixel in
-                let x = pixel % side
-                let stops: Float = (x / 2) % 2 == 0 ? 3.5 : 4
-                return SIMD3(repeating: 0.18 * exp2(stops + (x % 2 == 0 ? -0.08 : 0.08)))
-            }
-            let descriptor = SequenceDescriptor(grid: ExposureAnalyzer.Grid(width: side, height: side, step: 1,
-                frameWidth: side, frameHeight: side, light: light, all: light,
-                unclipped: Array(repeating: 1, count: light.count), weight: Array(repeating: 1, count: light.count)))
-            var analysis = ExposureAnalysis(meanStops: 0, validWeight: 1, grayEstimate: [0, 0, 0])
-            analysis.histogram = Array(repeating: 0, count: ExposureAnalysis.histogramBins)
-            analysis.histogram[10] = 1
+            let (descriptor, analysis) = try highlightFixture(in: fixture.stocks)
             let model = fixture.model(), gate = MeasurementGate()
             for name in AutoDecisionStateTests.names { gate.analyses[name] = analysis }
             try await AutoDecisionStateTests.open(fixture, in: model, through: gate)
@@ -176,6 +181,54 @@ import Testing
             waiting.openAll(frames)
             let settled = try #require(await model.settledDecision())
             #expect(settled.aims[target.url] == savedAim && model.manualEdits[target.url]?.baseline.aim == savedAim)
+            try await model.flushManualSaves()
+        }
+    }
+
+    @Test(arguments: [true, false])
+    func stockChangingPresetOnlyNeedsMeasurementsFromItsOwnCluster(clusterReady: Bool) async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let (descriptor, analysis) = try highlightFixture(in: fixture.stocks)
+            let first = fixture.model(), gate = MeasurementGate()
+            first.stockIndex = try #require(first.films?.stocks.firstIndex { $0.id == "toy" })
+            for name in AutoDecisionStateTests.names { gate.analyses[name] = analysis }
+            try await AutoDecisionStateTests.open(fixture, in: first, through: gate)
+            let firstFrames = try #require(first.roll?.frames)
+            first.descriptors[firstFrames[1].url] = descriptor
+            gate.openAll(firstFrames)
+            let kept = try #require(await first.settledDecision())
+            await first.decisionSave?.value
+            AutoDecisionStateTests.close(first, gate)
+
+            let model = fixture.model(), waiting = MeasurementGate()
+            model.stockIndex = try #require(model.films?.stocks.firstIndex { $0.id == "toy" })
+            for name in AutoDecisionStateTests.names { waiting.analyses[name] = analysis }
+            try await AutoDecisionStateTests.open(fixture, in: model, through: waiting)
+            defer { AutoDecisionStateTests.close(model, waiting) }
+            let frames = try #require(model.roll?.frames), target = frames[1]
+            let savedAim = try #require(kept.aims[target.url])
+            try #require(model.isBalanced && model.autoDecision?.revision == kept.revision)
+            try await waiting.waitUntilWaiting(for: frames.count)
+            let clusters = RollSmoothing.clusters(frames, analyses: [:])
+            try #require(clusters.map(\.count) == [5, 3])
+            let ready = clusterReady ? clusters[0] : [target]
+            waiting.openAll(ready)
+            for frame in ready { await model.analyze(frame) }
+            model.descriptors[target.url] = descriptor
+
+            let preset = UserPreset(name: "Compressed", includedParts: [.stock, .light], baseStockID: "compressed",
+                                    adjustments: try ManualAdjustments(exposureEV: 0.5))
+            let report = try #require(await model.applyPreset(preset, to: target)?.value)
+            #expect(report.pasted == [target.url])
+            try #require(model.analyses.count == ready.count && !model.isBalanced)
+            let edit = try #require(model.manualEdits[target.url])
+            #expect(edit.baseline.stockID == "compressed")
+
+            waiting.openAll(frames)
+            let settled = try #require(await model.settledDecision()?.aims[target.url])
+            try #require(settled.burn > savedAim.burn)
+            #expect(edit.baseline.aim == (clusterReady ? settled : savedAim))
+            #expect(model.manualEdits[target.url]?.baseline == edit.baseline)
             try await model.flushManualSaves()
         }
     }

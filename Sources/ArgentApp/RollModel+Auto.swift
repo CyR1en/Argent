@@ -207,17 +207,22 @@ extension RollModel {
         }
     }
 
-    /// Detail smooths over the whole roll, then protects each frame independently. Only replace
-    /// saved aims at the changed film settings, and only when both steps have their inputs.
+    /// Detail smooths within each capture cluster, then protects each frame independently. Only
+    /// replace saved aims for changed settings when the target's cluster and descriptor are ready.
     func autoAims(applying changed: [URL: FrameControls]) -> [URL: PrintAim] {
         guard AutoDecisions.method == .detail, !changed.isEmpty, isBalanced,
               let decision = autoDecision, let roll, let stock = currentStock else { return [:] }
         let frames = roll.frames.filter { decision.aims[$0.url] != nil }
-        guard frames.allSatisfy({ decision.failed.contains($0.url) || analyses[$0.url] != nil }) else { return [:] }
-        let samples = descriptors.filter { changed[$0.key] != nil }
+        let measured = analyses.filter { !decision.failed.contains($0.key) }
+        let ready = RollSmoothing.clusters(frames, analyses: measured).filter { cluster in
+            cluster.allSatisfy { decision.failed.contains($0.url) || measured[$0.url] != nil }
+        }
+        let samples = Dictionary(uniqueKeysWithValues: ready.joined().compactMap { frame in
+            changed[frame.url].flatMap { _ in descriptors[frame.url].map { (frame.url, $0) } }
+        })
         guard !samples.isEmpty else { return [:] }
         let frameStocks = changed.compactMapValues { films?.stocks[safe: stockIndex(own: $0)] }
-        let input = SequenceAims.Input(frames: frames, analyses: analyses.filter { !decision.failed.contains($0.key) },
+        let input = SequenceAims.Input(frames: frames, analyses: measured,
                                        descriptors: samples, stock: stock, controls: controls,
                                        frameControls: changed, frameStocks: frameStocks)
         return SequenceAims.resolve(input, method: .detail).aims.filter { samples[$0.key] != nil }
