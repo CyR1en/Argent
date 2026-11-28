@@ -720,7 +720,7 @@ extension RollModel {
             let latest = RestoredRoll(frames: roll.frames, checked: restored)
             if !manualChoicesChangedDuringRestore {
                 isApplyingRestoredChoices = true
-                if let id = latest.stockID, let index = films?.stocks.firstIndex(where: { $0.id == id }) { stockIndex = index }
+                applyRestoredRollStock(latest)
                 if let controls = latest.controls { self.controls = controls }
                 for (url, own) in latest.overrides { setRestoredFrameControls(own, url: url) }
                 isApplyingRestoredChoices = false

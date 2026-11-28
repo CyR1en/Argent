@@ -649,6 +649,24 @@ final class RollModel {
         return library
     }
 
+    /// Applies `restored`'s roll stock to the model: selects it if installed, or records it as missing and
+    /// falls back to `argent-neutral` for previewing without losing the saved stock id.
+    func applyRestoredRollStock(_ restored: RestoredRoll) {
+        guard let id = restored.stockID else { return }
+        if let index = films?.stocks.firstIndex(where: { $0.id == id }) {
+            missingRollStockID = nil
+            missingRollStockName = nil
+            stockIndex = index
+        } else {
+            missingRollStockID = id
+            missingRollStockName = restored.stockDisplayName
+            isMissingStockNoticeDismissed = false
+            if let neutral = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" }) {
+                stockIndex = neutral
+            }
+        }
+    }
+
     /// Why the open roll's own stock is unavailable, when it was saved with a stock that is not currently installed.
     var missingRollStockReason: String? {
         guard let id = missingRollStockID else { return nil }
@@ -1364,17 +1382,7 @@ final class RollModel {
         missingRollStockID = nil
         missingRollStockName = nil
         isMissingStockNoticeDismissed = false
-        if let id = restored.stockID {
-            if let index = films?.stocks.firstIndex(where: { $0.id == id }) {
-                stockIndex = index
-            } else {
-                missingRollStockID = id
-                missingRollStockName = restored.stockDisplayName
-                if let neutral = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" }) {
-                    stockIndex = neutral
-                }
-            }
-        }
+        applyRestoredRollStock(restored)
         controls = restored.controls ?? RollControls()
         overrides = restored.overrides
         // A frame developed before is printed as it was measured then.
