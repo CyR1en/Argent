@@ -36,6 +36,10 @@ extension UserStockStore {
             let specURL = contents.appendingPathComponent(Stock.specFileName)
             let spec = fm.fileExists(atPath: specURL.path) ? try Data(contentsOf: specURL) : nil
             let loaded = try Stock.load(from: contents, origin: spec == nil ? .userImported : .userBuilt)
+            guard RollControls.RatedAt.allCases.allSatisfy({ rating in
+                let iso = (loaded.boxSpeed * exp2(-Float(rating.stops))).rounded()
+                return Int(exactly: iso).map { $0 > 0 } == true
+            }) else { throw StockError.badValue("boxSpeed is outside the supported range for Rated At") }
             let directories = (try? fm.contentsOfDirectory(atPath: folder.path)) ?? []
             let usedIDs = Set((directories + Array(reservedIDs) + loadAll().stocks.map(\.id)).map { $0.lowercased() })
             let id = Self.isValidUserStockID(loaded.id) && loaded.id.utf8.count <= 240 && !usedIDs.contains(loaded.id.lowercased())

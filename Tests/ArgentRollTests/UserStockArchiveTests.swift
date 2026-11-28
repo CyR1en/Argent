@@ -61,6 +61,19 @@ import Testing
         }
     }
 
+    @Test func rejectsBoxSpeedThatOverflowsWhenRatedTwoStopsUnder() throws {
+        try withFolder { root in
+            let store = UserStockStore(folder: root.appendingPathComponent("Stocks"))
+            let source = root.appendingPathComponent("unpacked")
+            let lut = LUT3D.identity(size: 2)
+            let speed = Float(Int.max) / 2
+            try Stock(id: "user-overflow", displayName: "Overflow", status: "custom", boxSpeed: speed,
+                      densityRange: 3, negative: lut, print: lut).write(to: source)
+            #expect(throws: StockError.self) { try store.importStock(from: source) }
+            #expect(store.loadAll().stocks.isEmpty)
+        }
+    }
+
     private func withFolder(_ action: (URL) throws -> Void) throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("argent-stock-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
