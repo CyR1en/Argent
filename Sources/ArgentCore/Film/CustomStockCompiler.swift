@@ -35,7 +35,8 @@ public enum CustomStockCompiler {
         let rating = settings.exposureStops(boxSpeed: foundation?.boxSpeed ?? spec.boxSpeed)
         let tables = try foundation.flatMap { try manual.toneTables(stock: $0, settings: settings) }
         let sceneParameters = try manual.parameters(tables: tables)
-        let inputEncoding = negativeInputEncoding(encoding, scene: sceneParameters, tables: tables, rating: rating)
+        let inputEncoding = negativeInputEncoding(encoding, scene: sceneParameters, tables: tables, rating: rating,
+                                                  mixer: weights)
         let printParameters = try manual.parameters
         let presence = look?.effectivePresence ?? manual.adjustments.presence
         let printPresence = presence.acts(in: .print)
@@ -101,7 +102,7 @@ public enum CustomStockCompiler {
     private static let luma = SIMD3<Float>(0.2627, 0.6780, 0.0593)
 
     private static func negativeInputEncoding(_ source: LogEncoding, scene: ManualCurveParameters,
-                                              tables: ManualToneTables?, rating: Float) -> LogEncoding {
+                                              tables: ManualToneTables?, rating: Float, mixer: SIMD3<Float>?) -> LogEncoding {
         let shift = log2(scene.exposureGain) + rating
         let low: Float
         let high: Float
@@ -112,10 +113,15 @@ public enum CustomStockCompiler {
             low = min(0, scene.shadows) + min(0, scene.highlights)
             high = max(0, scene.shadows) + max(0, scene.highlights)
         }
-        // Invert the baked gain before setting the input limits: the renderer clips
-        // to this domain before looking up the now-re-exposed foundation negative.
+        var upper = source.stopsAboveMidGray - shift - low
+        if let mixer, let faintest = (0..<3).map({ mixer[$0] }).filter({ $0 > 0 }).min() {
+            // The original silver negative clips the mix, not its RGB channels.
+            // A single channel can reach the silver ceiling divided by its weight.
+            let sceneLimit = log2(Float(Float16.greatestFiniteMagnitude)) - log2(source.midGray)
+            upper = max(source.stopsAboveMidGray, upper, min(sceneLimit, upper - log2(faintest)))
+        }
         return LogEncoding(stopsBelowMidGray: source.stopsBelowMidGray + shift + high,
-                           stopsAboveMidGray: source.stopsAboveMidGray - shift - low,
+                           stopsAboveMidGray: upper,
                            midGray: source.midGray)
     }
 

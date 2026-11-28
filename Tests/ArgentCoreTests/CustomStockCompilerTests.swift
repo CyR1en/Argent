@@ -114,6 +114,20 @@ import Testing
         }
     }
 
+    @Test func bakedSilverExposureDoesNotClipBrightChannelsBeforeMixing() throws {
+        let base = try #require(MonochromeFilm.stocks.first)
+        let edit = try ManualRenderSettings(adjustments: .init(exposureEV: 2), referenceStops: 0)
+        let spec = try CustomStockSpec(baking: base, settings: .init(manual: edit, monochromeFilter: .yellow))
+        let oldCeiling = base.negative.encoding.decode(1) / 4
+        let brightBlue = SIMD3<Float>(0, 0, 20)
+        let expected = base.negativeAmounts(exposed: brightBlue * 4, filter: .yellow).x
+        let prematurelyClipped = base.negativeAmounts(exposed: SIMD3(0, 0, oldCeiling * 4), filter: .yellow).x
+        #expect(expected > prematurelyClipped + 0.05)
+
+        let baked = try compile(spec, base: base, size: CustomStockCompiler.saveSize)
+        #expect(abs(baked.negativeAmounts(exposed: brightBlue, filter: .none).x - expected) < 0.005)
+    }
+
     @Test func mixerDefaultsMatchTheDerivedFilmAndBakedFilter() throws {
         let base = try #require(MonochromeFilm.stocks.first)
         let film = try #require(base.monochrome)
