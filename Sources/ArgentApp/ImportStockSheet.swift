@@ -171,7 +171,7 @@ struct ImportStockSheet: View {
         do {
             try await Task.sleep(for: .milliseconds(120))
             let stock = try await Task.detached(priority: .userInitiated) {
-                try CubeImporter.bake(cube, id: "user-import-preview", name: "LUT Preview", options: request.options, size: 33)
+                try CubeImporter.bake(cube, id: "user-import-preview", name: "LUT Preview", options: request.options)
             }.value
             try Task.checkCancellation()
             let image = try await films.importPreview(frame, stock: stock, space: request.space)
