@@ -1,3 +1,4 @@
+import ArgentCore
 import ArgentRoll
 import SwiftUI
 
@@ -180,7 +181,7 @@ private struct StockSample: View {
         .accessibilityHint([
             isRollsOwn && !current ? "Makes this frame follow the roll's stock again." : "Develops \(scope) through \(name).",
             key.map { "Key \($0)." },
-            current ? StockCharacter.sentence(for: model.shownStock?.id) : nil,
+            current ? StockCharacter.sentence(for: model.shownStock) : nil,
             model.stockAfterLines[index]
         ].compactMap { $0 }.joined(separator: " "))
         .accessibilityAddTraits(current ? .isSelected : [])
@@ -231,6 +232,11 @@ private struct StockKeycap: View {
 /// is built to reproduce, without the film's name, which only the stock's descriptive line
 /// gives (spec, Naming policy). Keyed by stock id; a stock without a line shows its name alone.
 enum StockCharacter {
+    static func line(for stock: Stock?) -> String? {
+        if let custom = stock?.characterLine, !custom.isEmpty { return custom }
+        return line(for: stock?.id)
+    }
+
     static func line(for id: String?) -> String? {
         guard let id else { return nil }
         return lines[id]
@@ -238,6 +244,11 @@ enum StockCharacter {
 
     /// The current stock's description in the command bar, starting with a capital: "Warm
     /// neutral skin, soft highlight roll-off".
+    static func sentence(for stock: Stock?) -> String? {
+        guard let line = line(for: stock), let first = line.first else { return nil }
+        return first.uppercased() + line.dropFirst()
+    }
+
     static func sentence(for id: String?) -> String? {
         guard let line = line(for: id), let first = line.first else { return nil }
         return first.uppercased() + line.dropFirst()

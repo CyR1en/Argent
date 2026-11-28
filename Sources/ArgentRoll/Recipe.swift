@@ -893,6 +893,8 @@ public enum RecipeStore {
 /// frame's own controls from its recipe, and the folder the roll last developed to.
 public struct RestoredRoll: Sendable, Equatable {
     public var stockID: String?
+    /// The display name recorded in the roll's recipe for `stockID`, so a missing stock can still be named cleanly.
+    public var stockDisplayName: String? = nil
     public var controls: RollControls?
     public var overrides: [URL: FrameControls]
     public var destination: URL?
@@ -929,6 +931,13 @@ public struct RestoredRoll: Sendable, Equatable {
         }?.1
         // A frame with its own stock records the roll's beside it.
         stockID = newest.map { $0.frame.stock == nil ? $0.stock.id : $0.rollStock ?? $0.stock.id }
+        if let stockID {
+            if let newest, newest.stock.id == stockID {
+                stockDisplayName = newest.stock.displayName
+            } else {
+                stockDisplayName = found.first(where: { $0.1.stock.id == stockID })?.1.stock.displayName
+            }
+        }
         controls = newest?.roll
         overrides = Dictionary(found.filter { !$0.1.frame.isEmpty }.map { ($0.0.url, $0.1.frame) }, uniquingKeysWith: { a, _ in a })
         // A freshly adjusted, never-exported frame can own the newest choices without

@@ -54,7 +54,15 @@ public final class FilmPreviews: @unchecked Sendable {
     /// about half a gigabyte, however small the decode.
     public static let inHouseDecodesAtOnce: Int? = 1
 
-    public let stocks: [Stock]
+    private struct StockRenderKey: Hashable, Sendable {
+        let id: String
+        let digest: String
+    }
+
+    private var _stocks: [Stock]
+    private var _stockDigests: [String]
+    /// The stocks currently loaded in this preview session. Updated dynamically via `reloadStocks(_:)`.
+    public var stocks: [Stock] { renderersLock.withLock { _stocks } }
 
     private final class LinearEntry: @unchecked Sendable {
         let frame: LinearFrame
@@ -102,10 +110,10 @@ public final class FilmPreviews: @unchecked Sendable {
     private let decoder: ChosenDecoder
     /// Which decoder each file goes to; a develop shares it, so preview and file agree.
     public let decoderChoices: DecoderChoices
-    /// Each stock's film passes, by index, made up front so a stock switch never waits for them, let go
-    /// for a develop, whose sheet makes a stock's again on first use, and made again after it: their
+    /// Each stock's film passes, keyed by `(id, digest)`, made up front so a stock switch never waits for them,
+    /// let go for a develop, whose sheet makes a stock's again on first use, and made again after it: their
     /// LUTs are 12 MB on the GPU a stock.
-    private var renderers: [Int: FilmRenderer] = [:]
+    private var renderers: [StockRenderKey: FilmRenderer] = [:]
     private let renderersLock = NSLock()
     /// The latest stocks' and settings' `printLimits`, under `renderersLock`; a few dozen at most.
     private var printLimitsMade: [PrintLimitsKey: PrintLimits] = [:]
@@ -237,7 +245,8 @@ public final class FilmPreviews: @unchecked Sendable {
                 inHouseDecodesAtOnce: Int? = FilmPreviews.inHouseDecodesAtOnce, digests: SourceDigests = .shared,
                 patches: (any RemovalPatchSource)? = nil,
                 learnedDecodeTile: Int? = RollDeveloper.learnedDecodeTile) throws {
-        self.stocks = stocks
+        self._stocks = stocks
+        self._stockDigests = stocks.map(\.digest)
         self.diskCache = diskCache
         self.digests = digests
         self.decoderChoices = decoderChoices
@@ -380,10 +389,44 @@ public final class FilmPreviews: @unchecked Sendable {
     /// The key of a measurement of `frame`'s raw at version `source`.
     private static func measurementKey(_ frame: Frame, _ source: SourceStamp) -> String { "\(frame.url.path)|\(source.key)" }
 
+    private func stockEntry(_ index: Int) -> (stock: Stock, digest: String)? {
+        renderersLock.withLock {
+            guard _stocks.indices.contains(index) else { return nil }
+            return (_stocks[index], _stockDigests[index])
+        }
+    }
+
+    /// Replaces the loaded stock list in place (e.g. after a user stock is created, edited, or deleted).
+    /// Only renderers, print limits, and rendered pictures for removed, digest-changed, or re-indexed stocks
+    /// are dropped; decoded linear RAWs, measurements, and unchanged stocks' GPU resources stay warm.
+    public func reloadStocks(_ newStocks: [Stock]) {
+        let newDigests = newStocks.map(\.digest)
+        let newKeys = Set(zip(newStocks, newDigests).map { StockRenderKey(id: $0.id, digest: $1) })
+        let newIndexByID = Dictionary(uniqueKeysWithValues: newStocks.enumerated().map { ($0.element.id, $0.offset) })
+        let invalidatedIDs: Set<String> = renderersLock.withLock {
+            var staleIDs: Set<String> = []
+            for (oldIndex, oldStock) in _stocks.enumerated() {
+                let oldKey = StockRenderKey(id: oldStock.id, digest: _stockDigests[oldIndex])
+                if !newKeys.contains(oldKey) || newIndexByID[oldStock.id] != oldIndex {
+                    staleIDs.insert(oldStock.id)
+                }
+            }
+            _stocks = newStocks
+            _stockDigests = newDigests
+            renderers = renderers.filter { newKeys.contains($0.key) }
+            printLimitsMade = printLimitsMade.filter {
+                newKeys.contains(StockRenderKey(id: $0.key.stockID, digest: $0.key.stockDigest))
+            }
+            return staleIDs
+        }
+        renderedImages.removeImages(forStockIDs: invalidatedIDs)
+    }
+
     /// The key of a render of the decode kept under `decode`, refined or not.
-    private func filmKey(_ decode: String, _ stock: Int, _ settings: DevelopSettings, _ space: OutputSpace,
+    private func filmKey(_ decode: String, _ stock: Int, _ entry: (stock: Stock, digest: String),
+                         _ settings: DevelopSettings, _ space: OutputSpace,
                          _ maxPixelSize: Int, frameSized: Bool = false, refined: Bool = false) -> RenderedImageKey {
-        .film(decode, stock: stock, stockID: stocks[stock].id, settings: settings, space: space,
+        .film(decode, stock: stock, stockID: entry.stock.id, stockDigest: entry.digest, settings: settings, space: space,
               pixels: maxPixelSize, frameSized: frameSized, refined: refined,
               familyDecode: decode.lastIndex(of: "|").map { String(decode[..<$0]) })
     }
@@ -396,8 +439,8 @@ public final class FilmPreviews: @unchecked Sendable {
     /// The render if it is already made.
     public func cachedFilm(_ frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace,
                            maxPixelSize: Int) -> CGImage? {
-        guard stocks.indices.contains(stock) else { return nil }
-        return renderedImages.image(for: filmKey(cachedKey(frame, lens: settings.lens), stock, settings, space, maxPixelSize))
+        guard let stockInfo = stockEntry(stock) else { return nil }
+        return renderedImages.image(for: filmKey(cachedKey(frame, lens: settings.lens), stock, stockInfo, settings, space, maxPixelSize))
     }
 
     /// Whether the frame's raw is already decoded, so a render needs no decode.
@@ -416,15 +459,15 @@ public final class FilmPreviews: @unchecked Sendable {
     /// picture only: the frame's measurement is always the sheet's own (`measure`).
     public func film(_ frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace, maxPixelSize: Int,
                      priority: Operation.QueuePriority = .normal, frameViewSide: Int? = nil) async -> CGImage? {
-        guard !Task.isCancelled, stocks.indices.contains(stock) else { return nil }
+        guard !Task.isCancelled, let stockInfo = stockEntry(stock) else { return nil }
         let generation = lock.withLock { decodeGeneration }
-        let requestedKey = filmKey(cachedKey(frame, lens: settings.lens), stock, settings, space, maxPixelSize)
+        let requestedKey = filmKey(cachedKey(frame, lens: settings.lens), stock, stockInfo, settings, space, maxPixelSize)
         let ticket = renderedImages.beginRequest(for: requestedKey)
         if let cached = renderedImages.image(for: requestedKey, ticket: ticket) { return isCurrentDecode(generation) ? cached : nil }
         guard let preview = await linearPreview(frame, lens: settings.lens, priority: priority, frameViewSide: frameViewSide, generation: generation),
               !Task.isCancelled, isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
         // Kept under the decoder that made it.
-        let key = filmKey(keepKey(frame, madeFrom: preview), stock, settings, space, maxPixelSize)
+        let key = filmKey(keepKey(frame, madeFrom: preview), stock, stockInfo, settings, space, maxPixelSize)
         return await QueuedWork.runStoppable(on: renderQueue, priority: priority, prepare: { operation in
             self.renderedImages.attach(operation, to: ticket)
         }) { [self] stopped in
@@ -436,7 +479,7 @@ public final class FilmPreviews: @unchecked Sendable {
                 decodeTurns.endRender()
                 note("sheet-render \(frame.name) \(maxPixelSize) -")
             }
-            guard let renderer = try? renderer(stock),
+            guard let renderer = try? renderer(for: stockInfo),
                   let image = try? render(preview.frame, with: renderer, settings: settings, space: space, maxPixelSize: maxPixelSize)
             else { return nil }
             guard !stopped(), isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
@@ -559,10 +602,10 @@ public final class FilmPreviews: @unchecked Sendable {
     /// decode first, kept or not, since it is the develop's own picture (`refineFrame`).
     public func cachedFrameFilm(_ frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace,
                                 pixels: Int) -> CGImage? {
-        guard stocks.indices.contains(stock) else { return nil }
+        guard let stockInfo = stockEntry(stock) else { return nil }
         let decode = cachedKey(frame, lens: settings.lens)
-        return renderedImages.image(for: filmKey(decode, stock, settings, space, pixels, frameSized: true, refined: true))
-            ?? renderedImages.image(for: filmKey(decode, stock, settings, space, pixels, frameSized: true))
+        return renderedImages.image(for: filmKey(decode, stock, stockInfo, settings, space, pixels, frameSized: true, refined: true))
+            ?? renderedImages.image(for: filmKey(decode, stock, stockInfo, settings, space, pixels, frameSized: true))
     }
 
     /// The frame view's neutral raw, if it is already made at this size, the refined one first.
@@ -576,8 +619,8 @@ public final class FilmPreviews: @unchecked Sendable {
     /// drive hook's measurements.
     public func isRefinedFrameFilm(_ image: CGImage, frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace,
                                    pixels: Int) -> Bool {
-        guard stocks.indices.contains(stock) else { return false }
-        return renderedImages.image(for: filmKey(cachedKey(frame, lens: settings.lens), stock, settings, space, pixels, frameSized: true, refined: true)) === image
+        guard let stockInfo = stockEntry(stock) else { return false }
+        return renderedImages.image(for: filmKey(cachedKey(frame, lens: settings.lens), stock, stockInfo, settings, space, pixels, frameSized: true, refined: true)) === image
     }
 
     /// Compiles the brush's library, Follow edges' and the refiner's kernels off the caller's thread, for the Masks tab's opening: they are the slowest
@@ -625,16 +668,16 @@ public final class FilmPreviews: @unchecked Sendable {
     /// develop is to write. `nil` when the raw cannot be decoded or the task was cancelled first.
     public func frameFilm(_ frame: Frame, stock: Int, settings: DevelopSettings, space: OutputSpace, pixels: Int,
                           priority: Operation.QueuePriority = .veryHigh) async -> CGImage? {
-        guard !Task.isCancelled, stocks.indices.contains(stock) else { return nil }
+        guard !Task.isCancelled, let stockInfo = stockEntry(stock) else { return nil }
         let (generation, tileGeneration) = lock.withLock { (decodeGeneration, learnedTileGeneration) }
         let decode = cachedKey(frame, lens: settings.lens), refined = isFrameDecodeRefined(frame, lens: settings.lens, pixels: pixels)
         // A refined render outlives its decode; looked for before the request, which would let it go.
-        if !refined, let kept = renderedImages.image(for: filmKey(decode, stock, settings, space, pixels, frameSized: true, refined: true)) {
+        if !refined, let kept = renderedImages.image(for: filmKey(decode, stock, stockInfo, settings, space, pixels, frameSized: true, refined: true)) {
             return lock.withLock {
                 decodeGeneration == generation && !(Self.isRaw9DecodeKey(decode) && learnedTileGeneration != tileGeneration)
             } ? kept : nil
         }
-        let requestedKey = filmKey(decode, stock, settings, space, pixels, frameSized: true, refined: refined)
+        let requestedKey = filmKey(decode, stock, stockInfo, settings, space, pixels, frameSized: true, refined: refined)
         let ticket = renderedImages.beginRequest(for: requestedKey)
         if let cached = renderedImages.image(for: requestedKey, ticket: ticket) {
             return lock.withLock {
@@ -645,7 +688,7 @@ public final class FilmPreviews: @unchecked Sendable {
                                            generation: generation),
               !Task.isCancelled, isCurrentDecode(generation), renderedImages.isCurrent(ticket) else { return nil }
         let isRaw9Refined = entry.refined && DecoderChoice.of(entry.frame) == .raw9
-        let key = filmKey(keepKey(frame, madeFrom: entry), stock, settings, space, pixels, frameSized: true, refined: entry.refined)
+        let key = filmKey(keepKey(frame, madeFrom: entry), stock, stockInfo, settings, space, pixels, frameSized: true, refined: entry.refined)
         return await QueuedWork.runStoppable(on: renderQueue, priority: priority, prepare: { operation in
             self.renderedImages.attach(operation, to: ticket)
         }) { [self] stopped in
@@ -658,7 +701,7 @@ public final class FilmPreviews: @unchecked Sendable {
                 decodeTurns.endRender()
                 note("frame-render \(frame.name) \(pixels) -")
             }
-            guard let renderer = try? renderer(stock),
+            guard let renderer = try? renderer(for: stockInfo),
                   let image = try? render(entry.frame, with: renderer, settings: settings, space: space, maxPixelSize: pixels)
             else { return nil }
             guard !stopped(), renderedImages.isCurrent(ticket) else { return nil }
@@ -1087,15 +1130,17 @@ public final class FilmPreviews: @unchecked Sendable {
 
     /// Makes every stock's film passes not already made: up front, and again after a develop.
     public func prepareStocks() throws {
-        for index in stocks.indices { _ = try renderer(index) }
+        let entries = renderersLock.withLock { zip(_stocks, _stockDigests).map { ($0, $1) } }
+        for entry in entries { _ = try renderer(for: entry) }
     }
 
-    /// The film passes for `stocks[index]`, made on first use.
-    private func renderer(_ index: Int) throws -> FilmRenderer {
-        try renderersLock.withLock {
-            if let made = renderers[index] { return made }
-            let made = try FilmRenderer(gpu: gpu, stock: stocks[index])
-            renderers[index] = made
+    /// The film passes for `entry`, keyed by `(stock.id, digest)`, made on first use.
+    private func renderer(for entry: (stock: Stock, digest: String)) throws -> FilmRenderer {
+        let key = StockRenderKey(id: entry.stock.id, digest: entry.digest)
+        return try renderersLock.withLock {
+            if let made = renderers[key] { return made }
+            let made = try FilmRenderer(gpu: gpu, stock: entry.stock)
+            renderers[key] = made
             return made
         }
     }
@@ -1109,11 +1154,11 @@ public final class FilmPreviews: @unchecked Sendable {
     /// these as Lightroom's compare to its output's ends. Two 8-pixel renders, kept per stock, settings
     /// and space; a frame's masks play no part (`printLimitsProbe`).
     public func printLimits(stock: Int, settings: DevelopSettings, space: OutputSpace) async -> PrintLimits? {
-        guard stocks.indices.contains(stock), let probe = Self.printLimitsProbe(settings) else { return nil }
-        let key = PrintLimitsKey(stock: stock, settings: probe, space: space)
+        guard let stockInfo = stockEntry(stock), let probe = Self.printLimitsProbe(settings) else { return nil }
+        let key = PrintLimitsKey(stockID: stockInfo.stock.id, stockDigest: stockInfo.digest, settings: probe, space: space)
         if let made = renderersLock.withLock({ printLimitsMade[key] }) { return made }
         let limits = await Task.detached(priority: .userInitiated) { [self] () -> PrintLimits? in
-            guard let renderer = try? renderer(stock),
+            guard let renderer = try? renderer(for: stockInfo),
                   let white = try? probeCodes(Self.printWhiteLight, renderer: renderer, settings: probe, space: space),
                   let black = try? probeCodes(0, renderer: renderer, settings: probe, space: space) else { return nil }
             return PrintLimits(white: white, black: black)
@@ -1605,7 +1650,8 @@ public struct PrintLimits: Sendable, Equatable {
 }
 
 private struct PrintLimitsKey: Hashable {
-    var stock: Int
+    var stockID: String
+    var stockDigest: String
     var settings: DevelopSettings
     var space: OutputSpace
 }

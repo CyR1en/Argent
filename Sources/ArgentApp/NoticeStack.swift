@@ -37,6 +37,8 @@ struct NoticeStack: View {
         .animation(reduceMotion ? nil : (model.isScanning ? Graphite.Motion.arrive : Graphite.Motion.quick), value: model.isScanning)
         .animation(reduceMotion ? nil : (model.unreadableNotice != nil ? Graphite.Motion.arrive : Graphite.Motion.quick),
                    value: model.unreadableNotice)
+        .animation(reduceMotion ? nil : (model.missingStockNotice != nil ? Graphite.Motion.arrive : Graphite.Motion.quick),
+                   value: model.missingStockNotice)
         // Its coming and going, and a paste's spinner giving way to what it came to; not each count while it waits.
         .animation(reduceMotion ? nil : (model.clipboardNotice != nil ? Graphite.Motion.arrive : Graphite.Motion.quick),
                    value: model.clipboardNotice?.phase)
@@ -62,6 +64,10 @@ struct NoticeStack: View {
             }
             if let line = model.unreadableNotice {
                 UnreadableNotice(line: line)
+                    .transition(.dropsIn)
+            }
+            if let line = model.missingStockNotice {
+                MissingStockNotice(line: line)
                     .transition(.dropsIn)
             }
         }
@@ -248,6 +254,24 @@ private struct UnreadableNotice: View {
                 .help("The files that could not be read, and why they are left out")
                 .popover(isPresented: $isDetailsShown, arrowEdge: .bottom) { IssueDetails() }
             CloseButton(help: "Hide this for these files") { model.dismissUnreadableNotice() }
+        }
+    }
+}
+
+/// Non-blocking notice when the open roll (or one or more of its frames) references a stock
+/// that is not currently installed.
+private struct MissingStockNotice: View {
+    let line: String
+    @Environment(RollModel.self) private var model
+    @State private var isDetailsShown = false
+
+    var body: some View {
+        Notice(symbol: "exclamationmark.triangle", text: line) {
+            Button("Details") { isDetailsShown.toggle() }
+                .buttonStyle(.graphite(.quiet, size: .small))
+                .help("Which stocks are missing and how this roll is being previewed")
+                .popover(isPresented: $isDetailsShown, arrowEdge: .bottom) { IssueDetails() }
+            CloseButton(help: "Hide this notice") { model.isMissingStockNoticeDismissed = true }
         }
     }
 }

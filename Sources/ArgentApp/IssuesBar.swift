@@ -32,6 +32,7 @@ struct IssueDetails: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let report = model.lastDevelop, report.isUnfinished { unfinished(report) }
+                    if !model.missingStockReasons.isEmpty { missingStocksSection(model.missingStockReasons) }
                     if let unreadable = model.roll?.unreadable, !unreadable.isEmpty { unreadableSection(unreadable) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,6 +89,18 @@ struct IssueDetails: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
+            }
+        }
+    }
+
+    private func missingStocksSection(_ reasons: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: reasons.count == 1 ? "Missing film stock" : "Missing film stocks")
+                .font(Graphite.Typeface.sectionTitle)
+            ForEach(reasons, id: \.self) { reason in
+                Text(verbatim: reason)
+                    .font(Graphite.Typeface.label)
+                    .foregroundStyle(Graphite.secondaryText)
             }
         }
     }

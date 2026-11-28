@@ -534,7 +534,9 @@ extension RollModel {
         editRevision &+= 1
         let lineage = manualRecipes[frame.url]?.editLineage ?? manualLineages[frame.url] ?? editLineage
         let revision = editRevision, generation = manualGeneration
-        let rollControls = controls, own = frameControls(frame), analysis = analysis(for: frame), rollStock = currentStock?.id
+        let missingRollID = missingRollStockID, missingRollName = missingRollStockName
+        let rollControls = controls, own = frameControls(frame), analysis = analysis(for: frame)
+        let rollStock = missingRollID ?? currentStock?.id
         let aim = printAim(for: frame), edit = manualEdits[frame.url], hold = heldManualEdits[frame.url], output = output
         let previous = manualRecipes[frame.url], digest = stockDigests[stockIndex(for: frame)]
         let preceding = manualSaveTasks[frame.url]
@@ -570,6 +572,18 @@ extension RollModel {
                         editRevision: revision, editLineage: lineage, heldManual: held, resolved: recorded)
                 }
                 if let manual, manual.baseline.sourceSHA256 != verified.sha256 { throw ManualSaveError.sourceChanged }
+                // When the roll's stock is missing, keep its original stock reference in recipes for
+                // frames following the roll so unrelated edits never overwrite it with the preview fallback.
+                if own.stock == nil, let missingRollID {
+                    if let prevStock = previous?.stock, prevStock.id == missingRollID {
+                        recipe.stock = prevStock
+                    } else {
+                        recipe.stock.id = missingRollID
+                        recipe.stock.displayName = missingRollName ?? missingRollID
+                        recipe.stock.status = "custom"
+                        recipe.stock.digest = ""
+                    }
+                }
                 recipe.raw.sha256 = verified.sha256
                 let committed = try await RecipeWriter.shared.commit(recipe: recipe, for: frame, library: recipeLibrary)
                 guard generation == manualGeneration else { return }
@@ -706,7 +720,7 @@ extension RollModel {
             let latest = RestoredRoll(frames: roll.frames, checked: restored)
             if !manualChoicesChangedDuringRestore {
                 isApplyingRestoredChoices = true
-                if let id = latest.stockID, let index = films?.stocks.firstIndex(where: { $0.id == id }) { stockIndex = index }
+                applyRestoredRollStock(latest)
                 if let controls = latest.controls { self.controls = controls }
                 for (url, own) in latest.overrides { setRestoredFrameControls(own, url: url) }
                 isApplyingRestoredChoices = false

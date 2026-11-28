@@ -18,24 +18,69 @@ public enum StockLibrary {
         public let failures: [(folder: String, reason: String)]
     }
 
-    /// Every stock folder under `directory`: the library's stocks in library order, then any
-    /// others by id, so a stock baked for testing still shows up.
-    public static func load(from directory: URL, includeMonochrome: Bool = false) -> LoadResult {
+    /// Every stock folder under `directory` (bundled) plus optional user stocks under `userDirectory`.
+    /// Bundled stocks appear first in library order (then any extra bundled test stocks by id),
+    /// followed by user stocks sorted alphabetically by display name.
+    public static func load(from directory: URL, userDirectory: URL? = nil, includeMonochrome: Bool = false) -> LoadResult {
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey],
                                                                     options: [.skipsHiddenFiles])) ?? []
-        var stocks: [Stock] = includeMonochrome ? MonochromeFilm.stocks : []
+        var bundled: [Stock] = includeMonochrome ? MonochromeFilm.stocks : []
         var failures: [(String, String)] = []
         for folder in folders where (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             do {
-                let stock = try Stock.load(from: folder)
-                if !stocks.contains(where: { $0.id == stock.id && $0.monochrome != nil }) { stocks.append(stock) }
+                let stock = try Stock.load(from: folder, origin: .bundled)
+                if !bundled.contains(where: { $0.id == stock.id && $0.monochrome != nil }) { bundled.append(stock) }
             } catch {
                 failures.append((folder.lastPathComponent, "\(error)"))
             }
         }
         let ordered = includeMonochrome ? order + MonochromeFilm.stocks.map(\.id) : order
         let rank = { (id: String) in ordered.firstIndex(of: id) ?? ordered.count }
-        stocks.sort { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
+        bundled.sort { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
+
+        var stocks = bundled
+        if let userDirectory {
+            let userResult = loadUserStocks(from: userDirectory, excluding: Set(bundled.map(\.id)))
+            stocks.append(contentsOf: userResult.stocks)
+            failures.append(contentsOf: userResult.failures)
+        }
+        return LoadResult(stocks: stocks, failures: failures.sorted { $0.0 < $1.0 })
+    }
+
+    /// Loads user stock folders from `directory`, enforcing the `user-` id prefix and rejecting any id
+    /// that collides with `reservedIDs` or another folder in `directory`.
+    public static func loadUserStocks(from directory: URL, excluding reservedIDs: Set<String> = []) -> LoadResult {
+        let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey],
+                                                                    options: [.skipsHiddenFiles])) ?? []
+        let sortedFolders = folders.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var seenIDs = reservedIDs
+        var stocks: [Stock] = []
+        var failures: [(String, String)] = []
+        for folder in sortedFolders where (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            let hasSpec = FileManager.default.fileExists(
+                atPath: folder.appendingPathComponent(Stock.specFileName).path
+            )
+            let origin: Stock.Origin = hasSpec ? .userBuilt : .userImported
+            do {
+                let stock = try Stock.load(from: folder, origin: origin)
+                guard stock.id.hasPrefix(Stock.userIDPrefix), stock.id.count > Stock.userIDPrefix.count else {
+                    failures.append((folder.lastPathComponent,
+                                     "user stock id '\(stock.id)' must start with '\(Stock.userIDPrefix)'"))
+                    continue
+                }
+                guard seenIDs.insert(stock.id).inserted else {
+                    failures.append((folder.lastPathComponent,
+                                     "stock id '\(stock.id)' collides with an existing stock"))
+                    continue
+                }
+                stocks.append(stock)
+            } catch {
+                failures.append((folder.lastPathComponent, "\(error)"))
+            }
+        }
+        stocks.sort {
+            ($0.displayName.lowercased(), $0.id) < ($1.displayName.lowercased(), $1.id)
+        }
         return LoadResult(stocks: stocks, failures: failures.sorted { $0.0 < $1.0 })
     }
 }

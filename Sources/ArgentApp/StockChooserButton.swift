@@ -1,3 +1,4 @@
+import ArgentCore
 import SwiftUI
 
 /// Opens the film samples on the dock. The cartridge and name follow the roll's stock, or in the frame
@@ -13,7 +14,7 @@ struct StockChooserButton: View {
         let isOwn = frame.map(model.hasOwnStock) ?? false
         Button(action: action) {
             HStack(spacing: 6) {
-                FilmCanister(stockID: model.shownStock?.id)
+                FilmCanister(stockID: model.shownStock?.id, canisterColor: model.shownStock?.canisterColor)
                 Text(verbatim: model.shownStockName ?? "No stock")
                     .font(DisplayFace.font(size: 13, face: "SemiBold"))
                     .lineLimit(1)
@@ -62,9 +63,13 @@ struct StockChooserButton: View {
 
 private struct FilmCanister: View {
     let stockID: String?
+    var canisterColor: Stock.CanisterColor? = nil
 
     private var label: Color {
-        switch stockID {
+        if let canisterColor {
+            return Color(red: Double(canisterColor.red), green: Double(canisterColor.green), blue: Double(canisterColor.blue))
+        }
+        return switch stockID {
         case "argent-neutral": Color(white: 0.62)
         case "kodak-portra-160": Color(red: 0.73, green: 0.75, blue: 0.54)
         case "kodak-portra-800": Color(red: 0.80, green: 0.63, blue: 0.52)
