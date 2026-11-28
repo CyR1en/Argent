@@ -66,4 +66,26 @@ import Testing
         #expect(colorOriginal == colorFiltered)
         #expect(colorOriginal[0] != colorOriginal[2])
     }
+
+    @Test func silverIgnoresMaskBalanceWithoutIgnoringMaskExposure() throws {
+        let gpu = try GPU()
+        let stock = try #require(MonochromeFilm.stocks.first)
+        let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+        let frame = try MaskRender.frame(gpu, Array(repeating: SIMD3(repeating: 0.18), count: 256), width: 16,
+                                        picture: MaskSpace(width: 16, height: 16))
+        func render(exposure: Float, balance: MaskBalance = .init()) throws -> [Float16] {
+            let mask = Mask(components: [MaskRender.everywhere], adjustments: try ManualAdjustments(exposureEV: exposure),
+                            balance: balance)
+            let manual = try MaskRender.manual(masks: [mask])
+            let result = try renderer.render(frame, settings: DevelopSettings(manual: manual))
+            return ExposureAnalyzer.pixels(of: result.image.texture)
+        }
+        let normal = try render(exposure: 0)
+        let lighter = try render(exposure: 1)
+        #expect(lighter[0] > normal[0])
+        for balance in [MaskBalance(warmth: 100), MaskBalance(magenta: 100)] {
+            #expect(try render(exposure: 0, balance: balance) == normal)
+            #expect(try render(exposure: 1, balance: balance) == lighter)
+        }
+    }
 }
