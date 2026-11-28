@@ -36,6 +36,39 @@ import Testing
         return model
     }
 
+    @Test func builderBakesFrameAndReopensSavedSpec() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)
+            let userStocks = fixture.folder.appendingPathComponent("UserStocks", isDirectory: true)
+            let model = Self.makeModel(fixture: fixture, userStocks: userStocks)
+            await model.open(fixture.roll)
+            let frame = try #require(model.roll?.frames.first)
+            model.manualLoaded.insert(frame.url)
+            let base = try #require(model.stock(for: frame))
+
+            model.showStockBuilder()
+            #expect(model.stockBuilder?.spec.base == .neutral)
+            #expect(!model.canBakeFrameAsStock(frame))
+            model.stockBuilder = nil
+            model.bakeFrameAsStock(frame)
+            let request = try #require(model.stockBuilder)
+            #expect(request.frame == frame)
+            #expect(request.spec.base == .derived(stockID: base.id))
+            #expect(request.spec.frameLook != nil)
+            #expect(model.isSheetShown)
+            model.stockBuilder = nil
+
+            let stock = try CustomStockCompiler.compile(request.spec, id: "user-builder", name: "Builder", base: base, size: 17)
+            try UserStockStore(folder: userStocks).install(stock, specData: JSONEncoder().encode(request.spec))
+            model.reloadUserStocks()
+            let saved = try #require(model.films?.stocks.first { $0.id == stock.id })
+            model.editCustomStock(saved)
+            #expect(model.stockBuilder?.stockID == saved.id)
+            #expect(model.stockBuilder?.name == "Builder")
+            #expect(model.stockBuilder?.spec == request.spec)
+        }
+    }
+
     @Test func reloadUserStocksPicksUpAddedUpdatedAndDeletedStocks() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)

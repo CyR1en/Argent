@@ -203,10 +203,11 @@ struct MenuState: Equatable {
     /// First-launch onboarding is up over the workspace (`OnboardingController.isPresented`).
     var isShowingOnboarding = false
     var isShowingStockImport = false
+    var isShowingStockBuilder = false
     var canImportStock = false
     var canExportStock = false
     /// Any modal sheet or overlay is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding || isShowingStockImport }
+    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding || isShowingStockImport || isShowingStockBuilder }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -342,6 +343,11 @@ struct ArgentCommands: Commands {
                 .disabled(!state.canPasteToShown || !state.actsOnRoll)
         }
         CommandMenu("Stock") {
+            Button("New Custom Stock…") {
+                openWindow(id: "main")
+                model.showStockBuilder()
+            }
+            .disabled(!state.canImportStock)
             Button("Import LUT or Stock…") {
                 openWindow(id: "main")
                 model.chooseStockImport()
@@ -420,6 +426,10 @@ struct ArgentCommands: Commands {
                 if let frame = model.selectedFrame { model.showSavePreset(from: frame) }
             }
             .disabled(!state.actsOnRoll || state.isSeveralSelected || model.selectedFrame.map(model.canSavePreset) != true)
+            Button("Bake Frame as Stock…") {
+                if let frame = model.shownFrame ?? model.selectedFrame { model.bakeFrameAsStock(frame) }
+            }
+            .disabled(!state.actsOnRoll || state.isSeveralSelected || (model.shownFrame ?? model.selectedFrame).map(model.canBakeFrameAsStock) != true)
             Button("Look Presets…") { model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : []) }
                 .disabled(state.isShowingOnboarding)
             Divider()
