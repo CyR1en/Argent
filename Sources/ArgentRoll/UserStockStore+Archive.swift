@@ -49,7 +49,8 @@ extension UserStockStore {
                               exposurePerUnit: loaded.exposurePerUnit, negative: loaded.negative, print: loaded.print,
                               grain: loaded.grain, halation: loaded.halation, modelledPrint: loaded.modelledPrint,
                               origin: loaded.origin, canisterColor: loaded.canisterColor, characterLine: loaded.characterLine,
-                              hasSpec: loaded.hasSpec)
+                              hasSpec: loaded.hasSpec, monochromeGrain: loaded.monochromeGrain,
+                              scenePresence: loaded.scenePresence, scenePresenceReference: loaded.scenePresenceReference)
             let installed = try install(stock, specData: spec)
             return try Stock.load(from: installed, origin: stock.origin)
         }

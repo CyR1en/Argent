@@ -63,6 +63,7 @@ enum ShaderSource {
         float scalingAmount;
         uint  scalingRadius;
         float silverContrast;
+        uint monochromeGrain;
         float4 domainMin;
         float4 domainMax;
     };
@@ -369,6 +370,8 @@ enum ShaderSource {
                                   float(sigmas.read(uint2(index.b, 0)).b));
             if (params.silverContrast > 0.0f) {
                 amounts.r += (a.r + b.r) * 0.70710678f * sigma.r * params.grainScale;
+            } else if (params.monochromeGrain != 0u) {
+                amounts += (a.r + b.r) * 0.70710678f * sigma * params.grainScale;
             } else {
                 amounts += (a + b) * 0.70710678f * sigma * params.grainScale;
             }

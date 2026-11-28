@@ -723,6 +723,12 @@ extension Stock {
             }
             weights.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         }
+        if monochromeGrain { hash.update(data: Data("monochrome-grain-v1".utf8)) }
+        if let scenePresence {
+            hash.update(data: Data("stock-presence:\(scenePresence.version)".utf8))
+            let values = [scenePresence.texture, scenePresence.clarity, scenePresence.dehaze, scenePresenceReference ?? 0]
+            values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 }

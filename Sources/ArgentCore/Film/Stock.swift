@@ -99,6 +99,9 @@ public struct Stock: Sendable {
     /// The stock's halation, when its profile has one.
     public let halation: Halation?
     public let monochrome: MonochromeFilm?
+    public let monochromeGrain: Bool
+    public let scenePresence: Presence?
+    public let scenePresenceReference: Float?
 
     public var isUserStock: Bool { origin != .bundled }
 
@@ -123,10 +126,14 @@ public struct Stock: Sendable {
                 densityRange: Float, exposurePerUnit: SIMD3<Float> = SIMD3<Float>(repeating: 1), negative: LUT3D,
                 print: LUT3D, grain: GrainTable? = nil, halation: Halation? = nil, modelledPrint: String? = nil,
                 monochrome: MonochromeFilm? = nil, origin: Origin = .bundled, canisterColor: CanisterColor? = nil,
-                characterLine: String? = nil, hasSpec: Bool = false) {
+                characterLine: String? = nil, hasSpec: Bool = false, monochromeGrain: Bool = false,
+                scenePresence: Presence? = nil, scenePresenceReference: Float? = nil) {
         self.grain = grain
         self.halation = halation
         self.monochrome = monochrome
+        self.monochromeGrain = monochromeGrain
+        self.scenePresence = scenePresence
+        self.scenePresenceReference = scenePresenceReference
         self.origin = origin
         self.canisterColor = canisterColor
         self.characterLine = characterLine
@@ -215,6 +222,11 @@ public struct Stock: Sendable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 }
         let hasSpec = FileManager.default.fileExists(atPath: directory.appendingPathComponent(specFileName).path)
+        if let presence = manifest.scenePresence {
+            guard !presence.acts(in: .print), let reference = manifest.scenePresenceReference,
+                  (-32...32).contains(reference) else { throw StockError.badValue("Invalid stock scene Presence") }
+            try presence.validateSupportedVersion()
+        }
 
         return Stock(
             id: manifest.id, displayName: manifest.displayName,
@@ -225,7 +237,9 @@ public struct Stock: Sendable {
             print: try loadLUT(cube: manifest.print.file, binary: manifest.print.binary,
                                size: manifest.print.size, encoding: LogEncoding(), in: directory),
             grain: grain, halation: halation, modelledPrint: manifest.modelledPrint,
-            origin: origin, canisterColor: canisterColor, characterLine: characterLine, hasSpec: hasSpec)
+            origin: origin, canisterColor: canisterColor, characterLine: characterLine, hasSpec: hasSpec,
+            monochromeGrain: manifest.monochromeGrain ?? false,
+            scenePresence: manifest.scenePresence, scenePresenceReference: manifest.scenePresenceReference)
     }
 
     /// Writes this stock as a schema-2 folder (`stock.json`, `negative.lut3d`, `print.lut3d`).
@@ -264,7 +278,9 @@ public struct Stock: Sendable {
                 exposurePerUnit: [exposurePerUnit.x, exposurePerUnit.y, exposurePerUnit.z]
             ),
             grain: grain.map { .init(amounts: $0.amounts, sigma48: $0.sigma48) },
-            halation: halation.map { .init(strength: $0.strength, greenShare: $0.greenShare, radiusMicrometres: $0.radiusMicrometres) }
+            halation: halation.map { .init(strength: $0.strength, greenShare: $0.greenShare, radiusMicrometres: $0.radiusMicrometres) },
+            monochromeGrain: monochromeGrain ? true : nil, scenePresence: scenePresence,
+            scenePresenceReference: scenePresenceReference
         )
 
         let encoder = JSONEncoder()
@@ -371,5 +387,8 @@ public struct Stock: Sendable {
         var print: Print
         var grain: Grain?
         var halation: HalationEntry?
+        var monochromeGrain: Bool?
+        var scenePresence: Presence?
+        var scenePresenceReference: Float?
     }
 }
