@@ -69,7 +69,7 @@ private struct FilmCanister: View {
         if let canisterColor {
             return Color(red: Double(canisterColor.red), green: Double(canisterColor.green), blue: Double(canisterColor.blue))
         }
-        switch stockID {
+        return switch stockID {
         case "argent-neutral": Color(white: 0.62)
         case "kodak-portra-160": Color(red: 0.73, green: 0.75, blue: 0.54)
         case "kodak-portra-800": Color(red: 0.80, green: 0.63, blue: 0.52)
