@@ -75,6 +75,15 @@ public struct UserStockStore: Sendable {
     /// Atomically writes `stock` (and optional builder `specData`) into `folder/<stock.id>`.
     @discardableResult
     public func save(_ stock: Stock, specData: Data? = nil) throws -> URL {
+        try write(stock, specData: specData, replacing: true)
+    }
+
+    @discardableResult
+    public func install(_ stock: Stock, specData: Data? = nil) throws -> URL {
+        try write(stock, specData: specData, replacing: false)
+    }
+
+    private func write(_ stock: Stock, specData: Data?, replacing: Bool) throws -> URL {
         let target = try stockDirectory(for: stock.id)
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -85,7 +94,7 @@ public struct UserStockStore: Sendable {
             if let specData {
                 try specData.write(to: staging.appendingPathComponent(Stock.specFileName), options: .atomic)
             }
-            if fm.fileExists(atPath: target.path) {
+            if replacing, fm.fileExists(atPath: target.path) {
                 _ = try fm.replaceItemAt(target, withItemAt: staging)
             } else {
                 try fm.moveItem(at: staging, to: target)

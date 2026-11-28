@@ -34,6 +34,8 @@ enum ShaderSource {
         float silverR;
         float silverG;
         float silverB;
+        float4 domainMin;
+        float4 domainMax;
     };
 
     struct PrintParams {
@@ -61,6 +63,8 @@ enum ShaderSource {
         float scalingAmount;
         uint  scalingRadius;
         float silverContrast;
+        float4 domainMin;
+        float4 domainMax;
     };
 
     // ManualRenderSettings 2026-10-09-1, 2026-10-29-1 and 2026-11-06-1. The block mirrors
@@ -272,6 +276,10 @@ enum ShaderSource {
         return float3(lut.read(uint3(x, y, z)).rgb);
     }
 
+    static inline float3 unit_lut_domain(float3 input, float3 lower, float3 upper) {
+        return (clamp(input, lower, upper) - lower) / (upper - lower);
+    }
+
     // Tetrahedral interpolation: four fetches per pixel and no hue skew on the
     // gray axis, which trilinear sampling would introduce.
     static inline float3 sample_tetrahedral(texture3d<half, access::read> lut, float3 uvw, uint n) {
@@ -327,6 +335,7 @@ enum ShaderSource {
         float2 uv = (float2(gid) + 0.5f) / float2(outTexture.get_width(), outTexture.get_height());
         half4 pixel = inTexture.read(gid);
         float3 encoded = encode_log(scene_at(float3(pixel.rgb), \(sceneArguments)), params);
+        encoded = unit_lut_domain(encoded, params.domainMin.xyz, params.domainMax.xyz);
         float3 rgb = sample_tetrahedral(lut, encoded, params.lutSize);
         outTexture.write(half4(half3(rgb), pixel.a), gid);
     }
@@ -366,10 +375,12 @@ enum ShaderSource {
         }
         if (params.silverContrast > 0.0f) {
             float silver = (amounts.r + params.offsetR - 0.5f) * params.silverContrast + 0.5f;
-            return sample_tetrahedral(lut, float3(saturate(silver), 0.0f, 0.0f), params.lutSize);
+            float3 density = unit_lut_domain(float3(saturate(silver), 0.0f, 0.0f), params.domainMin.xyz, params.domainMax.xyz);
+            return sample_tetrahedral(lut, density, params.lutSize);
         }
         float3 offset = float3(params.offsetR, params.offsetG, params.offsetB);
         float3 density = saturate(amounts + offset);
+        density = unit_lut_domain(density, params.domainMin.xyz, params.domainMax.xyz);
         return sample_tetrahedral(lut, density, params.lutSize);
     }
 
@@ -569,6 +580,7 @@ enum ShaderSource {
         half4 pixel = inTexture.read(gid);
         float3 linear = scene_at(float3(pixel.rgb), \(sceneArguments)) + halation.sample(field, uv).rgb;
         float3 encoded = encode_log(linear, params);
+        encoded = unit_lut_domain(encoded, params.domainMin.xyz, params.domainMax.xyz);
         float3 rgb = sample_tetrahedral(lut, encoded, params.lutSize);
         outTexture.write(half4(half3(rgb), pixel.a), gid);
     }

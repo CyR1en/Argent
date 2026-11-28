@@ -107,6 +107,11 @@ struct ContentView: View {
             case .library(let frames): PresetLibrarySheet(model: model, frames: frames, store: store)
             }
         }
+        .sheet(item: $model.stockImportSource) { source in
+            if let store = model.userStockStore {
+                ImportStockSheet(model: model, source: source, store: store, frame: model.shownFrame ?? model.selectedFrame)
+            }
+        }
     }
 
     /// The Develop page's panel shows with its page.

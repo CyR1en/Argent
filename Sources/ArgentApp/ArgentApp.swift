@@ -202,8 +202,11 @@ struct MenuState: Equatable {
     var isShowingMaskModels = false
     /// First-launch onboarding is up over the workspace (`OnboardingController.isPresented`).
     var isShowingOnboarding = false
+    var isShowingStockImport = false
+    var canImportStock = false
+    var canExportStock = false
     /// Any modal sheet or overlay is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding }
+    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding || isShowingStockImport }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -339,6 +342,14 @@ struct ArgentCommands: Commands {
                 .disabled(!state.canPasteToShown || !state.actsOnRoll)
         }
         CommandMenu("Stock") {
+            Button("Import LUT or Stock…") {
+                openWindow(id: "main")
+                model.chooseStockImport()
+            }
+            .disabled(!state.canImportStock)
+            Button("Export Current Custom Stock…") { model.chooseStockExport() }
+                .disabled(!state.canExportStock)
+            Divider()
             Toggle("Stock Panel", isOn: Binding(get: { model.isStockPanelShown && model.workspacePage == .roll },
                                                 set: { if $0 != (model.isStockPanelShown && model.workspacePage == .roll) { model.toggleStockPanel() } }))
                 .keyboardShortcut("k", modifiers: [.command, .shift])

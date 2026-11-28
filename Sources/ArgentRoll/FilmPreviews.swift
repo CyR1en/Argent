@@ -490,6 +490,25 @@ public final class FilmPreviews: @unchecked Sendable {
         }
     }
 
+    /// Renders an uninstalled LUT import without enrolling it in the stock registry or render caches.
+    public func importPreview(_ frame: Frame, stock: Stock, space: OutputSpace) async throws -> CGImage? {
+        let generation = lock.withLock { decodeGeneration }
+        let settings = DevelopSettings(grain: stock.grain == nil ? 0 : 1, halation: stock.halation != nil, sharpen: true)
+        guard let preview = await linearPreview(frame, lens: settings.lens, priority: .high, frameViewSide: nil, generation: generation),
+              !Task.isCancelled, isCurrentDecode(generation) else { return nil }
+        let result: Result<CGImage, Error>? = await QueuedWork.runStoppable(on: renderQueue, priority: .high) { [self] stopped in
+            guard !stopped(), isCurrentDecode(generation) else { return nil }
+            decodeTurns.beginRender()
+            defer { decodeTurns.endRender() }
+            return Result {
+                let renderer = try FilmRenderer(gpu: gpu, stock: stock)
+                return try render(preview.frame, with: renderer, settings: settings, space: space, maxPixelSize: 800)
+            }
+        }
+        guard !Task.isCancelled, isCurrentDecode(generation) else { return nil }
+        return try result?.get()
+    }
+
     // MARK: Auto development
 
     /// What measuring a frame came to (`measure`).
