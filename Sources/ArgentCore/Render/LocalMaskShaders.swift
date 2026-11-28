@@ -99,7 +99,7 @@ extension ShaderSource {
             return [signature, ("scene_at(float3(pixel.rgb), \(sceneArguments))",
                                 "scene_masked_at(float3(pixel.rgb), " + masked),
                     ("float3 rgb = sample_tetrahedral(lut, encoded, params.lutSize);",
-                     "float3 rgb = sample_tetrahedral(lut, encoded, params.lutSize);\n        if (masks.balanceAny != 0u) { rgb += local_balance_at(float3(pixel.rgb), uv, maskCoverage, masks, " + refinedArguments + "; }")]
+                     "float3 rgb = sample_tetrahedral(lut, encoded, params.lutSize);\n        if (masks.balanceAny != 0u && params.silverR == 0.0f) { rgb += local_balance_at(float3(pixel.rgb), uv, maskCoverage, masks, " + refinedArguments + "; }")]
         }
     }
 

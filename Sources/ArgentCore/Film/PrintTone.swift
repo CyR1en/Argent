@@ -181,7 +181,8 @@ public struct PrintTone: Sendable, Equatable, Hashable {
         let burnColour = try shape().burnColour
         let whiteHold = try whiteHold()
         func printed(_ amounts: SIMD3<Float>) -> SIMD3<Float> {
-            stock.print.sample(encoded: amounts.clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1)))
+            stock.print.sample(encoded: stock.paperAmounts(amounts, grade: settings.paperGrade)
+                .clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1)))
         }
         let white = printed(SIMD3(repeating: 1))
         var values: [SIMD4<Float>] = []
@@ -193,10 +194,10 @@ public struct PrintTone: Sendable, Equatable, Hashable {
             let scene = PrintToneTableInfo.firstStops + Float(index) * PrintToneTableInfo.stepStops
             let stopsHere = try stops(baseLog2: log2(Float(0.18)) + scene, ratedStops: rated)
             guard stopsHere != 0 else { values.append(.zero); answered = nil; continue }
-            let colourShare = min(max(-stopsHere, 0) * burnColour, 1)
+            let colourShare = stock.monochrome == nil ? min(max(-stopsHere, 0) * burnColour, 1) : 0
             let film = stock.negative.sample(encoded: SIMD3(repeating: encoding.encode(encoding.midGray * exp2(scene + rated)))) + offset
             let plain = stopsHere * units
-            guard holdsColour else { values.append(SIMD4(plain, colourShare)); continue }
+            guard holdsColour, stock.monochrome == nil else { values.append(SIMD4(plain, colourShare)); continue }
             let unmoved = printed(film)
             let wanted = dot(printed(film + plain), luma)
             let base = dot(unmoved, luma)

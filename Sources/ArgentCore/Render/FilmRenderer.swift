@@ -123,6 +123,7 @@ public final class FilmRenderer {
         let version: String
         let exposureStops: Float
         let printOffset: SIMD3<Float>
+        let paperGrade: PaperGrade
     }
     private let toneLock = NSLock()
     /// The latest tables and their buffer, so a drag of Exposure or a curve, or a render of the same
@@ -134,6 +135,7 @@ public final class FilmRenderer {
         let referenceStops: Float
         let exposureStops: Float
         let printOffset: SIMD3<Float>
+        let paperGrade: PaperGrade
     }
     /// The latest masks' tables, so a slider or Amount only writes the parameter block. Built at most once a key, 182 KB and about 1 ms.
     private var localTables: (key: LocalTablesKey, tables: LocalMaskTables)?
@@ -146,6 +148,7 @@ public final class FilmRenderer {
         let ratedAt: Float?
         let labBalance: SIMD3<Float>
         let printExposure: Float
+        let paperGrade: PaperGrade
     }
     private var printToneCache: (key: PrintToneKey, table: [SIMD4<Float>])?
     /// What Presence's tone weights depend on: the transfer's inputs and the constants' version. No slider and not Exposure.
@@ -154,6 +157,7 @@ public final class FilmRenderer {
         let exposureStops: Float
         let printOffset: SIMD3<Float>
         let version: String
+        let paperGrade: PaperGrade
     }
     /// The latest weights and their buffer, so a slider step or an Exposure drag builds none.
     private var presenceWeightsCache: (key: PresenceWeightsKey, tables: PresenceToneWeights, buffer: MTLBuffer)?
@@ -217,6 +221,13 @@ public final class FilmRenderer {
         var printParams = PrintParams(offset: settings.printOffset(densityRange: stock.densityRange,
                                                                    exposurePerUnit: stock.exposurePerUnit),
                                       lutSize: stock.print.size)
+        if let monochrome = stock.monochrome {
+            let weights = monochrome.weights(for: settings.monochromeFilter)
+            negativeParams.silverR = weights.x
+            negativeParams.silverG = weights.y
+            negativeParams.silverB = weights.z
+            printParams.silverContrast = settings.paperGrade.contrast
+        }
         // Grain at a develop's own pixel pitch, and a picture smaller than its develop with the grain of
         // that develop area-resized to it, so a picture and a long-edge develop at its size match
         // (docs/manual-development-validation.md, "Grain tolerance, 2026-10-16").
@@ -224,7 +235,8 @@ public final class FilmRenderer {
         if settings.grain > 0, let sigmas = sigmaTexture {
             let longSide = max(frame.width, frame.height)
             let (a, b, scale) = try gpu.grainField.tiles(longSide: longSide,
-                                                         developLongSide: GrainModel.developLongSide(longSide: longSide, scale: frame.scale))
+                                                         developLongSide: GrainModel.developLongSide(longSide: longSide, scale: frame.scale),
+                                                         silver: stock.monochrome != nil)
             grain = GrainInputs(tileA: a, tileB: b, sigmas: sigmas)
             let seed = settings.grainSeed
             printParams.grainScale = settings.grain * GrainModel.amount * scale
@@ -351,7 +363,8 @@ public final class FilmRenderer {
     /// `LocalScene`'s tables for this stock and key, built once a key, as `toneInputs` builds the panel's: under the lock, so two lanes
     /// asking for one key build it once.
     private func localMaskTables(_ settings: DevelopSettings, exposureStops: Float, printOffset: SIMD3<Float>) throws -> LocalMaskTables {
-        let key = LocalTablesKey(referenceStops: settings.manual.referenceStops, exposureStops: exposureStops, printOffset: printOffset)
+        let key = LocalTablesKey(referenceStops: settings.manual.referenceStops, exposureStops: exposureStops,
+                                 printOffset: printOffset, paperGrade: settings.paperGrade)
         toneLock.lock(); defer { toneLock.unlock() }
         if let cached = localTables, cached.key == key { return cached.tables }
         let scene = LocalScene(referenceStops: key.referenceStops, stock: stock, settings: settings)
@@ -367,7 +380,8 @@ public final class FilmRenderer {
     /// The tone step's table for `settings` on this stock, from the cache when what it depends on is unchanged, as it is
     /// when a frame is rendered again at another size.
     private func printToneTable(_ settings: DevelopSettings) throws -> [SIMD4<Float>] {
-        let key = PrintToneKey(tone: settings.tone, ratedAt: settings.ratedAt, labBalance: settings.labBalance, printExposure: settings.printExposure)
+        let key = PrintToneKey(tone: settings.tone, ratedAt: settings.ratedAt, labBalance: settings.labBalance,
+                               printExposure: settings.printExposure, paperGrade: settings.paperGrade)
         if let cached = toneLock.withLock({ printToneCache }), cached.key == key { return cached.table }
         // Solved outside the lock: 2 ms, and a renderer's lanes may each be on another frame.
         let table = try settings.tone.table(stock: stock, settings: settings)
@@ -405,7 +419,7 @@ public final class FilmRenderer {
     func presenceWeights(_ settings: DevelopSettings, constants: PresenceConstants, exposureStops: Float,
                          printOffset: SIMD3<Float>) throws -> (tables: PresenceToneWeights, buffer: MTLBuffer) {
         let key = PresenceWeightsKey(referenceStops: settings.presenceReferenceStops, exposureStops: exposureStops,
-                                     printOffset: printOffset, version: constants.version)
+                                     printOffset: printOffset, version: constants.version, paperGrade: settings.paperGrade)
         toneLock.lock(); defer { toneLock.unlock() }
         if let cached = presenceWeightsCache, cached.key == key { return (cached.tables, cached.buffer) }
         let tables = try PresenceToneWeights(constants: constants, referenceStops: key.referenceStops, stock: stock, settings: settings)
@@ -426,7 +440,7 @@ public final class FilmRenderer {
         let a = manual.adjustments
         let key = ToneKey(values: [a.contrast, a.highlights, a.shadows, a.whites, a.blacks],
                           referenceStops: manual.referenceStops, version: manual.version,
-                          exposureStops: exposureStops, printOffset: printOffset)
+                          exposureStops: exposureStops, printOffset: printOffset, paperGrade: settings.paperGrade)
         toneLock.lock(); defer { toneLock.unlock() }
         if let cached = toneCache, cached.key == key { return (cached.tables, cached.buffer) }
         guard let tables = try manual.toneTables(stock: stock, settings: settings) else { return nil }

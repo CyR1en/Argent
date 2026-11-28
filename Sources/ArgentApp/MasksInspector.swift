@@ -290,14 +290,16 @@ private struct MaskPanel: View, Equatable {
                 }
                 .disabled(!canAdjust)
             }
-            InspectorGroup(title: "Balance", summary: MaskSummary.balance(of: mask), isOpen: editor.openGroups.contains(.balance),
-                           toggle: { editor.toggle(.balance) }) {
-                VStack(spacing: AdjustRowMetric.rowSpacing) {
-                    ForEach(MaskBalanceControl.allCases, id: \.self) { control in
-                        balanceRow(control)
+            if model.stock(for: frame)?.monochrome == nil {
+                InspectorGroup(title: "Balance", summary: MaskSummary.balance(of: mask), isOpen: editor.openGroups.contains(.balance),
+                               toggle: { editor.toggle(.balance) }) {
+                    VStack(spacing: AdjustRowMetric.rowSpacing) {
+                        ForEach(MaskBalanceControl.allCases, id: \.self) { control in
+                            balanceRow(control)
+                        }
                     }
+                    .disabled(!canAdjust)
                 }
-                .disabled(!canAdjust)
             }
             MaskShapeRows(frame: frame, maskID: mask.id, component: component, shape: mask.components[component].shape,
                           isOpen: editor.openGroups.contains(.shape))

@@ -499,7 +499,7 @@ final class RollModel {
         self.recipeLibrary = recipeLibrary
         self.developMemory = developMemory
         let directory = stocksDirectory ?? Self.stocksDirectory()
-        let library = directory.map(StockLibrary.load(from:))
+        let library = directory.map { StockLibrary.load(from: $0, includeMonochrome: stocksDirectory == nil) }
         for failure in library?.failures ?? [] {
             Self.log.error("stock \(failure.folder, privacy: .public) not loaded: \(failure.reason, privacy: .public)")
         }
@@ -583,6 +583,15 @@ final class RollModel {
 
     /// The roll's stock, when stocks loaded.
     var currentStock: Stock? { films?.stocks[safe: stockIndex] }
+
+    var rollUsesOnlyMonochrome: Bool {
+        Self.usesOnlyMonochrome(roll, defaultStock: currentStock, stockForFrame: stock(for:))
+    }
+
+    static func usesOnlyMonochrome(_ roll: Roll?, defaultStock: Stock?, stockForFrame: (Frame) -> Stock?) -> Bool {
+        guard let roll, !roll.frames.isEmpty else { return defaultStock?.monochrome != nil }
+        return roll.frames.allSatisfy { stockForFrame($0)?.monochrome != nil }
+    }
 
     /// The stock the dock, the stock panel and the Stock menu show: the open frame's, else the roll's.
     var shownStockIndex: Int { shownFrame.map(stockIndex(for:)) ?? stockIndex }
@@ -1365,7 +1374,8 @@ final class RollModel {
     var menuState: MenuState {
         let open = shownFrame, selected = selectionFlag
         let developing = isDeveloping
-        return MenuState(hasRoll: roll != nil, openFrame: open, frameIsOverridden: open.map(isOverridden) ?? false,
+        return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesOnlyMonochrome: rollUsesOnlyMonochrome,
+                         frameUsesMonochrome: shownStock?.monochrome != nil, frameIsOverridden: open.map(isOverridden) ?? false,
                          canResetManual: open.map(canResetManual) == true,
                          canSetDistortion: open.map(canSetDistortion) == true,
                          // The edit's own value, not the print's: the menus take a row's gesture once, as it ends.

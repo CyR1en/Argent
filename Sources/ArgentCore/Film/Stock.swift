@@ -64,6 +64,7 @@ public struct Stock: Sendable {
     public let grain: GrainTable?
     /// The stock's halation, when its profile has one.
     public let halation: Halation?
+    public let monochrome: MonochromeFilm?
 
     /// Halation as the profile gives it, a guess until a point source is shot on film
     /// (docs/M3-research.md section 4).
@@ -84,9 +85,11 @@ public struct Stock: Sendable {
 
     public init(id: String, displayName: String, modelledFilm: String? = nil, status: String, boxSpeed: Float,
                 densityRange: Float, exposurePerUnit: SIMD3<Float> = SIMD3<Float>(repeating: 1), negative: LUT3D,
-                print: LUT3D, grain: GrainTable? = nil, halation: Halation? = nil, modelledPrint: String? = nil) {
+                print: LUT3D, grain: GrainTable? = nil, halation: Halation? = nil, modelledPrint: String? = nil,
+                monochrome: MonochromeFilm? = nil) {
         self.grain = grain
         self.halation = halation
+        self.monochrome = monochrome
         self.id = id
         self.displayName = displayName
         self.modelledFilm = modelledFilm

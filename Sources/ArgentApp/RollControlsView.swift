@@ -1,4 +1,5 @@
 import AppKit
+import ArgentCore
 import ArgentRoll
 import SwiftUI
 
@@ -22,6 +23,7 @@ enum ControlsScope: Equatable, Sendable {
 struct RollControlsView: View {
     let frame: Frame?
     @Environment(\.dismiss) private var dismiss
+    @Environment(RollModel.self) private var model
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -39,7 +41,21 @@ struct RollControlsView: View {
                     if let frame { SameAsRollButton(frame: frame) }
                 }
                 setting("Rated at") { RatedAtControl(frame: frame) }
-                setting("Lab balance") { LabBalanceControl(frame: frame) }
+                if (frame.flatMap(model.stock(for:)) ?? model.currentStock)?.monochrome != nil {
+                    setting("Lens filter") {
+                        let titles: [MonochromeFilter: String] = [.none: "None", .yellow: "Yellow", .orange: "Orange", .red: "Red"]
+                        filmChoice("Lens filter", values: MonochromeFilter.allCases, defaultValue: .none,
+                                   roll: \.monochromeFilter, own: \.monochromeFilter) { titles[$0] ?? "" }
+                    }
+                    setting("Paper grade") {
+                        let titles = ["0 · Soft", "1 · Medium soft", "2 · Normal", "3 · Medium hard", "4 · Hard", "5 · Extra hard"]
+                        filmChoice("Paper grade", values: PaperGrade.allCases, defaultValue: .normal,
+                                   roll: \.paperGrade, own: \.paperGrade) { titles[$0.rawValue] }
+                    }
+                }
+                if frame.map({ model.stock(for: $0)?.monochrome == nil }) ?? !model.rollUsesOnlyMonochrome {
+                    setting("Lab balance") { LabBalanceControl(frame: frame) }
+                }
                 setting("Grain") { GrainControl(frame: frame) }
                 SectionDivider()
                     .padding(.top, 2)
@@ -73,6 +89,46 @@ struct RollControlsView: View {
             Spacer(minLength: 8)
             control()
         }
+    }
+
+    private func filmChoice<Value: Hashable>(_ label: String, values: [Value], defaultValue: Value,
+                                             roll: WritableKeyPath<RollControls, Value?>,
+                                             own: WritableKeyPath<FrameControls, Value?>,
+                                             title: @escaping (Value) -> String) -> some View {
+        let rollValue = model.controls[keyPath: roll] ?? defaultValue
+        let override = frame.flatMap { model.frameControls($0)[keyPath: own] }
+        let selection = Binding(get: { override ?? rollValue }, set: { value in
+            if let frame {
+                var controls = model.frameControls(frame)
+                controls[keyPath: own] = value == rollValue ? nil : value
+                model.setRestoredFrameControls(controls, url: frame.url)
+            } else {
+                model.controls[keyPath: roll] = value == defaultValue ? nil : value
+            }
+        })
+        return Menu {
+            Picker(label, selection: selection) {
+                ForEach(values, id: \.self) { Text(verbatim: title($0)).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            if let frame {
+                Divider()
+                Button(Self.sameAsRollItem(title(rollValue))) {
+                    var controls = model.frameControls(frame)
+                    controls[keyPath: own] = nil
+                    model.setRestoredFrameControls(controls, url: frame.url)
+                }
+                .disabled(override == nil)
+            }
+        } label: {
+            MenuFace(text: title(selection.wrappedValue), minWidth: 100)
+        }
+        .graphiteMenu()
+        .disabled(model.roll == nil)
+        .accessibilityLabel(label)
+        .accessibilityValue(title(selection.wrappedValue) + Self.ownership(ControlsScope(frame: frame), isOwn: override != nil))
+        .modifier(FrameOverrideIndicator(isOwn: override != nil))
     }
 
     /// "800, one stop under", or the position's name when no stock is loaded.

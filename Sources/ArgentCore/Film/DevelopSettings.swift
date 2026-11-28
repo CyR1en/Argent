@@ -32,11 +32,14 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
     /// Auto's own Presence finish (e.g., Neutral's subtle Vibrance and Clarity polish), separate from
     /// user refinements in `manual`. Identity takes the original render path.
     public var autoPresence: AutoPresence
+    public var monochromeFilter: MonochromeFilter
+    public var paperGrade: PaperGrade
 
     public init(ratedAt: Float? = nil, labBalance: SIMD3<Float> = .zero, printExposure: Float = 0,
                 grain: Float = 0, grainSeed: UInt32 = 0, halation: Bool = false, halationAmount: Float = 1,
                 sharpen: Bool = false, manual: ManualRenderSettings = .identity, tone: PrintTone = .identity,
-                autoPresence: AutoPresence = .identity) {
+                autoPresence: AutoPresence = .identity,
+                monochromeFilter: MonochromeFilter = .none, paperGrade: PaperGrade = .normal) {
         self.halation = halation
         self.halationAmount = halationAmount
         self.sharpen = sharpen
@@ -48,6 +51,8 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
         self.manual = manual
         self.tone = tone
         self.autoPresence = autoPresence
+        self.monochromeFilter = monochromeFilter
+        self.paperGrade = paperGrade
     }
 
     public var lens: LensSettings { manual.adjustments.lens }

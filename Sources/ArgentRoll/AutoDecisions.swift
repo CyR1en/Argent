@@ -268,7 +268,8 @@ public enum AutoDecisions {
     public static func ownControls(_ frames: [Frame], _ own: [URL: FrameControls],
                                    method: SequenceAims.Method = method) -> [String: FrameControls] {
         names(frames, own.compactMapValues { controls in
-            let used = method == .detail ? FrameControls(ratedAt: controls.ratedAt, labBalance: controls.labBalance) : controls
+            let used = method == .detail ? FrameControls(ratedAt: controls.ratedAt, labBalance: controls.labBalance,
+                                                         monochromeFilter: controls.monochromeFilter, paperGrade: controls.paperGrade) : controls
             return used.isEmpty ? nil : used
         })
     }
