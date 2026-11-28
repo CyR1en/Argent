@@ -70,7 +70,9 @@ public enum CustomStockCompiler {
             }
             let withPresence = PresencePrint.applying(to: rgb, parameters: printPresence)
             let baked = manual.applyingPrint(to: withPresence, parameters: printParameters, curves: curves)
-            return finish.applying(to: baked)
+            let paper = foundation?.monochrome != nil && !(baked.x == baked.y && baked.y == baked.z)
+                ? SIMD3(repeating: (baked * luma).sum()) : baked
+            return finish.applying(to: paper)
         }
         let print = try makeLUT(size: size, sample: printSample)
         let daylight = Float(0.18)

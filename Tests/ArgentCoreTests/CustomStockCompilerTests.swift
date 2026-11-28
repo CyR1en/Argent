@@ -114,6 +114,26 @@ import Testing
         }
     }
 
+    @Test func bakedSilverCurvesChangeLuminanceWithoutTintingThePaper() throws {
+        let base = try #require(MonochromeFilm.stocks.first)
+        let red = try ChannelCurve(points: [
+            CurvePoint(input: 0, output: 0), CurvePoint(input: 128, output: 192), CurvePoint(input: 255, output: 255),
+        ])
+        let manual = try ManualRenderSettings(adjustments: .init(curves: ToneCurves(red: red)), referenceStops: 0)
+        var spec = try CustomStockSpec(baking: base, settings: .init(manual: manual))
+        let gray = SIMD3<Float>(repeating: 0.5)
+        let unedited = base.print.sample(encoded: gray)
+        let curved = try manual.applyingPrint(to: unedited)
+        let expected = (curved * SIMD3<Float>(0.2627, 0.6780, 0.0593)).sum()
+        let baked = try compile(spec, base: base).print.sample(encoded: gray)
+        #expect(baked == SIMD3(repeating: expected))
+        #expect(baked.x > unedited.x)
+
+        spec.paperTone = SIMD3(1.1, 1, 0.9)
+        let toned = try compile(spec, base: base).print.sample(encoded: gray)
+        #expect(toned.x > toned.y && toned.y > toned.z)
+    }
+
     @Test func bakeCarriesLightCurvesPresenceAndFilmSettings() throws {
         let foundation = try compile(.init())
         let curves = try ToneCurves(tone: ChannelCurve(points: [
