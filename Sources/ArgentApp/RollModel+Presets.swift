@@ -46,7 +46,7 @@ extension RollModel {
 
     @discardableResult
     func openPresets(_ urls: [URL], showLibrary: Bool = true) -> Bool {
-        guard canShowPresetLibrary, !urls.isEmpty else { return false }
+        guard !isQuitting, !urls.isEmpty else { return false }
         var firstImportedID: UUID?
         var failures: [String] = []
         for url in urls {
@@ -65,7 +65,12 @@ extension RollModel {
                 showPresetLibrary(for: shownFrame.map { [$0] } ?? selectedFrames, selecting: firstImportedID)
             }
         }
-        if !failures.isEmpty { message = "Could not import presets:\n" + failures.joined(separator: "\n") }
+        let failure = failures.isEmpty ? nil : "Could not import presets:\n" + failures.joined(separator: "\n")
+        if case .library = presetPresentation {
+            presetDocumentImportError = failure
+        } else if let failure {
+            message = failure
+        }
         return true
     }
 
@@ -109,6 +114,7 @@ extension RollModel {
 
     func showPresetLibrary(for frames: [Frame], selecting id: UUID? = nil, managing: Bool = false) {
         guard canShowPresetLibrary else { return }
+        presetDocumentImportError = nil
         presetPresentation = .library(frames, selection: id, managing: managing)
     }
 

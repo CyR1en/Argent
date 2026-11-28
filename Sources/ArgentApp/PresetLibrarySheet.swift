@@ -10,7 +10,6 @@ struct PresetLibrarySheet: View {
     let store: PresetStore
     let managing: Bool
     @Environment(\.dismiss) private var dismiss
-    @State private var presets: [UserPreset] = []
     @State private var selection: UUID?
     @State private var error: String?
     @State private var issues: [String] = []
@@ -28,6 +27,7 @@ struct PresetLibrarySheet: View {
         _showsStocks = State(initialValue: managing)
     }
 
+    private var presets: [UserPreset] { model.lookPresets }
     private var selected: UserPreset? { presets.first { $0.id == selection } }
     private var unavailableReason: String? { selected.flatMap(model.presetUnavailableReason) }
     private var canApply: Bool {
@@ -46,10 +46,14 @@ struct PresetLibrarySheet: View {
                 .labelsHidden()
             }
             if showsStocks { stockLibrary } else { presetLibrary }
+            if let failure = model.presetDocumentImportError { Text(failure).foregroundStyle(.red) }
         }
         .padding(24)
         .frame(width: 500)
         .onAppear { reload() }
+        .onChange(of: presets) {
+            if selected == nil { selection = presets.first?.id }
+        }
     }
 
     private var presetLibrary: some View {
@@ -150,8 +154,7 @@ struct PresetLibrarySheet: View {
     private func reload(select id: UUID? = nil) {
         do {
             let result = try store.loadAll()
-            presets = result.presets
-            model.lookPresets = presets
+            model.lookPresets = result.presets
             issues = result.issues
             let wanted = id ?? selection
             selection = presets.first { $0.id == wanted }?.id ?? presets.first?.id

@@ -207,6 +207,27 @@ import Testing
         }
     }
 
+    @Test func openingASecondPresetWhileTheLibraryIsOpenUpdatesIt() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let first = UserPreset(name: "First")
+            let second = UserPreset(name: "Second")
+            let firstURL = try sourceStore.save(first)
+            let secondURL = try sourceStore.save(second)
+            #expect(model.open([firstURL]))
+            #expect(model.isSheetShown && !model.canShowPresetLibrary)
+            #expect(model.open([firstURL, secondURL]))
+            #expect(model.lookPresets.map(\.id) == [first.id, second.id])
+            #expect(model.presetDocumentImportError?.contains("First") == true)
+            guard case .library(_, let selection, _) = model.presetPresentation else {
+                Issue.record("The library should remain open while importing.")
+                return
+            }
+            #expect(selection == first.id)
+        }
+    }
+
     @Test func missingRollStockFallsBackNonDestructivelyAndClearsOnManualSelection() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)

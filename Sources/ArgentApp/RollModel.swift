@@ -165,6 +165,7 @@ final class RollModel {
     var presetPresentation: PresetPresentation?
     let presetStore: PresetStore
     var lookPresets: [UserPreset] = []
+    var presetDocumentImportError: String?
     var stockImportSource: StockImportSource?
     var stockBuilder: StockBuilderPresentation?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
