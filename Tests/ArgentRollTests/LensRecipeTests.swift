@@ -144,7 +144,7 @@ extension LensRecipeTests {
         var midpoint = original
         midpoint.manual?.adjustments = .identity.settingLens(try LensSettings(arguments: "vignette-midpoint=75"))
         #expect(midpoint.requiredVersion == 9)
-        #expect(original.requiredVersion == 2 && Recipe.currentVersion == 14)
+        #expect(original.requiredVersion == 2 && Recipe.currentVersion == 15)
     }
 
     @Test func defaultsKeepTheirBytesAndLensAnywhereRequiresNine() throws {

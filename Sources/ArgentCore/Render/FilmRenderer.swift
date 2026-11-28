@@ -32,10 +32,10 @@ public enum RenderGraph {
             let curved = settings.manual.adjustments.curves.isIdentity ? manual
                 : manual + "+" + settings.manual.adjustments.curves.version
             let masks = settings.manual.adjustments.masks
-            let masked = masks.isEmpty ? curved : curved + "+masks-" + masks.version
-            let presence = settings.manual.adjustments.presence
-            base = presence.isIdentity ? masked : masked + "+presence-" + presence.version
+            base = masks.isEmpty ? curved : curved + "+masks-" + masks.version
         }
+        let presence = settings.effectivePresence
+        if !presence.isIdentity { base += "+presence-" + presence.version }
         return lens.map { base + "+lens-" + $0.digest } ?? base
     }
 
@@ -381,7 +381,8 @@ public final class FilmRenderer {
     /// builds nothing. `.bypass` while Presence is identity. A part not built yet stops the render with `PresenceError.notBuilt`.
     func presenceInputs(_ frame: LinearFrame, settings: DevelopSettings, exposureStops: Float,
                         printOffset: SIMD3<Float>) throws -> PresenceRenderInputs {
-        let manual = settings.manual, presence = manual.adjustments.presence
+        try settings.autoPresence.presence.validateSupportedVersion()
+        let presence = settings.effectivePresence
         guard !presence.isIdentity else { return .bypass }
         let constants = try PresenceConstants.required(presence.version)
         var inputs = PresenceRenderInputs.bypass
@@ -390,7 +391,9 @@ public final class FilmRenderer {
             let analysis = try gpu.presenceAnalyses.analysis(of: frame, parts: parts, constants: constants)
             let weights = parts.isDisjoint(with: [.clarity, .texture]) ? nil
                 : try presenceWeights(settings, constants: constants, exposureStops: exposureStops, printOffset: printOffset)
-            inputs.scene = try PresenceScene.inputs(manual, constants: constants, analysis: analysis, weights: weights)
+            inputs.scene = try PresenceScene.inputs(presence: presence, exposureEV: settings.manual.adjustments.exposureEV,
+                                                    referenceStops: settings.presenceReferenceStops,
+                                                    constants: constants, analysis: analysis, weights: weights)
         }
         if presence.acts(in: .print) {
             inputs.print = try PresencePrint.parameters(presence, constants: constants, stockID: stock.id)
@@ -401,7 +404,7 @@ public final class FilmRenderer {
     /// Presence's tone weights for `settings` on this stock, from the cache when the transfer's inputs and the constants are unchanged.
     func presenceWeights(_ settings: DevelopSettings, constants: PresenceConstants, exposureStops: Float,
                          printOffset: SIMD3<Float>) throws -> (tables: PresenceToneWeights, buffer: MTLBuffer) {
-        let key = PresenceWeightsKey(referenceStops: settings.manual.referenceStops, exposureStops: exposureStops,
+        let key = PresenceWeightsKey(referenceStops: settings.presenceReferenceStops, exposureStops: exposureStops,
                                      printOffset: printOffset, version: constants.version)
         toneLock.lock(); defer { toneLock.unlock() }
         if let cached = presenceWeightsCache, cached.key == key { return (cached.tables, cached.buffer) }

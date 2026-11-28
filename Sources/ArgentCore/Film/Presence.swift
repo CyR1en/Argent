@@ -98,6 +98,19 @@ public struct Presence: Sendable, Equatable, Hashable {
         try Presence(Dictionary(uniqueKeysWithValues: Control.allCases.map { ($0, value(for: $0)) }))
     }
 
+    /// Combines this Presence (such as Neutral Auto's polish) with a user's `other` refinements, summing each
+    /// control within its valid range. Keeps `other`'s constants version when `other` is active, else `self`'s.
+    public func combined(with other: Presence) -> Presence {
+        guard !isIdentity else { return other }
+        guard !other.isIdentity else { return self }
+        var values: [Control: Float] = [:]
+        for control in Control.allCases {
+            let sum = value(for: control) + other.value(for: control)
+            values[control] = min(max(sum, control.range.lowerBound), control.range.upperBound)
+        }
+        return (try? Presence(recorded: values, version: other.version)) ?? other
+    }
+
     /// Whether any control acting in `placement` is set: the render binds and computes that side's stages only then.
     public func acts(in placement: Placement) -> Bool {
         Control.allCases.contains { $0.placement == placement && value(for: $0) != 0 }
@@ -167,4 +180,42 @@ public enum PresenceError: Error, Equatable, LocalizedError, CustomStringConvert
     }
 
     public var errorDescription: String? { description }
+}
+
+/// Automatic Presence applied by a stock's Auto finish (such as Neutral's subtle Vibrance and Clarity polish),
+/// kept apart from `ManualRenderSettings` so untouched Auto frames remain unedited (`manual.isIdentity`) and
+/// user adjustments stack on top of Auto without losing the polish.
+public struct AutoPresence: Sendable, Equatable, Hashable, Codable {
+    public static let identity = AutoPresence()
+
+    public var presence: Presence
+    /// Scene midtone reference in stops against 0.18, used by Clarity and Texture tone weights.
+    /// Zero while `presence` is identity so identity is a single canonical value.
+    public var referenceStops: Float
+
+    public var isActive: Bool { !presence.isIdentity }
+
+    public init(presence: Presence = .identity, referenceStops: Float = 0) {
+        self.presence = presence
+        self.referenceStops = presence.isIdentity ? 0 : (referenceStops == 0 ? 0 : referenceStops)
+    }
+
+    private enum CodingKeys: String, CodingKey { case presence, referenceStops }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let presence = try values.decode(Presence.self, forKey: .presence)
+        let referenceStops = try values.decode(Float.self, forKey: .referenceStops)
+        guard referenceStops.isFinite, (-32...32).contains(referenceStops) else {
+            throw DecodingError.dataCorruptedError(forKey: .referenceStops, in: values,
+                debugDescription: "Automatic Presence tonal reference must be finite and in -32...32.")
+        }
+        self.init(presence: presence, referenceStops: referenceStops)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(presence, forKey: .presence)
+        try values.encode(referenceStops, forKey: .referenceStops)
+    }
 }

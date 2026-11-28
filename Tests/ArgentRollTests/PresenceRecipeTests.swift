@@ -59,7 +59,7 @@ private struct PresenceScene {
     @Test func presenceAnywhereRequiresVersion7AndNothingElseDoes() throws {
         let scene = try PresenceScene()
         defer { try? FileManager.default.removeItem(at: scene.root) }
-        #expect(Recipe.currentVersion == 14)
+        #expect(Recipe.currentVersion == 15)
         let light = try ManualAdjustments(contrast: 10)
         #expect(try scene.recipe(scene.edit(light)).requiredVersion == 2, "Light without Presence keeps its version")
         #expect(try scene.recipe(scene.edit(Self.presence)).requiredVersion == 7)

@@ -97,4 +97,51 @@ import Testing
             #expect(today == (scene.parameters.sceneActive == 0 ? 0 : (1 + light).rounded(.up)))
         }
     }
+
+    /// `AutoPresence` renders bit-for-bit identically to an equivalent manual Presence while keeping `manual` at
+    /// identity, combines additively with user Presence (clamped to control bounds, bypassing when cancelled to zero),
+    /// and stamps `+presence-<version>` into `RenderGraph.version(for:)`.
+    @Test func autoPresenceRendersAndCombinesWithManualPresence() throws {
+        let gpu = try GPU()
+        let renderer = try FilmRenderer(gpu: gpu, stock: LightCompilerBaselineTests.toyStock())
+        let polish = try Presence([.vibrance: 12, .clarity: 8])
+        let reference: Float = -0.25
+
+        var autoOnly = DevelopSettings(ratedAt: 200, labBalance: SIMD3(0.1, -0.05, 0.03), printExposure: 0.3,
+                                       grain: 1, grainSeed: 37, halation: true, sharpen: true,
+                                       autoPresence: AutoPresence(presence: polish, referenceStops: reference))
+        let manualEquivalent = DevelopSettings(ratedAt: 200, labBalance: SIMD3(0.1, -0.05, 0.03), printExposure: 0.3,
+                                               grain: 1, grainSeed: 37, halation: true, sharpen: true,
+                                               manual: try ManualRenderSettings(adjustments: ManualAdjustments(presence: polish),
+                                                                                referenceStops: reference))
+        #expect(autoOnly.manual.isIdentity)
+        #expect(autoOnly.effectivePresence == polish && autoOnly.presenceReferenceStops == reference)
+        #expect(RenderGraph.version(for: autoOnly) == RenderGraph.version + "+presence-" + Presence.currentVersion)
+        #expect(try Self.bits(renderer, gpu, autoOnly, presence: nil) == (try Self.bits(renderer, gpu, manualEquivalent, presence: nil)))
+
+        // User Presence stacks additively on top of AutoPresence and cancels cleanly at the opposite values.
+        let userDelta = try Presence([.vibrance: 15, .clarity: -4, .saturation: 10])
+        autoOnly.manual = try ManualRenderSettings(adjustments: ManualAdjustments(exposureEV: 0.3, presence: userDelta),
+                                                   referenceStops: reference)
+        let summed = try Presence([.vibrance: 27, .clarity: 4, .saturation: 10])
+        let summedManual = DevelopSettings(ratedAt: 200, labBalance: SIMD3(0.1, -0.05, 0.03), printExposure: 0.3,
+                                           grain: 1, grainSeed: 37, halation: true, sharpen: true,
+                                           manual: try ManualRenderSettings(adjustments: ManualAdjustments(exposureEV: 0.3, presence: summed),
+                                                                            referenceStops: reference))
+        #expect(autoOnly.effectivePresence == summed)
+        #expect(try Self.bits(renderer, gpu, autoOnly, presence: nil) == (try Self.bits(renderer, gpu, summedManual, presence: nil)))
+
+        let cancelling = try Presence([.vibrance: -12, .clarity: -8])
+        autoOnly.manual = try ManualRenderSettings(adjustments: ManualAdjustments(presence: cancelling), referenceStops: reference)
+        #expect(autoOnly.effectivePresence.isIdentity)
+        #expect(RenderGraph.version(for: autoOnly) == RenderGraph.version + "+manual-" + ManualRenderSettings.currentVersion)
+        let plain = DevelopSettings(ratedAt: 200, labBalance: SIMD3(0.1, -0.05, 0.03), printExposure: 0.3,
+                                    grain: 1, grainSeed: 37, halation: true, sharpen: true)
+        #expect(try Self.bits(renderer, gpu, autoOnly, presence: nil) == (try Self.bits(renderer, gpu, plain, presence: nil)))
+
+        // Clamping at control range limits.
+        let maxed = try Presence([.vibrance: 95])
+        autoOnly.manual = try ManualRenderSettings(adjustments: ManualAdjustments(presence: maxed), referenceStops: reference)
+        #expect(autoOnly.effectivePresence.vibrance == 100 && autoOnly.effectivePresence.clarity == 8)
+    }
 }

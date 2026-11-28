@@ -265,7 +265,7 @@ public enum DevelopBudget {
     /// and Dehaze set). The stages run inside the existing passes and add no frame-sized texture, and Saturation and Vibrance read no
     /// analysis. Nothing for a frame whose Texture, Clarity and Dehaze are 0. `width` by `height` is the full-size picture's.
     public static func presenceCost(settings: DevelopSettings, width: Int, height: Int) -> Int {
-        PresenceAnalyses.developBytes(settings.manual.adjustments.presence, width: width, height: height)
+        PresenceAnalyses.developBytes(settings.effectivePresence, width: width, height: height)
     }
 
     /// The process's footprint now, as Activity Monitor and `footprint` report it.

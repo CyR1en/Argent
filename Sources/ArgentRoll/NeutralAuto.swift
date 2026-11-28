@@ -31,7 +31,8 @@ public enum NeutralAuto {
     public static let warmMoodKnee: Float = 0.45
     public static let warmMoodThreshold: Float = 0.75
 
-    /// Subtle auto polish applied to Neutral when no manual edit overrides Presence.
+    /// Subtle auto polish applied to Neutral in Auto mode, kept apart from manual edits so user
+    /// Presence adjustments stack cleanly on top of Auto without losing the polish.
     public static let polishVibrance: Float = 12
     public static let polishClarity: Float = 8
     public static let polishPresence: Presence = try! Presence([
@@ -103,11 +104,10 @@ public enum NeutralAuto {
         return AutoBalance.cast(redBlue: rb, greenMagenta: gm)
     }
 
-    /// Automatic manual-layer settings for `stock` when no user edit is present: subtle
-    /// skin-protected vibrance and clarity for Neutral, identity for all film stocks.
-    public static func autoManualSettings(for stock: Stock, referenceStops: Float) -> ManualRenderSettings {
+    /// Automatic Presence finish for `stock` in Auto mode: subtle skin-protected vibrance and
+    /// clarity for Neutral, identity for all film stocks.
+    public static func autoPresence(for stock: Stock, referenceStops: Float) -> AutoPresence {
         guard isNeutral(stock) else { return .identity }
-        let adjustments = (try? ManualAdjustments(presence: polishPresence)) ?? .identity
-        return (try? ManualRenderSettings(adjustments: adjustments, referenceStops: referenceStops)) ?? .identity
+        return AutoPresence(presence: polishPresence, referenceStops: referenceStops)
     }
 }

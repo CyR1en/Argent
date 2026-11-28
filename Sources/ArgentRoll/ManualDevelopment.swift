@@ -65,8 +65,10 @@ public struct AutomaticBaseline: Sendable, Equatable, Codable {
         self.resolverVersion = resolverVersion
         // Halation stays live under a pin, as grain does (`DevelopmentResolver.resolve`), so the pin keeps none of the
         // control: a frame pinned at another amount needs no newer recipe once the control is back at the stock's own.
+        // An Original starting point has no Auto corrections, including Neutral's auto polish.
         var render = baseRender
         render.halationAmount = nil
+        if origin == .original { render.autoPresence = nil }
         self.baseRender = render
         self.origin = origin
     }
@@ -80,8 +82,8 @@ public struct AutomaticBaseline: Sendable, Equatable, Codable {
                           origin: .original)
     }
 
-    /// Whether the pin is what its origin says: an Original's aim is the neutral one.
-    public var isConsistent: Bool { origin == .auto || aim == PrintAim() }
+    /// Whether the pin is what its origin says: an Original's aim is the neutral one with no Auto polish.
+    public var isConsistent: Bool { origin == .auto || (aim == PrintAim() && baseRender.autoPresence == nil) }
 
     private enum CodingKeys: String, CodingKey {
         case sourceSHA256, stockID, stockDigest, controls, aim, analysisVersion, resolverVersion, baseRender, origin
@@ -187,7 +189,7 @@ public enum DevelopmentResolver {
     /// the multiple of the stock's own (`OutputSettings.halationAmount`).
     public static func resolve(stock: Stock, stockDigest: String, controls: RollControls, aim: PrintAim,
                                manual: ManualEdit?, grain: Float, halation: Float = 1, grainSeed: UInt32,
-                               sharpen: Bool = true) throws -> DevelopSettings {
+                               sharpen: Bool = true, origin: AutomaticBaseline.Origin = .auto) throws -> DevelopSettings {
         var settings: DevelopSettings
         if let edit = manual {
             let baseline = edit.baseline
@@ -214,12 +216,26 @@ public enum DevelopmentResolver {
                 // The pin's tone step keeps the version it recorded, as the edit keeps its Light compiler: a new stock or
                 // rating solves its table again, and by the rules the frame was saved on (`PrintTone.versions`).
                 if let recorded = baseline.baseRender.tone, settings.tone.isActive { settings.tone.version = recorded.version }
+                // Neutral's auto polish follows the Auto starting point when switching stocks or controls,
+                // while preserving pre-polish Neutral pins and leaving Original untouched.
+                if baseline.origin == .auto,
+                   baseline.stockID != stock.id || baseline.baseRender.autoPresence != nil {
+                    settings.autoPresence = NeutralAuto.autoPresence(for: stock, referenceStops: baseline.aim.level)
+                    if let recorded = baseline.baseRender.autoPresence, settings.autoPresence.isActive {
+                        settings.autoPresence.presence = try Presence(
+                            Dictionary(uniqueKeysWithValues: Presence.Control.allCases.map {
+                                ($0, settings.autoPresence.presence.value(for: $0))
+                            }), version: recorded.presence.version)
+                    }
+                }
             }
+            if baseline.origin == .original { settings.autoPresence = .identity }
             settings.manual = try ManualRenderSettings(adjustments: edit.adjustments,
                                                        referenceStops: baseline.aim.level, version: edit.curveVersion)
         } else {
             settings = controls.settings(for: stock, aim: aim)
-            settings.manual = NeutralAuto.autoManualSettings(for: stock, referenceStops: aim.level)
+            settings.manual = .identity
+            settings.autoPresence = origin == .auto ? NeutralAuto.autoPresence(for: stock, referenceStops: aim.level) : .identity
         }
         settings.grain = grain
         settings.grainSeed = grainSeed

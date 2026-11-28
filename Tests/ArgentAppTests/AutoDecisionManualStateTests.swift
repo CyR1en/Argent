@@ -245,4 +245,69 @@ import Testing
             try await model.flushManualSaves()
         }
     }
+
+    /// Regression: Neutral's Auto polish must not keep `recordVisibleAutomatic` from recording the Auto render,
+    /// which previously left untouched Neutral frames stuck at "Preparing Auto…" with Masks and Adjust disabled.
+    /// Adding a mask pins Neutral's Auto polish in the baseline without jumping, Compare to Auto retains the polish,
+    /// user Presence stacks on top, and Start from Original clears the Auto polish.
+    @Test func neutralAutoBecomesAdjustableAndKeepsPolishUnderMasksAndOriginalClearsIt() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            try AutoDecisionStateTests.writeToyStock(NeutralAuto.stockID, in: fixture.stocks)
+            let model = fixture.model(), gate = MeasurementGate()
+            for name in AutoDecisionStateTests.names {
+                gate.analyses[name] = ExposureAnalysis(meanStops: 0.2, validWeight: 1, grayEstimate: [0, 0, 0])
+            }
+            try await AutoDecisionStateTests.open(fixture, in: model, through: gate)
+            defer { AutoDecisionStateTests.close(model, gate) }
+            let neutralIndex = try #require(model.films?.stocks.firstIndex(where: { $0.id == NeutralAuto.stockID }))
+            model.stockIndex = neutralIndex
+
+            let frames = try #require(model.roll?.frames), frame = frames[0]
+            model.selection = frame.id
+            model.openFrame()
+            defer { model.maskEditor.reset() }
+            try await gate.waitUntilWaiting(for: frames.count)
+            gate.openAll(frames)
+            let decision = try #require(await model.settledDecision())
+            let aim = try #require(decision.aims[frame.url])
+            while !model.isMeasured(frame) { await Task.yield() }
+            model.manualReadySources[frame.url] = try SourceDigests.shared.digest(of: frame.url)
+
+            let autoRendered = model.settings(for: frame, stock: neutralIndex)
+            #expect(autoRendered.manual == .identity)
+            #expect(autoRendered.autoPresence.isActive && autoRendered.effectivePresence == NeutralAuto.polishPresence)
+            #expect(model.automaticSettings(for: frame, stock: neutralIndex) == autoRendered)
+
+            model.recordVisibleAutomatic(for: frame, stock: neutralIndex, aim: aim, settings: autoRendered)
+            #expect(model.canAdjust(frame) && model.canAddMask(frame))
+            #expect(model.adjustPreparation(for: frame) == nil)
+
+            // Adding a mask pins Auto and keeps Neutral's polish intact without touching user Presence.
+            model.perform(.newMask(.linear))
+            #expect(model.placeArmedGradient())
+            let edit = try #require(model.manualEdits[frame.url])
+            #expect(edit.adjustments.masks.count == 1 && edit.adjustments.presence.isIdentity)
+            let maskedSettings = model.settings(for: frame, stock: neutralIndex)
+            #expect(maskedSettings.autoPresence == autoRendered.autoPresence)
+            #expect(maskedSettings.effectivePresence == NeutralAuto.polishPresence)
+            #expect(model.automaticSettings(for: frame, stock: neutralIndex) == autoRendered)
+
+            // User Presence stacks additively on Neutral Auto's polish and cancels cleanly at -12 / -8.
+            let cancelled = try edit.adjustments.settingPresence(Presence([
+                .vibrance: -NeutralAuto.polishVibrance,
+                .clarity: -NeutralAuto.polishClarity,
+            ]))
+            model.setManualAdjustments(cancelled, for: frame)
+            #expect(model.settings(for: frame, stock: neutralIndex).effectivePresence.isIdentity)
+
+            // Start from Original removes Neutral's Auto polish.
+            model.startFrom(.original, for: frame)
+            let originalEdit = try #require(model.manualEdits[frame.url])
+            #expect(originalEdit.baseline.origin == .original && originalEdit.baseline.baseRender.autoPresence == nil)
+            let originalSettings = model.settings(for: frame, stock: neutralIndex)
+            #expect(!originalSettings.autoPresence.isActive && originalSettings.effectivePresence.isIdentity)
+            #expect(!model.automaticSettings(for: frame, stock: neutralIndex).autoPresence.isActive)
+            try await model.flushManualSaves()
+        }
+    }
 }
