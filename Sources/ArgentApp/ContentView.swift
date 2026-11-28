@@ -110,7 +110,7 @@ struct ContentView: View {
                 if let store = model.userStockStore { StockBuilderSheet(model: model, store: store, presentation: presentation) }
             }
         }
-        .sheet(item: $model.stockImportSource) { source in
+        .sheet(item: $model.stockImportSource, onDismiss: model.showPresetsAfterStockImport) { source in
             if let store = model.userStockStore {
                 ImportStockSheet(model: model, source: source, store: store, frame: model.shownFrame ?? model.selectedFrame)
             }

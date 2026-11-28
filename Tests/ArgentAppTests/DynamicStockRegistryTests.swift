@@ -257,6 +257,36 @@ import Testing
         }
     }
 
+    @Test func mixedStockDropKeepsRejectedPresetErrorOnTheStockSheet() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let preset = UserPreset(name: "Already Installed")
+            let presetURL = try model.presetStore.save(preset)
+            let newPreset = UserPreset(name: "New Preset")
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let newURL = try sourceStore.save(newPreset)
+            let stockURL = fixture.folder.appendingPathComponent("Look.cube")
+            model.showWorkspacePage(.settings)
+            #expect(model.open([stockURL, presetURL, newURL]))
+            #expect(model.stockImportSource?.url == stockURL)
+            #expect(model.presetPresentation == nil)
+            #expect(model.presetDocumentImportError?.contains(preset.name) == true)
+
+            model.stockImportSource = nil
+            model.showPresetsAfterStockImport()
+            guard case .library(let targets, let selection, _) = model.presetPresentation else {
+                Issue.record("A mixed drop should show the imported preset after the stock sheet closes.")
+                return
+            }
+            #expect(targets.isEmpty && selection == newPreset.id)
+            #expect(model.presetDocumentImportError?.contains(preset.name) == true)
+
+            model.presetPresentation = nil
+            #expect(model.open([stockURL]))
+            #expect(model.presetDocumentImportError == nil)
+        }
+    }
+
     @Test func missingRollStockFallsBackNonDestructivelyAndClearsOnManualSelection() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)

@@ -43,6 +43,7 @@ extension RollModel {
     @discardableResult
     func presentStockImport(_ source: StockImportSource) -> Bool {
         guard canShowStockBuilder else { return false }
+        presetDocumentImportError = nil
         stockImportSource = source
         return true
     }

@@ -71,6 +71,9 @@ struct ImportStockSheet: View {
                 Text("Install this stock so it’s available in the stock shelf. Existing stocks won’t be replaced.")
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let failure = model.presetDocumentImportError {
+                Text(failure).foregroundStyle(.red).textSelection(.enabled)
+            }
             if let error {
                 Text(error).foregroundStyle(.red).textSelection(.enabled)
             }
@@ -218,7 +221,8 @@ struct ImportStockSheet: View {
                     return try store.importStock(from: url, excluding: reservedIDs)
                 }.value
                 model.reloadUserStocks()
-                model.message = "Imported \(stock.displayName)"
+                model.message = ["Imported \(stock.displayName)", model.presetDocumentImportError]
+                    .compactMap { $0 }.joined(separator: "\n")
                 dismiss()
             } catch {
                 self.error = "Could not import the stock: \(error)"

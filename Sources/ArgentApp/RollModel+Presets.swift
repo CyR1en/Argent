@@ -49,7 +49,7 @@ extension RollModel {
     }
 
     @discardableResult
-    func openPresets(_ urls: [URL], showLibrary: Bool = true) -> Bool {
+    func openPresets(_ urls: [URL]) -> Bool {
         guard !isQuitting, !urls.isEmpty else { return false }
         var firstImportedID: UUID?
         var failures: [String] = []
@@ -65,7 +65,9 @@ extension RollModel {
         }
         if let firstImportedID {
             reloadLookPresets()
-            if showLibrary {
+            if stockImportSource != nil {
+                presetSelectionAfterStockImport = firstImportedID
+            } else {
                 showPresetLibrary(for: presetTargetFrames, selecting: firstImportedID)
             }
         }
@@ -73,9 +75,18 @@ extension RollModel {
         if case .library = presetPresentation {
             presetDocumentImportError = failure
         } else if let failure {
-            message = failure
+            if stockImportSource != nil { presetDocumentImportError = failure }
+            else { message = failure }
         }
         return true
+    }
+
+    func showPresetsAfterStockImport() {
+        guard let selection = presetSelectionAfterStockImport else { return }
+        presetSelectionAfterStockImport = nil
+        let failure = presetDocumentImportError
+        showPresetLibrary(for: presetTargetFrames, selecting: selection)
+        presetDocumentImportError = failure
     }
 
     func choosePresetImport() {

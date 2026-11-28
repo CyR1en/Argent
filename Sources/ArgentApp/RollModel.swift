@@ -166,6 +166,7 @@ final class RollModel {
     let presetStore: PresetStore
     var lookPresets: [UserPreset] = []
     var presetDocumentImportError: String?
+    var presetSelectionAfterStockImport: UUID?
     var stockImportSource: StockImportSource?
     var stockBuilder: StockBuilderPresentation?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
@@ -1482,8 +1483,8 @@ final class RollModel {
         let source = urls.lazy.compactMap(StockImportSource.init(url:)).first
         let presets = urls.filter(isPresetFile)
         guard source != nil || !presets.isEmpty else { return nil }
-        let importedPresets = openPresets(presets, showLibrary: source == nil)
         let openedStock = source.map { presentStockImport($0) } ?? false
+        let importedPresets = openPresets(presets)
         return importedPresets || openedStock
     }
 
