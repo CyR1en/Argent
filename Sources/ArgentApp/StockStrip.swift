@@ -8,20 +8,42 @@ struct StockShelf: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var position = ScrollPosition(idType: Int.self)
     @State private var visible = CGRect.zero
+    @State private var stockToDelete: Stock?
+    @State private var presetToDelete: UserPreset?
 
     var body: some View {
         GeometryReader { room in
-            let layout = StockShelfLayout(width: room.size.width, count: model.stockNames.count)
+            let stocks = model.installedStocks
+            let builtIn = model.builtInStockIndices
+            let custom = stocks.indices.filter { stocks[$0].isUserStock }
+            let presets = model.lookPresets
+            let layout = StockShelfLayout(width: room.size.width, count: stocks.count + presets.count)
             HStack(spacing: StockShelfLayout.pagingGap) {
                 if layout.showsPaging { pageButton(forward: false, layout: layout) }
                 ScrollView(.horizontal) {
-                    HStack(spacing: StockShelfLayout.gap) {
-                        ForEach(model.stockNames.indices, id: \.self) { index in
-                            StockSample(frame: model.paletteFrame, index: index, width: layout.sampleWidth)
-                                .id(index)
+                    HStack(alignment: .top, spacing: StockShelfLayout.gap) {
+                        if !builtIn.isEmpty {
+                            section("Built-In") {
+                                ForEach(builtIn, id: \.self) { index in
+                                    stockSample(index, stock: stocks[index], width: layout.sampleWidth)
+                                }
+                            }
+                        }
+                        if !custom.isEmpty {
+                            section("Custom") {
+                                ForEach(custom, id: \.self) { index in
+                                    stockSample(index, stock: stocks[index], width: layout.sampleWidth)
+                                }
+                            }
+                        }
+                        if !presets.isEmpty {
+                            section("Presets") {
+                                ForEach(presets) { preset in
+                                    presetSample(preset, width: layout.sampleWidth)
+                                }
+                            }
                         }
                     }
-                    .scrollTargetLayout()
                 }
                 .scrollIndicators(.hidden)
                 .scrollBounceBehavior(.basedOnSize)
@@ -42,19 +64,120 @@ struct StockShelf: View {
                 if layout.showsPaging { pageButton(forward: true, layout: layout) }
             }
         }
-        .frame(height: StockShelfLayout.sampleHeight)
+        .frame(height: StockShelfLayout.shelfHeight)
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Film stocks")
+        .accessibilityLabel("Film stocks and look presets")
+        .onAppear { model.reloadLookPresets() }
+        .confirmationDialog("Delete this custom stock?", isPresented: Binding(
+            get: { stockToDelete != nil }, set: { if !$0 { stockToDelete = nil } }
+        ), titleVisibility: .visible, presenting: stockToDelete) { stock in
+            Button("Delete \(stock.displayName)", role: .destructive) { model.deleteCustomStock(stock) }
+        } message: { _ in
+            Text("Rolls and presets that use this stock will need it reinstalled or a different stock selected.")
+        }
+        .confirmationDialog("Delete this preset?", isPresented: Binding(
+            get: { presetToDelete != nil }, set: { if !$0 { presetToDelete = nil } }
+        ), titleVisibility: .visible, presenting: presetToDelete) { preset in
+            Button("Delete \(preset.name)", role: .destructive) {
+                do {
+                    try model.presetStore.delete(id: preset.id)
+                    model.reloadLookPresets()
+                } catch {
+                    model.message = "Could not delete the preset: \(error.localizedDescription)"
+                }
+            }
+        } message: { _ in
+            Text("Frames already updated with this preset keep their adjustments.")
+        }
         .dropDestination(for: URL.self) { urls, _ in
-            guard let source = urls.lazy.compactMap(StockImportSource.init(url:)).first else { return false }
-            return model.presentStockImport(source)
+            if let source = urls.lazy.compactMap(StockImportSource.init(url:)).first {
+                return model.presentStockImport(source)
+            }
+            guard let url = urls.first(where: model.isPresetFile) else { return false }
+            return model.openPreset(url)
+        }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Graphite.secondaryText)
+                .padding(.leading, 4)
+                .frame(height: StockShelfLayout.headerHeight - 2)
+                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: StockShelfLayout.gap, content: content)
+        }
+    }
+
+    private func stockSample(_ index: Int, stock: Stock, width: CGFloat) -> some View {
+        StockSample(frame: model.paletteFrame, stock: stock, index: index, width: width)
+            .id(stock.id)
+            .contextMenu {
+                if stock.isUserStock {
+                    if stock.hasSpec {
+                        Button("Edit Custom Stock…") { model.editCustomStock(stock) }
+                            .disabled(!model.canShowStockBuilder)
+                    }
+                    Button("Export Custom Stock…") { model.chooseStockExport(stock) }
+                    Divider()
+                    Button("Delete Custom Stock…", role: .destructive) { stockToDelete = stock }
+                } else {
+                    Button("Create Custom Stock from \(stock.displayName)…") { model.showStockBuilder(from: stock) }
+                        .disabled(!model.canShowStockBuilder)
+                }
+            }
+    }
+
+    private func presetSample(_ preset: UserPreset, width: CGFloat) -> some View {
+        let frame = model.shownFrame
+        let unavailable = model.presetUnavailableReason(preset)
+        let canApply = model.canApplyLookPreset && unavailable == nil
+        return Button {
+            if let frame { model.applyPreset(preset, to: frame) }
+            else { model.applyPresetToRoll(preset) }
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                FilmCanister(stockID: nil, canisterColor: preset.tagTint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: StockShelfLayout.pictureHeight)
+                    .background(Graphite.well, in: RoundedRectangle(cornerRadius: 3))
+                Text(verbatim: preset.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Graphite.text)
+                    .lineLimit(1)
+                    .frame(height: 15)
+            }
+            .padding(4)
+            .frame(width: width, height: StockShelfLayout.sampleHeight, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(StockSampleStyle())
+        .disabled(!canApply || (frame == nil && model.roll?.frames.isEmpty != false))
+        .help(unavailable ?? (frame == nil ? "Apply to the entire roll" : "Apply to this frame"))
+        .contextMenu {
+            if let frame {
+                Button("Apply to This Frame") { model.applyPreset(preset, to: frame) }
+                    .disabled(!canApply)
+            }
+            Button("Apply to Entire Roll") { model.applyPresetToRoll(preset) }
+                .disabled(!canApply || model.roll?.frames.isEmpty != false)
+            Divider()
+            Button("Manage Preset…") {
+                model.showPresetLibrary(for: frame.map { [$0] } ?? model.selectedFrames, selecting: preset.id)
+            }
+            Button("Export Preset…") { model.choosePresetExport(preset) }
+            Button("Delete Preset…", role: .destructive) { presetToDelete = preset }
         }
     }
 
     private func revealSelection(layout: StockShelfLayout, from offset: CGFloat? = nil, animated: Bool = false) {
-        let target = layout.offset(revealing: model.shownStockIndex, from: offset ?? visible.minX)
+        let indices = model.builtInStockIndices + model.installedStocks.enumerated().compactMap {
+            $0.element.isUserStock ? $0.offset : nil
+        }
+        let target = layout.offset(revealing: indices.firstIndex(of: model.shownStockIndex) ?? -1, from: offset ?? visible.minX)
         withAnimation(animated && !reduceMotion ? Graphite.Motion.glide : nil) {
             position.scrollTo(x: target)
         }
@@ -69,7 +192,7 @@ struct StockShelf: View {
             Image(systemName: forward ? "chevron.right" : "chevron.left")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Graphite.secondaryText)
-                .frame(width: StockShelfLayout.pagingWidth, height: StockShelfLayout.sampleHeight)
+                .frame(width: StockShelfLayout.pagingWidth, height: StockShelfLayout.shelfHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -87,6 +210,8 @@ struct StockShelfLayout: Equatable {
     static let minimumSampleWidth: CGFloat = 108
     static let pictureHeight: CGFloat = 48
     static let sampleHeight: CGFloat = pictureHeight + 4 + 15 + 8
+    static let headerHeight: CGFloat = 16
+    static let shelfHeight: CGFloat = sampleHeight + headerHeight
 
     let count: Int
     let sampleWidth: CGFloat
@@ -124,6 +249,7 @@ struct StockShelfLayout: Equatable {
 
 private struct StockSample: View {
     let frame: Frame?
+    let stock: Stock
     let index: Int
     let width: CGFloat
     @Environment(RollModel.self) private var model
@@ -136,8 +262,8 @@ private struct StockSample: View {
         let scope = model.shownFrame == nil ? "the whole roll" : "this frame"
         // In the frame view, the roll's own stock is marked, so a frame given another can find its way back.
         let isRollsOwn = model.shownFrame != nil && model.stockIndex == index
-        let name = model.stockNames[index]
-        let key = index < 9 ? String(index + 1) : nil
+        let name = stock.displayName
+        let key = model.stockDigit(for: index).map { String($0) }
         let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
         Button {
             model.selectStock(index)
@@ -146,6 +272,9 @@ private struct StockSample: View {
                 picture
                     .overlay(alignment: .topTrailing) {
                         if let key { StockKeycap(text: key).padding(3) }
+                        else if stock.isUserStock {
+                            FilmCanister(stockID: stock.id, canisterColor: stock.canisterColor).padding(3)
+                        }
                     }
                 HStack(spacing: 4) {
                     Text(verbatim: name)
@@ -175,21 +304,10 @@ private struct StockSample: View {
             .contentShape(shape)
         }
         .buttonStyle(StockSampleStyle())
-        .contextMenu {
-            if let stock = model.films?.stocks[safe: index] {
-                if stock.isUserStock, stock.hasSpec {
-                    Button("Edit Custom Stock…") { model.editCustomStock(stock) }
-                        .disabled(!model.canShowStockBuilder)
-                } else if !stock.isUserStock {
-                    Button("Create Custom Stock from \(stock.displayName)…") { model.showStockBuilder(from: stock) }
-                        .disabled(!model.canShowStockBuilder)
-                }
-            }
-        }
         .onHover { hovered = $0 }
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: hovered)
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: current)
-        .help(model.stockAfterLines[index] ?? name)
+        .help(stock.afterLine ?? name)
         .accessibilityLabel(name)
         .accessibilityValue([current ? "In use for \(scope)" : nil, isRollsOwn ? "the roll's stock" : nil]
             .compactMap { $0 }.joined(separator: ", "))
@@ -197,7 +315,7 @@ private struct StockSample: View {
             isRollsOwn && !current ? "Makes this frame follow the roll's stock again." : "Develops \(scope) through \(name).",
             key.map { "Key \($0)." },
             current ? StockCharacter.sentence(for: model.shownStock) : nil,
-            model.stockAfterLines[index]
+            stock.afterLine
         ].compactMap { $0 }.joined(separator: " "))
         .accessibilityAddTraits(current ? .isSelected : [])
     }

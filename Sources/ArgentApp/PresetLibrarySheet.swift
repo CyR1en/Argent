@@ -1,4 +1,5 @@
 import AppKit
+import ArgentCore
 import ArgentRoll
 import SwiftUI
 import UniformTypeIdentifiers
@@ -7,30 +8,55 @@ struct PresetLibrarySheet: View {
     let model: RollModel
     let frames: [Frame]
     let store: PresetStore
+    let managing: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var presets: [UserPreset] = []
     @State private var selection: UUID?
     @State private var error: String?
     @State private var issues: [String] = []
     @State private var confirmsDelete = false
+    @State private var showsStocks: Bool
+    @State private var stockSelection: String?
+    @State private var confirmsStockDelete = false
+
+    init(model: RollModel, frames: [Frame], store: PresetStore, selection: UUID?, managing: Bool) {
+        self.model = model
+        self.frames = frames
+        self.store = store
+        self.managing = managing
+        _selection = State(initialValue: selection)
+        _showsStocks = State(initialValue: managing)
+    }
 
     private var selected: UserPreset? { presets.first { $0.id == selection } }
     private var unavailableReason: String? { selected.flatMap(model.presetUnavailableReason) }
     private var canApply: Bool {
-        selected != nil && unavailableReason == nil && !model.isScanning && !model.isQuitting
-            && !model.isRestoringManual && model.frameMove == nil
+        selected != nil && unavailableReason == nil && model.canApplyLookPreset
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Look Presets").font(.title2)
+            Text(managing ? "Custom Stocks & Presets" : "Look Presets").font(.title2)
+            if managing {
+                Picker("Library", selection: $showsStocks) {
+                    Text("Custom Stocks").tag(true)
+                    Text("Presets").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            if showsStocks { stockLibrary } else { presetLibrary }
+        }
+        .padding(24)
+        .frame(width: 500)
+        .onAppear { reload() }
+    }
+
+    private var presetLibrary: some View {
+        VStack(alignment: .leading, spacing: 12) {
             List(presets, selection: $selection) { preset in
                 HStack {
-                    if let rgb = preset.canisterColor, rgb.count == 3 {
-                        Circle().fill(Color(red: Double(rgb[0]), green: Double(rgb[1]), blue: Double(rgb[2])))
-                            .frame(width: 10, height: 10)
-                            .accessibilityHidden(true)
-                    }
+                    FilmCanister(stockID: nil, canisterColor: preset.tagTint)
                     Text(preset.name)
                 }
                 .tag(preset.id)
@@ -48,7 +74,12 @@ struct PresetLibrarySheet: View {
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
                 Button("Import…") { importPreset() }
-                Button("Export…") { if let selected { exportPreset(selected) } }.disabled(selected == nil)
+                Button("Export…") {
+                    guard let selected else { return }
+                    error = nil
+                    model.choosePresetExport(selected) { error = $0.localizedDescription }
+                }
+                .disabled(selected == nil)
                 Button("Delete…") { confirmsDelete = true }.disabled(selected == nil)
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -66,9 +97,6 @@ struct PresetLibrarySheet: View {
                 .disabled(!canApply || frames.isEmpty)
             }
         }
-        .padding(24)
-        .frame(width: 500)
-        .onAppear { reload() }
         .confirmationDialog("Delete this preset?", isPresented: $confirmsDelete, titleVisibility: .visible) {
             Button("Delete Preset", role: .destructive) {
                 guard let selected else { return }
@@ -82,10 +110,48 @@ struct PresetLibrarySheet: View {
         }
     }
 
+    private var stockLibrary: some View {
+        let stocks = model.installedStocks.filter(\.isUserStock)
+        let stock = stocks.first { $0.id == stockSelection }
+        return VStack(alignment: .leading, spacing: 12) {
+            List(stocks, id: \.id, selection: $stockSelection) { stock in
+                HStack {
+                    FilmCanister(stockID: stock.id, canisterColor: stock.canisterColor)
+                    Text(stock.displayName)
+                }
+                .tag(stock.id)
+            }
+            .frame(minHeight: 180)
+            .overlay {
+                if stocks.isEmpty { Text("No custom stocks").foregroundStyle(.secondary).allowsHitTesting(false) }
+            }
+            if let error { Text(error).foregroundStyle(.red) }
+            HStack {
+                Button("Edit…") {
+                    guard let stock else { return }
+                    do { model.presetPresentation = .builder(try model.stockRecipe(for: stock)) }
+                    catch { self.error = error.localizedDescription }
+                }
+                .disabled(stock?.hasSpec != true)
+                Button("Export…") { if let stock { model.chooseStockExport(stock) } }.disabled(stock == nil)
+                Button("Delete…") { confirmsStockDelete = true }.disabled(stock == nil)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+        }
+        .confirmationDialog("Delete this custom stock?", isPresented: $confirmsStockDelete, titleVisibility: .visible,
+                            presenting: stock) { stock in
+            Button("Delete \(stock.displayName)", role: .destructive) { model.deleteCustomStock(stock) }
+        } message: { _ in
+            Text("Rolls and presets that use this stock will need it reinstalled or a different stock selected.")
+        }
+    }
+
     private func reload(select id: UUID? = nil) {
         do {
             let result = try store.loadAll()
             presets = result.presets
+            model.lookPresets = presets
             issues = result.issues
             let wanted = id ?? selection
             selection = presets.first { $0.id == wanted }?.id ?? presets.first?.id
@@ -93,13 +159,9 @@ struct PresetLibrarySheet: View {
         } catch { self.error = error.localizedDescription }
     }
 
-    private var presetType: UTType {
-        UTType(filenameExtension: PresetStore.fileExtension, conformingTo: .json) ?? .json
-    }
-
     private func importPreset() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [presetType]
+        panel.allowedContentTypes = [.argentPreset]
         panel.begin { response in
             guard response == .OK, let url = panel.url else { return }
             let accessing = url.startAccessingSecurityScopedResource()
@@ -107,21 +169,6 @@ struct PresetLibrarySheet: View {
             do {
                 let imported = try store.importPreset(from: url)
                 reload(select: imported.id)
-            } catch { self.error = error.localizedDescription }
-        }
-    }
-
-    private func exportPreset(_ preset: UserPreset) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [presetType]
-        panel.nameFieldStringValue = preset.name.replacingOccurrences(of: "/", with: "-") + "." + PresetStore.fileExtension
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            do {
-                try store.exportPreset(id: preset.id, to: url)
-                error = nil
             } catch { self.error = error.localizedDescription }
         }
     }

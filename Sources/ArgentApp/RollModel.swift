@@ -163,6 +163,8 @@ final class RollModel {
     var isRestoringManual = false
     var isQuitting = false
     var presetPresentation: PresetPresentation?
+    let presetStore: PresetStore
+    var lookPresets: [UserPreset] = []
     var stockImportSource: StockImportSource?
     var stockBuilder: StockBuilderPresentation?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
@@ -321,6 +323,7 @@ final class RollModel {
     /// the roll and frame under it alone.
     var isSheetShown: Bool {
         isAskingToDevelop || maskModels.isShown || onboarding.isPresented || stockImportSource != nil || stockBuilder != nil
+            || presetPresentation != nil
     }
     /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
     @ObservationIgnored var maskModelStagingSweep: Task<Void, Never>?
@@ -508,6 +511,7 @@ final class RollModel {
          flagStore: FlagStore = FlagStore(), recipeLibrary: URL = RecipeStore.defaultLibrary,
          previewCache: URL = LinearDiskCache.defaultFolder, digestsFile: URL? = SourceDigests.defaultFile,
          developMemory: DevelopMemorySettings = .shared,
+         presetStore: PresetStore = PresetStore(folder: PresetStore.defaultFolder),
          onboarding: OnboardingController = OnboardingController()) {
         self.bookmarks = bookmarks
         self.onboarding = onboarding
@@ -516,6 +520,7 @@ final class RollModel {
         self.flagStore = flagStore
         self.recipeLibrary = recipeLibrary
         self.developMemory = developMemory
+        self.presetStore = presetStore
         let directory = stocksDirectory ?? Self.stocksDirectory()
         let resolvedUserStocks = userStocksDirectory
             ?? (stocksDirectory == nil && !ProcessInfo.isRunningTests ? UserStockStore.defaultFolder : nil)
@@ -615,6 +620,11 @@ final class RollModel {
     /// Store for user-created and user-imported stocks, when configured.
     var userStockStore: UserStockStore? {
         userStocksDirectory.map { UserStockStore(folder: $0) }
+    }
+
+    var installedStocks: [Stock] {
+        _ = stockVersion
+        return films?.stocks ?? []
     }
 
     /// Reloads bundled and user stocks from disk, updating `films` in place without clearing decoded RAWs.
@@ -739,7 +749,7 @@ final class RollModel {
 
     /// The stock the dock, the stock panel and the Stock menu show: the open frame's, else the roll's.
     var shownStockIndex: Int { shownFrame.map(stockIndex(for:)) ?? stockIndex }
-    var shownStock: Stock? { films?.stocks[safe: shownStockIndex] }
+    var shownStock: Stock? { installedStocks[safe: shownStockIndex] }
     var shownStockName: String? { stockNames[safe: shownStockIndex] }
 
     /// The stock `frame` develops through, in library order: its own, or the roll's.
@@ -1452,13 +1462,14 @@ final class RollModel {
     }
 
     /// A roll is a folder or a card; loose files are refused rather than guessed at, because
-    /// the sandbox grants the files and not the folder around them. Returns whether a folder
-    /// was taken.
+    /// the sandbox grants the files and not the folder around them. Look and stock documents
+    /// are imported instead. Returns whether an input was taken.
     @discardableResult
     func open(_ urls: [URL]) -> Bool {
         if let source = urls.lazy.compactMap(StockImportSource.init(url:)).first {
             return presentStockImport(source)
         }
+        if let url = urls.first(where: isPresetFile) { return openPreset(url) }
         guard let folder = urls.first(where: { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true })
         else {
             closeImport()
@@ -1531,7 +1542,7 @@ final class RollModel {
     var menuState: MenuState {
         let open = shownFrame, selected = selectionFlag
         let developing = isDeveloping
-        let canManageStocks = !isSheetShown && presetPresentation == nil && userStockStore != nil && !isQuitting
+        let canManageStocks = canShowStockBuilder
         return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesOnlyMonochrome: rollUsesOnlyMonochrome,
                          frameUsesMonochrome: shownStock?.monochrome != nil, frameIsOverridden: open.map(isOverridden) ?? false,
                          canResetManual: open.map(canResetManual) == true,
@@ -1569,7 +1580,10 @@ final class RollModel {
                          isShowingOnboarding: onboarding.isPresented,
                          isShowingStockImport: stockImportSource != nil,
                          isShowingStockBuilder: stockBuilder != nil,
+                         isShowingPresetSheet: presetPresentation != nil,
+                         canShowPresetLibrary: canShowPresetLibrary,
                          canImportStock: canManageStocks,
+                         canEditStock: canManageStocks && shownStock?.isUserStock == true && shownStock?.hasSpec == true,
                          canExportStock: canManageStocks && shownStock?.isUserStock == true,
                          canCheckForUpdates: updates.canCheckForUpdates)
     }

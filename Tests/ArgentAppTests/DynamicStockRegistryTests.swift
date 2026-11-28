@@ -30,7 +30,8 @@ import Testing
             flagStore: FlagStore(library: fixture.library),
             recipeLibrary: fixture.library,
             previewCache: fixture.folder.appendingPathComponent("Linear Previews"),
-            digestsFile: nil
+            digestsFile: nil,
+            presetStore: PresetStore(folder: fixture.folder.appendingPathComponent("Presets", isDirectory: true))
         )
         fixture.made.models.append(model)
         return model
@@ -133,6 +134,61 @@ import Testing
             #expect(model.currentStock?.id == "user-amber")
             #expect(model.missingRollStockID == nil)
             #expect(model.missingStockNotice == nil)
+        }
+    }
+
+    @Test func customImportsDoNotTakeAnUnusedBuiltInDigit() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let userStocks = fixture.folder.appendingPathComponent("UserStocks", isDirectory: true)
+            let model = Self.makeModel(fixture: fixture, userStocks: userStocks)
+            await model.open(fixture.roll)
+            let builtIn = try #require(model.films?.stocks.first)
+            let unusedDigit = model.builtInStockIndices.count + 1
+            try #require(unusedDigit <= 9)
+            let custom = Self.makeCustomStock(id: "user-amber", displayName: "Amber")
+            try #require(model.userStockStore).install(custom)
+            model.reloadUserStocks()
+            let customIndex = try #require(model.films?.stocks.firstIndex { $0.id == custom.id })
+            #expect(model.stockDigit(for: customIndex) == nil)
+            model.digitPressed(unusedDigit)
+            #expect(model.currentStock?.id == builtIn.id)
+            model.selectStock(customIndex)
+            model.digitPressed(1)
+            #expect(model.currentStock?.id == builtIn.id)
+        }
+    }
+
+    @Test func openingPresetImportsItAndBakingDoesNotSaveAnotherPreset() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let source = UserPreset(name: "Soft", canisterColor: [0.2, 0.3, 0.4], includedParts: .light)
+            let url = try sourceStore.save(source)
+            #expect(model.open([url]))
+            #expect(model.lookPresets.map(\.id) == [source.id])
+            #expect(model.lookPresets.first?.tagTint?.components == source.canisterColor)
+            guard case .library(_, let selection, false) = model.presetPresentation else {
+                Issue.record("Opening a preset should show it in the library.")
+                return
+            }
+            #expect(selection == source.id)
+            #expect(model.isSheetShown && model.menuState.isSheetShown)
+            model.presetPresentation = nil
+
+            await model.open(fixture.roll)
+            let frame = try #require(model.roll?.frames.first)
+            model.manualLoaded.insert(frame.url)
+            model.showSavePreset(from: frame)
+            #expect(!model.canBakeFrameAsStock(frame) && model.canMakeBakedStock(from: frame))
+            try model.bakePresetAsStock(from: frame, name: "Soft Stock", canisterColor: source.canisterColor)
+            guard case .builder(let builder) = model.presetPresentation else {
+                Issue.record("Baking from the save sheet should open the builder.")
+                return
+            }
+            #expect(builder.name == "Soft Stock")
+            #expect(builder.spec.canisterColor == source.canisterColor)
+            #expect(builder.spec.frameLook != nil)
+            #expect(try model.presetStore.loadAll().presets.map(\.id) == [source.id])
         }
     }
 

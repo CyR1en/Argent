@@ -101,10 +101,13 @@ struct ContentView: View {
         }
         .fileDialogDefaultDirectory(model.importDirectory)
         .sheet(item: $model.presetPresentation) { presentation in
-            let store = PresetStore(folder: PresetStore.defaultFolder)
             switch presentation {
-            case .save(let frame): SavePresetSheet(model: model, frame: frame, store: store)
-            case .library(let frames): PresetLibrarySheet(model: model, frames: frames, store: store)
+            case .save(let frame):
+                SavePresetSheet(model: model, frame: frame, store: model.presetStore)
+            case .library(let frames, let selection, let managing):
+                PresetLibrarySheet(model: model, frames: frames, store: model.presetStore, selection: selection, managing: managing)
+            case .builder(let presentation):
+                if let store = model.userStockStore { StockBuilderSheet(model: model, store: store, presentation: presentation) }
             }
         }
         .sheet(item: $model.stockImportSource) { source in

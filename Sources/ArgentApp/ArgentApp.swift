@@ -49,7 +49,7 @@ struct ArgentApp: App {
     }
 }
 
-/// Folders handed over by Finder or the Dock (Open With, a drop on the Dock icon, `open -a`).
+/// Folders and documents handed over by Finder or the Dock (Open With, a drop on the Dock icon, `open -a`).
 /// Launch Services passes them with a sandbox extension, as a drop on the window does.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: RollModel?
@@ -204,10 +204,15 @@ struct MenuState: Equatable {
     var isShowingOnboarding = false
     var isShowingStockImport = false
     var isShowingStockBuilder = false
+    var isShowingPresetSheet = false
+    var canShowPresetLibrary = false
     var canImportStock = false
+    var canEditStock = false
     var canExportStock = false
     /// Any modal sheet or overlay is up over the workspace.
-    var isSheetShown: Bool { isAskingToDevelop || isShowingMaskModels || isShowingOnboarding || isShowingStockImport || isShowingStockBuilder }
+    var isSheetShown: Bool {
+        isAskingToDevelop || isShowingMaskModels || isShowingOnboarding || isShowingStockImport || isShowingStockBuilder || isShowingPresetSheet
+    }
     /// Argent > Check for Updates…: Sparkle updater started and is idle enough to check now.
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
@@ -343,16 +348,30 @@ struct ArgentCommands: Commands {
                 .disabled(!state.canPasteToShown || !state.actsOnRoll)
         }
         CommandMenu("Stock") {
+            Button("Manage Custom Stocks & Presets…") {
+                openWindow(id: "main")
+                model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : [], managing: true)
+            }
+            .disabled(!state.canShowPresetLibrary)
             Button("New Custom Stock…") {
                 openWindow(id: "main")
                 model.showStockBuilder()
             }
             .disabled(!state.canImportStock)
+            Button("Edit Current Custom Stock…") {
+                if let stock = model.shownStock { model.editCustomStock(stock) }
+            }
+            .disabled(!state.canEditStock)
             Button("Import LUT or Stock…") {
                 openWindow(id: "main")
                 model.chooseStockImport()
             }
             .disabled(!state.canImportStock)
+            Button("Import Preset…") {
+                openWindow(id: "main")
+                model.choosePresetImport()
+            }
+            .disabled(!state.canShowPresetLibrary)
             Button("Export Current Custom Stock…") { model.chooseStockExport() }
                 .disabled(!state.canExportStock)
             Divider()
@@ -361,21 +380,19 @@ struct ArgentCommands: Commands {
                 .keyboardShortcut("k", modifiers: [.command, .shift])
                 .disabled(!state.hasRoll || model.stockNames.isEmpty || state.isSheetShown)
             Divider()
-            // The number keys switch stocks, in library order; a tenth stock and later have no key. With the brush in hand they are
+            // The number keys switch built-in stocks, in library order. With the brush in hand they are
             // Flow's (Mask > Flow), and these stand aside; a key that beats the menu's refresh still does what the live tool says.
             ForEach(model.stockNames.indices, id: \.self) { index in
-                Toggle(model.stockNames[index], isOn: Binding(get: { model.shownStockIndex == index },
-                                                              set: { isOn in
-                                                                  // A key can beat the menu's refresh: under a sheet
-                                                                  // the live model says a digit is no stock's.
-                                                                  if model.isSheetShown { return }
-                                                                  if model.maskEditor.tool == .brush {
-                                                                      if index < 9 { model.digitPressed(index + 1) }
-                                                                  } else if isOn {
-                                                                      model.selectStock(index)
-                                                                  }
-                                                              }))
-                    .keyboardShortcut(StockChooserButton.key(for: index))
+                let digit = model.stockDigit(for: index)
+                Toggle(model.stockNames[index], isOn: Binding(get: { model.shownStockIndex == index }, set: { isOn in
+                    guard !model.isSheetShown else { return }
+                    if model.maskEditor.tool == .brush {
+                        if let digit { model.digitPressed(digit) }
+                    } else if isOn {
+                        model.selectStock(index)
+                    }
+                }))
+                    .keyboardShortcut(digit.flatMap { StockChooserButton.key(for: $0 - 1) })
                     .disabled(!state.actsOnRoll || state.armedMaskTool == .brush)
                     // The film it models, as on the stock panel's tile.
                     .help(model.stockAfterLines[index] ?? "")
@@ -431,7 +448,7 @@ struct ArgentCommands: Commands {
             }
             .disabled(!state.actsOnRoll || state.isSeveralSelected || (model.shownFrame ?? model.selectedFrame).map(model.canBakeFrameAsStock) != true)
             Button("Look Presets…") { model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : []) }
-                .disabled(state.isShowingOnboarding)
+                .disabled(!state.canShowPresetLibrary)
             Divider()
             // One item whose title follows the frame, on the sheet and in the frame view. Plain F, as the
             // number keys switch stocks: a focused text field takes the key first, and so does the
