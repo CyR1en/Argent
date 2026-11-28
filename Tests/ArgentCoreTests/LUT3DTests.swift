@@ -53,6 +53,14 @@ import Testing
         #expect(throws: LUTError.self) { try LUT3D.parseCube(text) }
     }
 
+    @Test func resolveInputRangeAppliesToAllChannels() throws {
+        let text = "LUT_3D_INPUT_RANGE -0.5 1.5\n" + LUT3D.identity(size: 2).cubeText(title: "Resolve")
+        let lut = try LUT3D.parseCube(text)
+        #expect(lut.sample(encoded: SIMD3(-1, 0.5, 0)) == SIMD3(0, 0.5, 0.25))
+        #expect(throws: LUTError.self) { try LUT3D.parseCube("DOMAIN_MIN 0 0 0\n" + text) }
+        #expect(throws: LUTError.self) { try LUT3D.parseCube(text.replacingOccurrences(of: "-0.5 1.5", with: "1 0")) }
+    }
+
     @Test func cubeRoundTrip() throws {
         let lut = LUT3D.identity(size: 5)
         let parsed = try LUT3D.parseCube(lut.cubeText(title: "identity"))

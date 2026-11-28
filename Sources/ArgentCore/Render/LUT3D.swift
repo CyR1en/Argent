@@ -162,6 +162,7 @@ public struct LUT3D: Sendable {
         var values: [Float] = []
         var minimum: SIMD3<Float>?
         var maximum: SIMD3<Float>?
+        var hasInputRange = false
         var domainLine = 0
         for (index, rawLine) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
@@ -172,13 +173,22 @@ public struct LUT3D: Sendable {
             case "TITLE":
                 continue
             case "DOMAIN_MIN", "DOMAIN_MAX":
-                guard parts.count == 4, let r = Float(parts[1]), let g = Float(parts[2]), let b = Float(parts[3]),
+                guard !hasInputRange, parts.count == 4, let r = Float(parts[1]), let g = Float(parts[2]), let b = Float(parts[3]),
                       r.isFinite, g.isFinite, b.isFinite,
                       first == "DOMAIN_MIN" ? minimum == nil : maximum == nil else {
                     throw LUTError.malformedCube(line: index + 1, text: line)
                 }
                 if first == "DOMAIN_MIN" { minimum = SIMD3(r, g, b) }
                 else { maximum = SIMD3(r, g, b) }
+                domainLine = index + 1
+            case "LUT_3D_INPUT_RANGE":
+                guard minimum == nil, maximum == nil, parts.count == 3,
+                      let lower = Float(parts[1]), let upper = Float(parts[2]), lower.isFinite, upper.isFinite else {
+                    throw LUTError.malformedCube(line: index + 1, text: line)
+                }
+                minimum = SIMD3(repeating: lower)
+                maximum = SIMD3(repeating: upper)
+                hasInputRange = true
                 domainLine = index + 1
             case "LUT_3D_SIZE":
                 guard size == 0, parts.count == 2, let n = Int(parts[1]) else {
