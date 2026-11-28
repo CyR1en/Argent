@@ -6,6 +6,17 @@ import Testing
 
 /// Scope and menu wording, plus the shelf's layout, paging and selection visibility.
 @MainActor @Suite struct StockPanelTests {
+    @Test func menusUseTheStockForTheirOwnScope() {
+        var state = MenuState()
+        #expect(!state.canSetFrameLabBalance)
+        state.openFrame = Frame(id: 0, url: URL(fileURLWithPath: "/tmp/frame.ARW"), info: ARWFrameInfo())
+        state.rollUsesMonochrome = true
+        #expect(!state.canSetRollLabBalance && state.canSetFrameLabBalance)
+        state.rollUsesMonochrome = false
+        state.frameUsesMonochrome = true
+        #expect(state.canSetRollLabBalance && !state.canSetFrameLabBalance)
+    }
+
     @Test func eachLineSaysWhatItSets() {
         #expect(ControlsScope.roll.title == "Whole roll")
         #expect(ControlsScope.frame.title == "This frame")

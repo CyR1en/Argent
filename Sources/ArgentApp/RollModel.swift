@@ -1365,7 +1365,8 @@ final class RollModel {
     var menuState: MenuState {
         let open = shownFrame, selected = selectionFlag
         let developing = isDeveloping
-        return MenuState(hasRoll: roll != nil, openFrame: open, frameIsOverridden: open.map(isOverridden) ?? false,
+        return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesMonochrome: currentStock?.monochrome != nil,
+                         frameUsesMonochrome: shownStock?.monochrome != nil, frameIsOverridden: open.map(isOverridden) ?? false,
                          canResetManual: open.map(canResetManual) == true,
                          canSetDistortion: open.map(canSetDistortion) == true,
                          // The edit's own value, not the print's: the menus take a row's gesture once, as it ends.

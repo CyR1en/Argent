@@ -34,14 +34,16 @@ private struct RollDockLine: View {
             .disabled(model.roll == nil)
             .help("The roll's Rated at: \(ratedAtDescription). Every frame without its own develops at it.")
 
-            RollDockField(title: "Lab balance", value: model.controls.labBalance.title,
-                          selection: labBalance, compact: compact) {
-                ForEach(RollControls.LabBalance.allCases, id: \.self) { balance in
-                    Text(balance.title).tag(balance)
+            if model.currentStock?.monochrome == nil {
+                RollDockField(title: "Lab balance", value: model.controls.labBalance.title,
+                              selection: labBalance, compact: compact) {
+                    ForEach(RollControls.LabBalance.allCases, id: \.self) { balance in
+                        Text(balance.title).tag(balance)
+                    }
                 }
+                .disabled(model.roll == nil)
+                .help("The roll's Lab balance. Every frame without its own prints with it.")
             }
-            .disabled(model.roll == nil)
-            .help("The roll's Lab balance. Every frame without its own prints with it.")
 
             if showsGrain {
                 RollDockField(title: "Grain", value: model.output.grain.title, selection: grain, compact: compact) {
