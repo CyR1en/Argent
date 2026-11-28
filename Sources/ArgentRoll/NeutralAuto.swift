@@ -3,9 +3,8 @@ import Foundation
 
 /// Auto-development rules specific to the Neutral digital stock (`argent-neutral`):
 ///
-/// - Mood-preserving white balance: removes unwanted green/magenta and cool casts cleanly while
-///   tapering warm red-blue correction above a golden-hour knee so warm light (such as sunsets)
-///   keeps its mood instead of being neutralized cold.
+/// - Mood-preserving white balance: removes unwanted green/magenta and cool casts, trims mild
+///   warmth, and leaves the red-blue balance of strongly warm light (such as sunsets) alone.
 /// - Subtle social-ready polish: adds a small Vibrance (+12) and Clarity (+8) lift when Neutral
 ///   develops in Auto mode; `PresencePrint` protects skin tones via its Oklab skin-hue mask.
 public enum NeutralAuto {
@@ -25,11 +24,12 @@ public enum NeutralAuto {
     /// bright blue skies do not warm sunny landscapes into yellow.
     public static let coolShare: Float = 0.45
     public static let coolLimit: Float = 0.35
-    /// Mild warm casts below `warmMoodKnee` stops are trimmed at `mildWarmShare`; stronger warm
-    /// casts (golden hour, sunset) taper smoothly toward `warmMoodLimit` so the scene stays warm.
+    /// Mild warm casts up to `warmMoodKnee` stops are trimmed at `mildWarmShare`. The correction
+    /// fades to zero at `warmMoodThreshold` stops so strong golden-hour and sunset light keeps
+    /// its red-blue balance.
     public static let mildWarmShare: Float = 0.55
     public static let warmMoodKnee: Float = 0.45
-    public static let warmMoodLimit: Float = 0.32
+    public static let warmMoodThreshold: Float = 0.75
 
     /// Subtle auto polish applied to Neutral when no manual edit overrides Presence.
     public static let polishVibrance: Float = 12
@@ -59,12 +59,12 @@ public enum NeutralAuto {
             rb = -min(coolShare * coolExcess, coolLimit)
         } else if redBlue <= warmMoodKnee {
             rb = mildWarmShare * (redBlue - redBlueDeadband)
-        } else {
+        } else if redBlue < warmMoodThreshold {
             let base = mildWarmShare * (warmMoodKnee - redBlueDeadband)
-            let headroom = max(warmMoodLimit - base, 0)
-            let excess = redBlue - warmMoodKnee
-            let soft = headroom > 0 ? headroom * (excess / (excess + headroom / mildWarmShare)) : 0
-            rb = min(base + soft, warmMoodLimit)
+            let t = (warmMoodThreshold - redBlue) / (warmMoodThreshold - warmMoodKnee)
+            rb = base * t * t * (3 - 2 * t)
+        } else {
+            rb = 0
         }
         return AutoBalance.cast(redBlue: rb, greenMagenta: gm)
     }
