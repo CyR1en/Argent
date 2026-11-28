@@ -163,7 +163,7 @@ public struct ManualEdit: Sendable, Equatable, Codable {
 }
 
 public enum DevelopmentResolver {
-    public static let currentVersion = "2026-10-09-1"
+    public static let currentVersion = "2026-11-28-1"
 
     public enum Failure: Error, LocalizedError, Equatable {
         case unsupportedResolver(String)
@@ -206,6 +206,9 @@ public enum DevelopmentResolver {
                 // version instead of silently remapping an existing edit.
                 switch baseline.resolverVersion {
                 case currentVersion: settings = controls.settings(for: stock, aim: baseline.aim)
+                case "2026-10-09-1":
+                    settings = controls.settings(for: stock, aim: baseline.aim,
+                                                 neutralCorrection: NeutralAuto.legacyWhiteBalanceCorrection)
                 default: throw Failure.unsupportedResolver(baseline.resolverVersion)
                 }
                 // The pin's tone step keeps the version it recorded, as the edit keeps its Light compiler: a new stock or

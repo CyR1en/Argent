@@ -47,6 +47,26 @@ public enum NeutralAuto {
     /// variance inside its deadbands, cleans genuine fluorescent and cold casts gently without
     /// warming blue skies, trims mild indoor warmth, and preserves golden-hour / sunset warmth.
     public static func whiteBalanceCorrection(for cast: SIMD3<Float>) -> SIMD3<Float> {
+        whiteBalanceCorrection(for: cast) { redBlue, base in
+            guard redBlue < warmMoodThreshold else { return 0 }
+            let t = (warmMoodThreshold - redBlue) / (warmMoodThreshold - warmMoodKnee)
+            return base * t * t * (3 - 2 * t)
+        }
+    }
+
+    /// Filtration for edits pinned to the 2026-10-09-1 resolver.
+    static func legacyWhiteBalanceCorrection(for cast: SIMD3<Float>) -> SIMD3<Float> {
+        whiteBalanceCorrection(for: cast) { redBlue, base in
+            let warmMoodLimit: Float = 0.32
+            let headroom = max(warmMoodLimit - base, 0)
+            let excess = redBlue - warmMoodKnee
+            let soft = headroom > 0 ? headroom * (excess / (excess + headroom / mildWarmShare)) : 0
+            return min(base + soft, warmMoodLimit)
+        }
+    }
+
+    private static func whiteBalanceCorrection(for cast: SIMD3<Float>,
+                                               strongWarmCorrection: (Float, Float) -> Float) -> SIMD3<Float> {
         let (redBlue, greenMagenta) = AutoBalance.axes(cast)
         let gmExcess = max(abs(greenMagenta) - greenMagentaDeadband, 0)
         let gmSign: Float = greenMagenta >= 0 ? 1 : -1
@@ -59,12 +79,9 @@ public enum NeutralAuto {
             rb = -min(coolShare * coolExcess, coolLimit)
         } else if redBlue <= warmMoodKnee {
             rb = mildWarmShare * (redBlue - redBlueDeadband)
-        } else if redBlue < warmMoodThreshold {
-            let base = mildWarmShare * (warmMoodKnee - redBlueDeadband)
-            let t = (warmMoodThreshold - redBlue) / (warmMoodThreshold - warmMoodKnee)
-            rb = base * t * t * (3 - 2 * t)
         } else {
-            rb = 0
+            let base = mildWarmShare * (warmMoodKnee - redBlueDeadband)
+            rb = strongWarmCorrection(redBlue, base)
         }
         return AutoBalance.cast(redBlue: rb, greenMagenta: gm)
     }

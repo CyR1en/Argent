@@ -170,6 +170,30 @@ import Testing
         #expect(reset.labBalance != pinned.labBalance && reset.manual.isIdentity)
     }
 
+    @Test(arguments: ["2026-10-09-1", DevelopmentResolver.currentVersion])
+    func neutralPinKeepsItsResolversFiltrationWhenRatingChanges(version: String) throws {
+        let stock = Stock(id: NeutralAuto.stockID, displayName: "Neutral", status: "digital", boxSpeed: 100,
+                          densityRange: 2.5, exposurePerUnit: SIMD3(repeating: 1),
+                          negative: LUT3D.identity(size: 5), print: LUT3D.identity(size: 5))
+        let aim = PrintAim(level: -0.67, cast: AutoBalance.cast(redBlue: 0.77651215, greenMagenta: 0))
+        let correction = AutoBalance.cast(redBlue: version == "2026-10-09-1" ? 0.25969395 : 0, greenMagenta: 0)
+        let pinnedBalance = RollControls.grayCompensation(stock, exposureStops: SIMD3(repeating: aim.level) + correction)
+        let baseline = AutomaticBaseline(sourceSHA256: "raw", stockID: stock.id, stockDigest: stock.digest,
+            controls: RollControls(), aim: aim, analysisVersion: ExposureAnalysis.currentVersion, resolverVersion: version,
+            baseRender: Recipe.Render(settings: DevelopSettings(labBalance: pinnedBalance), grain: .off))
+        let saved = ManualEdit(adjustments: try ManualAdjustments(exposureEV: 0.7), baseline: baseline)
+        let edit = try JSONDecoder().decode(ManualEdit.self, from: JSONEncoder().encode(saved))
+        #expect(edit.baseline.resolverVersion == version)
+
+        let controls = RollControls(ratedAt: .oneStopOver)
+        let changed = try DevelopmentResolver.resolve(stock: stock, stockDigest: stock.digest,
+            controls: controls, aim: PrintAim(), manual: edit, grain: 0, grainSeed: 0)
+        let exposure = SIMD3<Float>(repeating: Float(controls.ratedAt.stops) + aim.level) + correction
+        #expect(changed.ratedAt == 50)
+        #expect(changed.labBalance == RollControls.grayCompensation(stock, exposureStops: exposure))
+        #expect(changed.manual.adjustments == saved.adjustments)
+    }
+
     @Test func previousAnalysisBaselineAndItsStoredRenderSurviveCurrentAutoAndResume() throws {
         let scene = try Scene()
         defer { try? FileManager.default.removeItem(at: scene.root) }
