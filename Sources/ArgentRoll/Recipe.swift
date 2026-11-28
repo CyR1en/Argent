@@ -183,7 +183,7 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
 public struct Recipe: Sendable, Equatable, Codable {
     public static let fileExtension = "argent"
     public static let formatName = "camera.argent.recipe"
-    public static let currentVersion = 14
+    public static let currentVersion = 15
     /// Develops kept in the record, newest last.
     public static let keptDevelops = 20
 
@@ -229,10 +229,12 @@ public struct Recipe: Sendable, Equatable, Codable {
         public var manual: ManualRenderSettings?
         /// Auto's tone step; absent where it had none, as every render had before it existed.
         public var tone: PrintTone?
+        /// Auto's own Presence finish (such as Neutral's polish); absent where it had none.
+        public var autoPresence: AutoPresence?
 
         public init(ratedAt: Float?, labBalance: [Float], printExposure: Float, grain: String,
                     halation: String, halationAmount: Float? = nil, grainSeed: UInt32? = nil, sharpen: String? = nil,
-                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil) {
+                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil, autoPresence: AutoPresence? = nil) {
             self.ratedAt = ratedAt
             self.labBalance = labBalance
             self.printExposure = printExposure
@@ -243,6 +245,7 @@ public struct Recipe: Sendable, Equatable, Codable {
             self.sharpen = sharpen
             self.manual = manual?.adjustments.isIdentity == true ? nil : manual
             self.tone = tone?.isActive == true ? tone : nil
+            self.autoPresence = autoPresence?.isActive == true ? autoPresence : nil
         }
 
         public init(settings: DevelopSettings, grain: OutputSettings.Grain) {
@@ -251,7 +254,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                       printExposure: settings.printExposure, grain: grain.rawValue,
                       halation: settings.halation ? "on" : "off", halationAmount: settings.halation ? settings.halationAmount : nil,
                       grainSeed: grain == .off ? nil : settings.grainSeed,
-                      sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone)
+                      sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone,
+                      autoPresence: settings.autoPresence)
         }
 
         public static func == (lhs: Render, rhs: Render) -> Bool {
@@ -260,6 +264,7 @@ public struct Recipe: Sendable, Equatable, Codable {
                 && lhs.halation == rhs.halation && (lhs.halationAmount ?? 1) == (rhs.halationAmount ?? 1)
                 && lhs.grainSeed == rhs.grainSeed && lhs.sharpen == rhs.sharpen
                 && (lhs.manual ?? .identity) == (rhs.manual ?? .identity) && lhs.tone == rhs.tone
+                && (lhs.autoPresence ?? .identity) == (rhs.autoPresence ?? .identity)
         }
 
         /// The render as a develop receipt keeps it (`Recipe.encoded()`).
@@ -275,7 +280,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                             printExposure: printExposure,
                             grain: OutputSettings.Grain(rawValue: grain)?.amount ?? 0, grainSeed: grainSeed ?? 0,
                             halation: halation == "on", halationAmount: halationAmount ?? 1, sharpen: sharpen == "on",
-                            manual: manual ?? .identity, tone: tone ?? .identity)
+                            manual: manual ?? .identity, tone: tone ?? .identity,
+                            autoPresence: autoPresence ?? .identity)
         }
     }
 
@@ -450,6 +456,7 @@ public struct Recipe: Sendable, Equatable, Codable {
         // An unverified source must never inherit an automatic pin or its refinements.
         recipe.manual = nil
         recipe.render.manual = nil
+        recipe.render.autoPresence = nil
         return recipe
     }
 
@@ -570,7 +577,8 @@ public struct Recipe: Sendable, Equatable, Codable {
         guard format == Self.formatName else { throw ReadFailure.wrongFormat }
         guard (1...Self.currentVersion).contains(version) else { throw ReadFailure.unsupportedVersion(version) }
         guard version >= requiredVersion || (version == 1 && requiredVersion == 2) else {
-            throw ReadFailure.invalid(requiredVersion == 14 ? "a Halation amount requires recipe version 14"
+            throw ReadFailure.invalid(requiredVersion == 15 ? "Automatic Presence requires recipe version 15"
+                                      : requiredVersion == 14 ? "a Halation amount requires recipe version 14"
                                       : requiredVersion == 13 ? "a frame's own stock or grain requires recipe version 13"
                                       : requiredVersion == 12 ? "a removal requires recipe version 12"
                                       : requiredVersion == 11 ? "Vignetting requires recipe version 11"
@@ -594,6 +602,7 @@ public struct Recipe: Sendable, Equatable, Codable {
         func valid(_ render: Render) -> Bool {
             render.labBalance.count == 3 && render.labBalance.allSatisfy(\.isFinite)
                 && render.printExposure.isFinite && (render.ratedAt.map { $0.isFinite && $0 > 0 } ?? true)
+                && (render.autoPresence.map { $0.referenceStops.isFinite && (-32...32).contains($0.referenceStops) } ?? true)
         }
         guard valid(render), develops.allSatisfy({ valid($0.render) }) else { throw ReadFailure.invalid("non-finite render values") }
         // Only a receipt may hold a digest: what the frame renders now keeps its masks in full.
@@ -630,6 +639,7 @@ public struct Recipe: Sendable, Equatable, Codable {
     public var requiredVersion: Int {
         let renders = [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 }
             + develops.map(\.render)
+        if renders.contains(where: { $0.autoPresence != nil }) { return 15 }
         if frame.halation != nil || renders.contains(where: { ($0.halationAmount ?? 1) != 1 }) { return 14 }
         if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let lenses = [manual?.adjustments.lens, heldManual?.adjustments.lens].compactMap { $0 }

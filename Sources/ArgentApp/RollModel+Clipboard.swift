@@ -573,7 +573,8 @@ extension RollModel {
             if plan.origin == .auto, !isBalanced { return refuse("The roll has not settled on its Auto yet.") }
             let aim = plan.origin == .original ? PrintAim() : printAim(for: frame), controls = plan.own.applied(to: self.controls)
             let base = try DevelopmentResolver.resolve(stock: stock, stockDigest: stockDigests[index], controls: controls, aim: aim,
-                                                       manual: nil, grain: grain.amount, grainSeed: frame.grainSeed, sharpen: true)
+                                                       manual: nil, grain: grain.amount, grainSeed: frame.grainSeed, sharpen: true,
+                                                       origin: plan.origin)
             let baseline = AutomaticBaseline(sourceSHA256: verified.sha256, stockID: stock.id, stockDigest: stockDigests[index],
                                              controls: controls, aim: aim, analysisVersion: ExposureAnalysis.currentVersion,
                                              resolverVersion: DevelopmentResolver.currentVersion,

@@ -102,13 +102,84 @@ private func makeStock(id: String, displayName: String = "Test") -> Stock {
 
         let neutralAuto = try DevelopmentResolver.resolve(stock: neutral, stockDigest: "d", controls: RollControls(),
                                                           aim: aim, manual: nil, grain: 0, grainSeed: 0)
-        #expect(neutralAuto.manual.adjustments.presence.vibrance == NeutralAuto.polishVibrance)
-        #expect(neutralAuto.manual.adjustments.presence.clarity == NeutralAuto.polishClarity)
-        #expect(neutralAuto.manual.referenceStops == aim.level)
+        #expect(neutralAuto.manual == .identity)
+        #expect(neutralAuto.autoPresence.isActive)
+        #expect(neutralAuto.autoPresence.presence.vibrance == NeutralAuto.polishVibrance)
+        #expect(neutralAuto.autoPresence.presence.clarity == NeutralAuto.polishClarity)
+        #expect(neutralAuto.autoPresence.referenceStops == aim.level)
+        #expect(neutralAuto.effectivePresence == NeutralAuto.polishPresence)
+        #expect(neutralAuto.presenceReferenceStops == aim.level)
+
+        let neutralOriginal = try DevelopmentResolver.resolve(stock: neutral, stockDigest: "d", controls: RollControls(),
+                                                              aim: PrintAim(), manual: nil, grain: 0, grainSeed: 0, origin: .original)
+        #expect(neutralOriginal.manual == .identity && !neutralOriginal.autoPresence.isActive)
 
         let portraAuto = try DevelopmentResolver.resolve(stock: portra, stockDigest: "d", controls: RollControls(),
                                                          aim: aim, manual: nil, grain: 0, grainSeed: 0)
-        #expect(portraAuto.manual == .identity)
+        #expect(portraAuto.manual == .identity && !portraAuto.autoPresence.isActive)
+    }
+
+    @Test func neutralAutoPolishSurvivesManualEditsCacheKeysBudgetAndRecipes() throws {
+        let neutral = makeStock(id: NeutralAuto.stockID, displayName: "Neutral")
+        let portra = makeStock(id: "kodak-portra-400", displayName: "Portra 400")
+        let aim = PrintAim(level: -0.3)
+
+        let autoSettings = try DevelopmentResolver.resolve(stock: neutral, stockDigest: neutral.digest, controls: RollControls(),
+                                                           aim: aim, manual: nil, grain: 0, grainSeed: 0)
+        let autoKey = RenderedImageKey.film("frame|source|apple", stock: 0, stockID: neutral.id,
+                                            settings: autoSettings, space: .sRGB, pixels: 960, frameSized: true)
+        #expect(!autoKey.isManual, "untouched Neutral Auto stays in the Auto cache slot")
+        #expect(DevelopBudget.presenceCost(settings: autoSettings, width: 4000, height: 3000) > 0)
+
+        let baseline = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: neutral.id,
+                                         stockDigest: neutral.digest, controls: RollControls(), aim: aim,
+                                         analysisVersion: ExposureAnalysis.currentVersion,
+                                         baseRender: Recipe.Render(settings: autoSettings, grain: .off))
+        let maskEdit = ManualEdit(adjustments: try ManualAdjustments(exposureEV: 0.4), baseline: baseline)
+        let edited = try DevelopmentResolver.resolve(stock: neutral, stockDigest: neutral.digest, controls: RollControls(),
+                                                     aim: aim, manual: maskEdit, grain: 0, grainSeed: 0)
+        #expect(edited.autoPresence == autoSettings.autoPresence)
+        #expect(edited.manual.adjustments == maskEdit.adjustments)
+        #expect(edited.effectivePresence == NeutralAuto.polishPresence)
+        let editedKey = RenderedImageKey.film("frame|source|apple", stock: 0, stockID: neutral.id,
+                                              settings: edited, space: .sRGB, pixels: 960, frameSized: true)
+        #expect(editedKey.isManual && editedKey.slot != autoKey.slot)
+
+        // Switching to a film stock drops Neutral's auto polish; switching back to Neutral restores it.
+        let switchedToPortra = try DevelopmentResolver.resolve(stock: portra, stockDigest: portra.digest, controls: RollControls(),
+                                                               aim: aim, manual: maskEdit, grain: 0, grainSeed: 0)
+        #expect(!switchedToPortra.autoPresence.isActive && switchedToPortra.effectivePresence.isIdentity)
+
+        let portraBaseline = AutomaticBaseline(sourceSHA256: String(repeating: "a", count: 64), stockID: portra.id,
+                                               stockDigest: portra.digest, controls: RollControls(), aim: aim,
+                                               analysisVersion: ExposureAnalysis.currentVersion,
+                                               baseRender: Recipe.Render(settings: try DevelopmentResolver.resolve(
+                                                   stock: portra, stockDigest: portra.digest, controls: RollControls(),
+                                                   aim: aim, manual: nil, grain: 0, grainSeed: 0), grain: .off))
+        let portraEdit = ManualEdit(adjustments: try ManualAdjustments(exposureEV: 0.4), baseline: portraBaseline)
+        let switchedToNeutral = try DevelopmentResolver.resolve(stock: neutral, stockDigest: neutral.digest, controls: RollControls(),
+                                                                aim: aim, manual: portraEdit, grain: 0, grainSeed: 0)
+        #expect(switchedToNeutral.autoPresence == autoSettings.autoPresence)
+
+        // Recipe round-trip at version 15 and rejection by older readers.
+        let frame = Frame(id: 0, url: URL(fileURLWithPath: "/tmp/DSC04445.ARW"), info: ARWFrameInfo())
+        var recipe = try Recipe.make(frame: frame, byteCount: 4096, stock: neutral, stockDigest: neutral.digest,
+                                     roll: RollControls(), own: FrameControls(), aim: aim, manual: maskEdit)
+        #expect(recipe.version == 15 && recipe.requiredVersion == 15)
+        let decoded = try Recipe.decodeStrict(recipe.encoded())
+        #expect(decoded == recipe && decoded.render.autoPresence == autoSettings.autoPresence)
+        #expect(throws: Recipe.ReadFailure.unsupportedVersion(15)) {
+            try Recipe.decodeStrict(recipe.encoded(), readerVersion: 14)
+        }
+        recipe.version = 14
+        #expect(throws: Recipe.ReadFailure.invalid("Automatic Presence requires recipe version 15")) {
+            try recipe.validate()
+        }
+
+        // Film stocks stay free of autoPresence and keep their earlier recipe version.
+        let filmRecipe = try Recipe.make(frame: frame, byteCount: 4096, stock: portra, stockDigest: portra.digest,
+                                         roll: RollControls(), own: FrameControls(), aim: aim)
+        #expect(filmRecipe.render.autoPresence == nil && filmRecipe.requiredVersion == 2)
     }
 
     @Test func exposurePlacementRespondsToFacesOnNeutral() {

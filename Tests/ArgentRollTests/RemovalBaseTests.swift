@@ -34,7 +34,7 @@ import Testing
     @Test func aRemovalAnywhereRequiresVersion12AndNothingElseDoes() throws {
         let folder = try library()
         defer { try? FileManager.default.removeItem(at: folder) }
-        #expect(Recipe.currentVersion == 14)
+        #expect(Recipe.currentVersion == 15)
         let original = try recipe(in: folder, manual: true)
         #expect(original.requiredVersion == 2, "a frame with nothing removed keeps the version it needed")
         let before = try original.encoded()

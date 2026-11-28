@@ -24,7 +24,13 @@ enum PresenceScene {
     /// control is set.
     static func inputs(_ manual: ManualRenderSettings, constants: PresenceConstants, analysis: PresenceAnalysis,
                        weights: (tables: PresenceToneWeights, buffer: MTLBuffer)?) throws -> PresenceSceneInputs {
-        let presence = manual.adjustments.presence
+        try inputs(presence: manual.adjustments.presence, exposureEV: manual.adjustments.exposureEV,
+                   referenceStops: manual.referenceStops, constants: constants, analysis: analysis, weights: weights)
+    }
+
+    static func inputs(presence: Presence, exposureEV: Float, referenceStops: Float,
+                       constants: PresenceConstants, analysis: PresenceAnalysis,
+                       weights: (tables: PresenceToneWeights, buffer: MTLBuffer)?) throws -> PresenceSceneInputs {
         guard presence.acts(in: .scene) else { return .bypass }
         var inputs = PresenceSceneInputs(analysis: analysis)
         var q = PresenceSceneParameters()
@@ -58,7 +64,7 @@ enum PresenceScene {
             q.weightScale = 1 / weights.tables.step
             // `ManualCurveParameters.guideOffset`, which the oldest compiler's block leaves out: a base in the guide's units, before
             // Exposure, to stops from the reference after it.
-            q.weightOffset = manual.adjustments.exposureEV + manual.referenceStops - log2(Float(0.18))
+            q.weightOffset = exposureEV + referenceStops - log2(Float(0.18))
             q.detailLimit = constants.detailLimitStops
             inputs.weights = weights.buffer
             inputs.maximumGainStops += constants.detailLimitStops

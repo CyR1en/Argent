@@ -29,10 +29,14 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
     public var manual: ManualRenderSettings
     /// Auto's local burn and dodge in print exposure. Identity takes the original render path.
     public var tone: PrintTone
+    /// Auto's own Presence finish (e.g., Neutral's subtle Vibrance and Clarity polish), separate from
+    /// user refinements in `manual`. Identity takes the original render path.
+    public var autoPresence: AutoPresence
 
     public init(ratedAt: Float? = nil, labBalance: SIMD3<Float> = .zero, printExposure: Float = 0,
                 grain: Float = 0, grainSeed: UInt32 = 0, halation: Bool = false, halationAmount: Float = 1,
-                sharpen: Bool = false, manual: ManualRenderSettings = .identity, tone: PrintTone = .identity) {
+                sharpen: Bool = false, manual: ManualRenderSettings = .identity, tone: PrintTone = .identity,
+                autoPresence: AutoPresence = .identity) {
         self.halation = halation
         self.halationAmount = halationAmount
         self.sharpen = sharpen
@@ -43,9 +47,21 @@ public struct DevelopSettings: Sendable, Equatable, Hashable {
         self.grainSeed = grainSeed
         self.manual = manual
         self.tone = tone
+        self.autoPresence = autoPresence
     }
 
     public var lens: LensSettings { manual.adjustments.lens }
+
+    /// The Presence rendered for this frame: `autoPresence` combined with any user Presence in `manual`.
+    public var effectivePresence: Presence {
+        autoPresence.isActive ? autoPresence.presence.combined(with: manual.adjustments.presence)
+            : manual.adjustments.presence
+    }
+
+    /// Scene midtone reference in stops for scene Presence (Clarity/Texture) tone weights.
+    public var presenceReferenceStops: Float {
+        manual.adjustments.isIdentity ? autoPresence.referenceStops : manual.referenceStops
+    }
 
     /// Stops of extra exposure the negative receives. Rated at 200 on a 400 stock is one
     /// stop over, because the photographer metered as if the film were slower.
