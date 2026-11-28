@@ -92,11 +92,7 @@ struct StockShelf: View {
             Text("Frames already updated with this preset keep their adjustments.")
         }
         .dropDestination(for: URL.self) { urls, _ in
-            if let source = urls.lazy.compactMap(StockImportSource.init(url:)).first {
-                return model.presentStockImport(source)
-            }
-            guard let url = urls.first(where: model.isPresetFile) else { return false }
-            return model.openPreset(url)
+            model.openStockOrPresets(urls) ?? false
         }
     }
 

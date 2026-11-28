@@ -45,17 +45,27 @@ extension RollModel {
     }
 
     @discardableResult
-    func openPreset(_ url: URL) -> Bool {
-        guard canShowPresetLibrary, isPresetFile(url) else { return false }
-        do {
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            let preset = try presetStore.importPreset(from: url)
-            reloadLookPresets()
-            showPresetLibrary(for: shownFrame.map { [$0] } ?? selectedFrames, selecting: preset.id)
-        } catch {
-            message = "Could not import the preset: \(error.localizedDescription)"
+    func openPresets(_ urls: [URL], showLibrary: Bool = true) -> Bool {
+        guard canShowPresetLibrary, !urls.isEmpty else { return false }
+        var firstImportedID: UUID?
+        var failures: [String] = []
+        for url in urls {
+            do {
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let preset = try presetStore.importPreset(from: url)
+                firstImportedID = firstImportedID ?? preset.id
+            } catch {
+                failures.append("\(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
+        if let firstImportedID {
+            reloadLookPresets()
+            if showLibrary && failures.isEmpty {
+                showPresetLibrary(for: shownFrame.map { [$0] } ?? selectedFrames, selecting: firstImportedID)
+            }
+        }
+        if !failures.isEmpty { message = "Could not import presets:\n" + failures.joined(separator: "\n") }
         return true
     }
 
@@ -63,9 +73,10 @@ extension RollModel {
         guard canShowPresetLibrary else { return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.argentPreset]
+        panel.allowsMultipleSelection = true
         panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            self.openPreset(url)
+            guard response == .OK else { return }
+            self.openPresets(panel.urls)
         }
     }
 

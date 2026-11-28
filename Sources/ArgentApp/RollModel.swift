@@ -1466,10 +1466,7 @@ final class RollModel {
     /// are imported instead. Returns whether an input was taken.
     @discardableResult
     func open(_ urls: [URL]) -> Bool {
-        if let source = urls.lazy.compactMap(StockImportSource.init(url:)).first {
-            return presentStockImport(source)
-        }
-        if let url = urls.first(where: isPresetFile) { return openPreset(url) }
+        if let handled = openStockOrPresets(urls) { return handled }
         guard let folder = urls.first(where: { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true })
         else {
             closeImport()
@@ -1478,6 +1475,15 @@ final class RollModel {
         }
         Task { await open(folder) }
         return true
+    }
+
+    func openStockOrPresets(_ urls: [URL]) -> Bool? {
+        let source = urls.lazy.compactMap(StockImportSource.init(url:)).first
+        let presets = urls.filter(isPresetFile)
+        guard source != nil || !presets.isEmpty else { return nil }
+        let importedPresets = openPresets(presets, showLibrary: source == nil)
+        let openedStock = source.map { presentStockImport($0) } ?? false
+        return importedPresets || openedStock
     }
 
     func canChangeSize(by delta: Int) -> Bool {

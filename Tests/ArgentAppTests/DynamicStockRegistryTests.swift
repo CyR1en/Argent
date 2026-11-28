@@ -192,6 +192,21 @@ import Testing
         }
     }
 
+    @Test func openingMultiplePresetsImportsEveryFileEvenIfOneAlreadyExists() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let first = UserPreset(name: "First")
+            let duplicate = UserPreset(name: "Duplicate")
+            let last = UserPreset(name: "Last")
+            try model.presetStore.save(duplicate)
+            let urls = try [first, duplicate, last].map { try sourceStore.save($0) }
+            #expect(model.open(urls))
+            #expect(Set(model.lookPresets.map(\.id)) == Set([first.id, duplicate.id, last.id]))
+            #expect(model.message?.contains("Duplicate") == true)
+        }
+    }
+
     @Test func missingRollStockFallsBackNonDestructivelyAndClearsOnManualSelection() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)
