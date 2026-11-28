@@ -162,6 +162,7 @@ final class RollModel {
     var isRestoringManual = false
     var isQuitting = false
     var presetPresentation: PresetPresentation?
+    var stockImportSource: StockImportSource?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
     let updates = UpdateController()
     var editLineage = UUID().uuidString
@@ -316,7 +317,7 @@ final class RollModel {
     private(set) var isAskingToDevelop = false
     /// A modal sheet is up over the workspace (Quick Develop, the mask models' licence screen, or onboarding): keys and menus leave
     /// the roll and frame under it alone.
-    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown || onboarding.isPresented }
+    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown || onboarding.isPresented || stockImportSource != nil }
     /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
     @ObservationIgnored var maskModelStagingSweep: Task<Void, Never>?
     /// An in-flight Settings removal of downloaded mask models, awaited before a new download starts or on quit.
@@ -1437,6 +1438,9 @@ final class RollModel {
     /// was taken.
     @discardableResult
     func open(_ urls: [URL]) -> Bool {
+        if let source = urls.lazy.compactMap(StockImportSource.init(url:)).first {
+            return presentStockImport(source)
+        }
         guard let folder = urls.first(where: { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true })
         else {
             closeImport()
@@ -1509,6 +1513,7 @@ final class RollModel {
     var menuState: MenuState {
         let open = shownFrame, selected = selectionFlag
         let developing = isDeveloping
+        let canManageStocks = !isSheetShown && presetPresentation == nil && userStockStore != nil && !isQuitting
         return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesOnlyMonochrome: rollUsesOnlyMonochrome,
                          frameUsesMonochrome: shownStock?.monochrome != nil, frameIsOverridden: open.map(isOverridden) ?? false,
                          canResetManual: open.map(canResetManual) == true,
@@ -1544,6 +1549,9 @@ final class RollModel {
                          moveTargets: moveTargets, isAskingToDevelop: isAskingToDevelop,
                          isShowingMaskModels: maskModels.isShown,
                          isShowingOnboarding: onboarding.isPresented,
+                         isShowingStockImport: stockImportSource != nil,
+                         canImportStock: canManageStocks,
+                         canExportStock: canManageStocks && shownStock?.isUserStock == true,
                          canCheckForUpdates: updates.canCheckForUpdates)
     }
 

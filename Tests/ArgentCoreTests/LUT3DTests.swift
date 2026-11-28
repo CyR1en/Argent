@@ -33,6 +33,26 @@ import Testing
 }
 
 @Suite struct LUT3DTests {
+    @Test func cubeUsesPerChannelDomainAndClampsOutsideIt() throws {
+        let text = "DOMAIN_MIN -1 0.25 0\r\nDOMAIN_MAX 1 0.75 2\r\n"
+            + LUT3D.identity(size: 2).cubeText(title: "identity").replacingOccurrences(of: "\n", with: "\r\n")
+        let lut = try LUT3D.parseCube(text)
+        #expect(lut.sample(encoded: SIMD3(0, 0.375, 1)) == SIMD3(0.5, 0.25, 0.5))
+        #expect(lut.sample(encoded: SIMD3(-10, 2, 0.5)) == SIMD3(0, 1, 0.25))
+        let roundTrip = try LUT3D.parseCube(lut.cubeText(title: "domain"))
+        #expect(roundTrip.domainMin == SIMD3(-1, 0.25, 0))
+        #expect(roundTrip.domainMax == SIMD3(1, 0.75, 2))
+        let binary = try LUT3D.parseBinary(lut.binaryData())
+        #expect(binary.sample(encoded: SIMD3(0.5, 0, 1)) == SIMD3(0.75, 0, 0.5))
+    }
+
+    @Test(arguments: ["DOMAIN_MIN 0 0", "DOMAIN_MAX 0 1 1", "DOMAIN_MAX 1 -1 1",
+                      "DOMAIN_MIN nan 0 0", "DOMAIN_MAX 1 inf 1", "DOMAIN_MIN 0 0 0\nDOMAIN_MIN 0 0 0"])
+    func cubeRejectsInvalidDomain(_ header: String) {
+        let text = header + "\n" + LUT3D.identity(size: 2).cubeText(title: "identity")
+        #expect(throws: LUTError.self) { try LUT3D.parseCube(text) }
+    }
+
     @Test func cubeRoundTrip() throws {
         let lut = LUT3D.identity(size: 5)
         let parsed = try LUT3D.parseCube(lut.cubeText(title: "identity"))

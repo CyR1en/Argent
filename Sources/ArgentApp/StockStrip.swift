@@ -47,6 +47,10 @@ struct StockShelf: View {
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Film stocks")
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let source = urls.lazy.compactMap(StockImportSource.init(url:)).first else { return false }
+            return model.presentStockImport(source)
+        }
     }
 
     private func revealSelection(layout: StockShelfLayout, from offset: CGFloat? = nil, animated: Bool = false) {

@@ -82,6 +82,8 @@ public struct LUT3D: Sendable {
     public let size: Int
     public let encoding: LogEncoding
     public var values: [Float]
+    public private(set) var domainMin = SIMD3<Float>.zero
+    public private(set) var domainMax = SIMD3<Float>(repeating: 1)
 
     public init(size: Int, encoding: LogEncoding = LogEncoding(), values: [Float]) throws {
         guard (2...128).contains(size) else { throw LUTError.badSize(size) }
@@ -158,16 +160,28 @@ public struct LUT3D: Sendable {
     public static func parseCube(_ text: String, encoding: LogEncoding = LogEncoding()) throws -> LUT3D {
         var size = 0
         var values: [Float] = []
-        for (index, rawLine) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        var minimum: SIMD3<Float>?
+        var maximum: SIMD3<Float>?
+        var domainLine = 0
+        for (index, rawLine) in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).enumerated() {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" })
             guard let first = parts.first else { continue }
             switch first {
-            case "TITLE", "DOMAIN_MIN", "DOMAIN_MAX":
+            case "TITLE":
                 continue
+            case "DOMAIN_MIN", "DOMAIN_MAX":
+                guard parts.count == 4, let r = Float(parts[1]), let g = Float(parts[2]), let b = Float(parts[3]),
+                      r.isFinite, g.isFinite, b.isFinite,
+                      first == "DOMAIN_MIN" ? minimum == nil : maximum == nil else {
+                    throw LUTError.malformedCube(line: index + 1, text: line)
+                }
+                if first == "DOMAIN_MIN" { minimum = SIMD3(r, g, b) }
+                else { maximum = SIMD3(r, g, b) }
+                domainLine = index + 1
             case "LUT_3D_SIZE":
-                guard parts.count == 2, let n = Int(parts[1]) else {
+                guard size == 0, parts.count == 2, let n = Int(parts[1]) else {
                     throw LUTError.malformedCube(line: index + 1, text: line)
                 }
                 // Bounds before the arithmetic below: a hostile header such as 2147483647
@@ -184,11 +198,23 @@ public struct LUT3D: Sendable {
                 values.append(r); values.append(g); values.append(b)
             }
         }
-        return try LUT3D(size: size, encoding: encoding, values: values)
+        var lut = try LUT3D(size: size, encoding: encoding, values: values)
+        lut.domainMin = minimum ?? .zero
+        lut.domainMax = maximum ?? SIMD3(repeating: 1)
+        let span = lut.domainMax - lut.domainMin
+        guard span.indices.allSatisfy({ span[$0].isFinite && span[$0] > 0 }) else {
+            throw LUTError.malformedCube(line: domainLine, text: "DOMAIN_MAX must exceed DOMAIN_MIN on each channel")
+        }
+        return lut
     }
 
     public func cubeText(title: String) -> String {
-        var out = "TITLE \"\(title)\"\nLUT_3D_SIZE \(size)\n"
+        var out = "TITLE \"\(title)\"\n"
+        if domainMin != .zero || domainMax != SIMD3(repeating: 1) {
+            out += "DOMAIN_MIN \(domainMin.x) \(domainMin.y) \(domainMin.z)\n"
+            out += "DOMAIN_MAX \(domainMax.x) \(domainMax.y) \(domainMax.z)\n"
+        }
+        out += "LUT_3D_SIZE \(size)\n"
         out.reserveCapacity(size * size * size * 30)
         for i in stride(from: 0, to: values.count, by: 3) {
             out += String(format: "%.6f %.6f %.6f\n", values[i], values[i + 1], values[i + 2])
@@ -240,6 +266,7 @@ public struct LUT3D: Sendable {
 
     /// The table in the `.lut3d` layout, the same bytes `argent-bake` writes.
     public func binaryData() -> Data {
+        let values = unitDomainValues()
         var out = Data(capacity: Self.binaryHeaderLength + values.count * MemoryLayout<Float>.size)
         out.append(Self.binaryMagic)
         out.append(littleEndianBytes(Self.binaryVersion))
@@ -269,6 +296,7 @@ public struct LUT3D: Sendable {
             throw LUTError.wrongEntryCount(expected: size * size * size, found: values.count / 3)
         }
         try Self.validateValues(values)
+        let values = unitDomainValues()
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = .type3D
         descriptor.pixelFormat = .rgba16Float
@@ -302,10 +330,35 @@ public struct LUT3D: Sendable {
 
     // MARK: CPU reference
 
+    private func unitDomainValues() -> [Float] {
+        guard domainMin != .zero || domainMax != SIMD3(repeating: 1) else { return values }
+        return Self.gridValues(size: size) { sample(encoded: $0) }
+    }
+
+    static func gridValues(size: Int, transform: (SIMD3<Float>) -> SIMD3<Float>) -> [Float] {
+        var values = [Float]()
+        values.reserveCapacity(size * size * size * 3)
+        let scale = Float(size - 1)
+        for b in 0..<size { for g in 0..<size { for r in 0..<size {
+            let result = transform(SIMD3(Float(r), Float(g), Float(b)) / scale)
+            values.append(result.x); values.append(result.y); values.append(result.z)
+        } } }
+        return values
+    }
+
     /// Tetrahedral sample on the CPU, the reference the GPU tests compare against.
     public func sample(encoded: SIMD3<Float>) -> SIMD3<Float> {
+        sample(encoded: encoded, trilinear: false)
+    }
+
+    func sampleTrilinear(encoded: SIMD3<Float>) -> SIMD3<Float> {
+        sample(encoded: encoded, trilinear: true)
+    }
+
+    private func sample(encoded: SIMD3<Float>, trilinear: Bool) -> SIMD3<Float> {
         let n = size
-        let p = encoded.clamped(lowerBound: .zero, upperBound: SIMD3<Float>(repeating: 1)) * Float(n - 1)
+        let input = encoded.clamped(lowerBound: domainMin, upperBound: domainMax)
+        let p = ((input - domainMin) / (domainMax - domainMin)) * Float(n - 1)
         var i0 = SIMD3<Int>(Int(p.x), Int(p.y), Int(p.z))
         i0 = i0.clamped(lowerBound: .zero, upperBound: SIMD3<Int>(repeating: n - 2))
         let i1 = i0 &+ 1
@@ -316,6 +369,14 @@ public struct LUT3D: Sendable {
         }
         let c000 = fetch(i0.x, i0.y, i0.z)
         let c111 = fetch(i1.x, i1.y, i1.z)
+        if trilinear {
+            func mix(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ t: Float) -> SIMD3<Float> { (1 - t) * a + t * b }
+            let low0 = mix(c000, fetch(i1.x, i0.y, i0.z), f.x)
+            let low1 = mix(fetch(i0.x, i1.y, i0.z), fetch(i1.x, i1.y, i0.z), f.x)
+            let high0 = mix(fetch(i0.x, i0.y, i1.z), fetch(i1.x, i0.y, i1.z), f.x)
+            let high1 = mix(fetch(i0.x, i1.y, i1.z), c111, f.x)
+            return mix(mix(low0, low1, f.y), mix(high0, high1, f.y), f.z)
+        }
         if f.x > f.y {
             if f.y > f.z {
                 return (1 - f.x) * c000 + (f.x - f.y) * fetch(i1.x, i0.y, i0.z) + (f.y - f.z) * fetch(i1.x, i1.y, i0.z) + f.z * c111
