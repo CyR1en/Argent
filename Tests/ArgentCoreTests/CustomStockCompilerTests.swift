@@ -84,6 +84,20 @@ import Testing
         #expect(throws: StockError.self) { try compile(spec) }
     }
 
+    @Test func bakedExposureMovesTheInputDomainInBothDirections() throws {
+        let foundation = try compile(.init())
+        let encoding = foundation.negative.encoding
+        for (ev, input) in [(Float(2), encoding.decode(0) * 0.5), (-2, encoding.decode(1) * 2)] {
+            let edit = try ManualAdjustments(exposureEV: ev)
+            let manual = try ManualRenderSettings(adjustments: edit, referenceStops: 0)
+            let spec = try CustomStockSpec(baking: foundation, settings: .init(manual: manual))
+            let baked = try compile(spec, base: foundation)
+            let expected = foundation.negativeAmounts(exposed: SIMD3(repeating: input * exp2(ev)), filter: .none)
+            let actual = baked.negativeAmounts(exposed: SIMD3(repeating: input), filter: .none)
+            #expect(abs(actual.x - expected.x) < 1e-5)
+        }
+    }
+
     @Test func bakeCarriesLightCurvesPresenceAndFilmSettings() throws {
         let foundation = try compile(.init())
         let curves = try ToneCurves(tone: ChannelCurve(points: [
@@ -95,7 +109,8 @@ import Testing
         let spec = try CustomStockSpec(baking: foundation, settings: settings)
         let baked = try compile(spec, base: foundation)
         #expect(spec.toneCurve == curves)
-        #expect(baked.negative.values != foundation.negative.values)
+        let gray = SIMD3<Float>(repeating: 0.18)
+        #expect(baked.negativeAmounts(exposed: gray, filter: .none) != foundation.negativeAmounts(exposed: gray, filter: .none))
         #expect(baked.print.values != foundation.print.values)
         #expect(baked.scenePresence?.clarity == 16)
         #expect(baked.scenePresence?.saturation == 0)

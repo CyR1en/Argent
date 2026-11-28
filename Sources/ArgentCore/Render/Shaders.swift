@@ -263,12 +263,13 @@ enum ShaderSource {
     // 1 = logMax stops above. Matches LogEncoding in LUT3D.swift. exposureStops
     // shifts the negative's exposure before encoding, which is how Rated at arrives.
     static inline float3 encode_log(float3 linear, constant LUTParams &p) {
+        float floor = min(1e-6f, p.midGray * exp2(p.logMin));
         if (p.silverR > 0.0f) {
-            float gray = max(dot(compress_scene_gamut(linear), float3(p.silverR, p.silverG, p.silverB)), 1e-6f);
+            float gray = max(dot(compress_scene_gamut(linear), float3(p.silverR, p.silverG, p.silverB)), floor);
             float stops = log2(gray / p.midGray) + p.exposureStops;
             return float3(saturate((stops - p.logMin) / (p.logMax - p.logMin)));
         }
-        float3 v = max(compress_scene_gamut(linear), float3(1e-6f));
+        float3 v = max(compress_scene_gamut(linear), float3(floor));
         float3 stops = log2(v / p.midGray) + p.exposureStops;
         return saturate((stops - p.logMin) / (p.logMax - p.logMin));
     }

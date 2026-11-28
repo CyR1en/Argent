@@ -36,13 +36,14 @@ public enum CustomStockCompiler {
         let rating = settings.exposureStops(boxSpeed: foundation?.boxSpeed ?? spec.boxSpeed)
         let tables = try foundation.flatMap { try manual.toneTables(stock: $0, settings: settings) }
         let sceneParameters = try manual.parameters(tables: tables)
+        let inputEncoding = negativeInputEncoding(encoding, scene: sceneParameters, tables: tables, rating: rating)
         let printParameters = try manual.parameters
         let presence = manual.adjustments.presence
         let printPresence = presence.acts(in: .print)
             ? try PresencePrint.parameters(presence, constants: PresenceConstants.required(presence.version), stockID: foundation?.id ?? id)
             : .bypass
         let negativeSample: (SIMD3<Float>) -> SIMD3<Float> = { input in
-            let scene = SIMD3(encoding.decode(input.x), encoding.decode(input.y), encoding.decode(input.z))
+            let scene = SIMD3(inputEncoding.decode(input.x), inputEncoding.decode(input.y), inputEncoding.decode(input.z))
             let adjusted = manual.applyingScene(to: scene, baseLog2: ManualRenderSettings.guideLog2(scene),
                                                tables: tables, parameters: sceneParameters)
             let exposed = adjusted * exp2(rating)
@@ -53,7 +54,7 @@ public enum CustomStockCompiler {
             return layer.sample(encoded: SIMD3(encoding.encode(exposed.x), encoding.encode(exposed.y), encoding.encode(exposed.z)))
         }
         let negative = weights != nil || sceneParameters.sceneActive != 0 || rating != 0
-            ? try makeLUT(size: size, encoding: encoding, sample: negativeSample) : layer
+            ? try makeLUT(size: size, encoding: inputEncoding, sample: negativeSample) : layer
         let finish = Finish(spec)
         let printSample: (SIMD3<Float>) -> SIMD3<Float> = { input in
             var dye = input + offset
@@ -73,7 +74,7 @@ public enum CustomStockCompiler {
         }
         let print = try makeLUT(size: size, sample: printSample)
         let daylight = Float(0.18)
-        let mid = SIMD3<Float>(repeating: encoding.encode(daylight))
+        let mid = SIMD3<Float>(repeating: negative.encoding.encode(daylight))
         let dye = negative.sample(encoded: mid)
         let calibrated = analytical ? exposureCalibration(print: print, at: dye, densityRange: densityRange, sample: printSample) : exposures
         let scenePresence = try Presence(
@@ -96,6 +97,25 @@ public enum CustomStockCompiler {
     }
 
     private static let luma = SIMD3<Float>(0.2627, 0.6780, 0.0593)
+
+    private static func negativeInputEncoding(_ source: LogEncoding, scene: ManualCurveParameters,
+                                              tables: ManualToneTables?, rating: Float) -> LogEncoding {
+        let shift = log2(scene.exposureGain) + rating
+        let low: Float
+        let high: Float
+        if let tables {
+            low = min(0, tables.local.min() ?? 0) + min(0, tables.global.min() ?? 0)
+            high = tables.maximumGain
+        } else {
+            low = min(0, scene.shadows) + min(0, scene.highlights)
+            high = max(0, scene.shadows) + max(0, scene.highlights)
+        }
+        // Invert the baked gain before setting the input limits: the renderer clips
+        // to this domain before looking up the now-re-exposed foundation negative.
+        return LogEncoding(stopsBelowMidGray: source.stopsBelowMidGray + shift + high,
+                           stopsAboveMidGray: source.stopsAboveMidGray - shift - low,
+                           midGray: source.midGray)
+    }
 
     private static func makeLUT(size: Int, encoding: LogEncoding = .init(),
                                 sample: (SIMD3<Float>) -> SIMD3<Float>) throws -> LUT3D {
