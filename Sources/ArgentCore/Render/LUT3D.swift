@@ -45,6 +45,8 @@ public struct LUTParams: Sendable {
     var silverR: Float = 0
     var silverG: Float = 0
     var silverB: Float = 0
+    var domainMin: SIMD4<Float> = .zero
+    var domainMax = SIMD4<Float>(repeating: 1)
 }
 
 public enum LUTError: Error, CustomStringConvertible {
@@ -55,6 +57,7 @@ public enum LUTError: Error, CustomStringConvertible {
     case unsupportedBinaryVersion(UInt32)
     case wrongBinaryLength(expected: Int, found: Int)
     case invalidValue(index: Int, value: Float)
+    case invalidDomain
 
     public var description: String {
         switch self {
@@ -62,10 +65,12 @@ public enum LUTError: Error, CustomStringConvertible {
         case .malformedCube(let line, let text): return "Malformed .cube at line \(line): \(text)"
         case .wrongEntryCount(let e, let f): return ".cube has \(f) entries but LUT_3D_SIZE implies \(e)."
         case .badBinaryMagic: return "Not a .lut3d file: the first eight bytes are not ARGLUT3D."
-        case .unsupportedBinaryVersion(let v): return ".lut3d version \(v) is not supported; this build reads version 1."
+        case .unsupportedBinaryVersion(let v): return ".lut3d version \(v) is not supported; this build reads versions 1 and 2."
         case .wrongBinaryLength(let e, let f): return ".lut3d is \(f) bytes but its header implies \(e)."
         case .invalidValue(let index, let value):
             return "LUT value \(index) (\(value)) is not finite in the renderer's half-float storage."
+        case .invalidDomain:
+            return "LUT domain bounds must be finite, with a positive finite range on each channel."
         }
     }
 }
@@ -98,7 +103,8 @@ public struct LUT3D: Sendable {
 
     public var params: LUTParams {
         LUTParams(logMin: -encoding.stopsBelowMidGray, logMax: encoding.stopsAboveMidGray,
-                  midGray: encoding.midGray, lutSize: UInt32(size))
+                  midGray: encoding.midGray, lutSize: UInt32(size),
+                  domainMin: SIMD4(domainMin, 0), domainMax: SIMD4(domainMax, 1))
     }
 
     // MARK: Generators
@@ -211,8 +217,7 @@ public struct LUT3D: Sendable {
         var lut = try LUT3D(size: size, encoding: encoding, values: values)
         lut.domainMin = minimum ?? .zero
         lut.domainMax = maximum ?? SIMD3(repeating: 1)
-        let span = lut.domainMax - lut.domainMin
-        guard span.indices.allSatisfy({ span[$0].isFinite && span[$0] > 0 }) else {
+        guard Self.isValidDomain(min: lut.domainMin, max: lut.domainMax) else {
             throw LUTError.malformedCube(line: domainLine, text: "DOMAIN_MAX must exceed DOMAIN_MIN on each channel")
         }
         return lut
@@ -238,11 +243,12 @@ public struct LUT3D: Sendable {
     ///
     /// Little-endian throughout: eight ASCII bytes `ARGLUT3D`, a uint32 version (1), a
     /// uint32 size (2 to 128), then size cubed times three float32 values in `.cube` order,
-    /// red fastest, R G B per node. No trailer and no padding, so the length is fixed by the
-    /// header. Parsing is a copy, where a 65 cubed `.cube` costs a few hundred milliseconds
+    /// red fastest, R G B per node. Version 2 appends six Float32 values (RGB minima and
+    /// then RGB maxima) for non-unit domains. Parsing is a copy, where a 65 cubed `.cube` costs a few hundred milliseconds
     /// of text scanning.
     public static let binaryMagic = Data("ARGLUT3D".utf8)
     public static let binaryVersion: UInt32 = 1
+    private static let domainBinaryVersion: UInt32 = 2
     private static let binaryHeaderLength = 16
 
     public static func parseBinary(_ data: Data, encoding: LogEncoding = LogEncoding()) throws -> LUT3D {
@@ -250,16 +256,18 @@ public struct LUT3D: Sendable {
             throw LUTError.badBinaryMagic
         }
         let version = readLittleEndianUInt32(data, at: 8)
-        guard version == binaryVersion else { throw LUTError.unsupportedBinaryVersion(version) }
+        let hasDomain = version == domainBinaryVersion
+        guard version == binaryVersion || hasDomain else { throw LUTError.unsupportedBinaryVersion(version) }
         let size = Int(readLittleEndianUInt32(data, at: 12))
         guard (2...128).contains(size) else { throw LUTError.badSize(size) }
         let count = size * size * size * 3
-        let expected = binaryHeaderLength + count * MemoryLayout<Float>.size
+        let payloadEnd = binaryHeaderLength + count * MemoryLayout<Float>.size
+        let expected = payloadEnd + (hasDomain ? 6 * MemoryLayout<Float>.size : 0)
         guard data.count == expected else { throw LUTError.wrongBinaryLength(expected: expected, found: data.count) }
 
         let values = [Float](unsafeUninitializedCapacity: count) { buffer, initialized in
             data.withUnsafeBytes { bytes in
-                let payload = UnsafeRawBufferPointer(rebasing: bytes[binaryHeaderLength...])
+                let payload = UnsafeRawBufferPointer(rebasing: bytes[binaryHeaderLength..<payloadEnd])
                 if hostIsLittleEndian {
                     UnsafeMutableRawBufferPointer(buffer).copyMemory(from: payload)
                 } else {
@@ -271,20 +279,34 @@ public struct LUT3D: Sendable {
             }
             initialized = count
         }
-        return try LUT3D(size: size, encoding: encoding, values: values)
+        var lut = try LUT3D(size: size, encoding: encoding, values: values)
+        if hasDomain {
+            func component(_ index: Int) -> Float {
+                Float(bitPattern: readLittleEndianUInt32(data, at: payloadEnd + index * MemoryLayout<Float>.size))
+            }
+            lut.domainMin = SIMD3(component(0), component(1), component(2))
+            lut.domainMax = SIMD3(component(3), component(4), component(5))
+            guard isValidDomain(min: lut.domainMin, max: lut.domainMax) else { throw LUTError.invalidDomain }
+        }
+        return lut
     }
 
     /// The table in the `.lut3d` layout, the same bytes `argent-bake` writes.
     public func binaryData() -> Data {
-        let values = unitDomainValues()
-        var out = Data(capacity: Self.binaryHeaderLength + values.count * MemoryLayout<Float>.size)
+        let hasDomain = domainMin != .zero || domainMax != SIMD3(repeating: 1)
+        var out = Data(capacity: Self.binaryHeaderLength + (values.count + (hasDomain ? 6 : 0)) * MemoryLayout<Float>.size)
         out.append(Self.binaryMagic)
-        out.append(littleEndianBytes(Self.binaryVersion))
+        out.append(littleEndianBytes(hasDomain ? Self.domainBinaryVersion : Self.binaryVersion))
         out.append(littleEndianBytes(UInt32(size)))
         if hostIsLittleEndian {
             values.withUnsafeBytes { out.append(contentsOf: $0) }
         } else {
             for value in values { out.append(littleEndianBytes(value.bitPattern)) }
+        }
+        if hasDomain {
+            for domain in [domainMin, domainMax] {
+                for channel in domain.indices { out.append(littleEndianBytes(domain[channel].bitPattern)) }
+            }
         }
         return out
     }
@@ -306,7 +328,6 @@ public struct LUT3D: Sendable {
             throw LUTError.wrongEntryCount(expected: size * size * size, found: values.count / 3)
         }
         try Self.validateValues(values)
-        let values = unitDomainValues()
         let descriptor = MTLTextureDescriptor()
         descriptor.textureType = .type3D
         descriptor.pixelFormat = .rgba16Float
@@ -340,9 +361,9 @@ public struct LUT3D: Sendable {
 
     // MARK: CPU reference
 
-    private func unitDomainValues() -> [Float] {
-        guard domainMin != .zero || domainMax != SIMD3(repeating: 1) else { return values }
-        return Self.gridValues(size: size) { sample(encoded: $0) }
+    private static func isValidDomain(min: SIMD3<Float>, max: SIMD3<Float>) -> Bool {
+        let span = max - min
+        return span.indices.allSatisfy { span[$0].isFinite && span[$0] > 0 }
     }
 
     static func gridValues(size: Int, transform: (SIMD3<Float>) -> SIMD3<Float>) -> [Float] {

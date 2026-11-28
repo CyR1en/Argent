@@ -44,6 +44,9 @@ import Testing
         #expect(roundTrip.domainMax == SIMD3(1, 0.75, 2))
         let binary = try LUT3D.parseBinary(lut.binaryData())
         #expect(binary.sample(encoded: SIMD3(0.5, 0, 1)) == SIMD3(0.75, 0, 0.5))
+        #expect(binary.values == lut.values)
+        #expect(binary.sample(encoded: SIMD3(0, 0.125, 1)) == SIMD3(0.5, 0, 0.5))
+        #expect(binary.sample(encoded: SIMD3(0, 0.375, 1)) == SIMD3(0.5, 0.25, 0.5))
     }
 
     @Test(arguments: ["DOMAIN_MIN 0 0", "DOMAIN_MAX 0 1 1", "DOMAIN_MAX 1 -1 1",
@@ -201,8 +204,14 @@ import Testing
         #expect(throws: LUTError.self) { try LUT3D.parseBinary(badMagic) }
 
         var badVersion = good
-        badVersion[8] = 2
+        badVersion[8] = 3
         #expect(throws: LUTError.self) { try LUT3D.parseBinary(badVersion) }
+        var missingDomain = good
+        missingDomain[8] = 2
+        #expect(throws: LUTError.self) { try LUT3D.parseBinary(missingDomain) }
+        #expect(throws: LUTError.self) {
+            try LUT3D.parseBinary(missingDomain + Data(repeating: 0, count: 24))
+        }
 
         var badSize = good
         badSize[12] = 1
@@ -216,10 +225,14 @@ import Testing
 }
 
 @Suite struct LUTPassGPUTests {
-    @Test func identityLUTReturnsLogEncodedInput() throws {
+    @Test(arguments: [false, true])
+    func identityLUTReturnsLogEncodedInput(customDomain: Bool) throws {
         let gpu = try GPU()
         let pass = try LUTPass(gpu: gpu)
-        let lut = LUT3D.identity(size: 17)
+        let identity = LUT3D.identity(size: 17)
+        let lut = customDomain
+            ? try LUT3D.parseCube("DOMAIN_MIN 0.143 0.11 0.19\nDOMAIN_MAX 0.66 0.85 0.74\n" + identity.cubeText(title: "identity"))
+            : identity
         let lutTexture = try lut.makeTexture(device: gpu.device)
 
         let samples: [Float] = [0.001, 0.01, 0.05, 0.18, 0.5, 1, 2, 4, 8, 0, 0.18, 0.18, 0.3, 0.6, 0.9, 1.2]
@@ -244,9 +257,10 @@ import Testing
             output.texture.getBytes(buffer.baseAddress!, bytesPerRow: 4 * 8, from: MTLRegionMake2D(0, 0, 4, 4), mipmapLevel: 0)
         }
         for i in 0..<16 {
-            let expected = lut.encoding.encode(Float(Float16(samples[i])))
-            #expect(abs(Float(result[i * 4]) - expected) < 0.01, "sample \(samples[i])")
-            #expect(abs(Float(result[i * 4 + 2]) - expected) < 0.01, "sample \(samples[i]) blue")
+            let encoded = lut.encoding.encode(Float(Float16(samples[i])))
+            let expected = lut.sample(encoded: SIMD3(repeating: encoded))
+            #expect(abs(Float(result[i * 4]) - expected.x) < 0.01, "sample \(samples[i])")
+            #expect(abs(Float(result[i * 4 + 2]) - expected.z) < 0.01, "sample \(samples[i]) blue")
         }
     }
 }

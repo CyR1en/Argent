@@ -37,7 +37,9 @@ import Testing
                       densityRange: 3, negative: lut, print: lut).write(to: source)
             for stage in ["negative", "print"] {
                 try FileManager.default.removeItem(at: source.appendingPathComponent("\(stage).lut3d"))
-                try lut.cubeText(title: stage).write(to: source.appendingPathComponent("\(stage).cube"), atomically: true, encoding: .utf8)
+                let domain = stage == "print" ? "DOMAIN_MIN 0.2 0.3 0.1\n" : ""
+                try (domain + lut.cubeText(title: stage)).write(to: source.appendingPathComponent("\(stage).cube"),
+                                                              atomically: true, encoding: .utf8)
             }
             let store = UserStockStore(folder: root.appendingPathComponent("Stocks"))
             let stock = try store.importStock(from: source, excluding: ["user-neutral-copy"])
@@ -45,7 +47,10 @@ import Testing
             #expect(stock.origin == .userImported && !stock.hasSpec)
             let installed = try store.stockDirectory(for: stock.id)
             #expect(FileManager.default.fileExists(atPath: installed.appendingPathComponent("print.lut3d").path))
-            #expect(stock.print.sample(encoded: SIMD3(0.5, 0.25, 0.75)) == SIMD3(0.5, 0.25, 0.75))
+            let sample = stock.print.sample(encoded: SIMD3(0.6, 0.25, 0.55))
+            #expect(abs(sample.x - 0.5) < 1e-6)
+            #expect(sample.y == 0)
+            #expect(abs(sample.z - 0.5) < 1e-6)
         }
     }
 

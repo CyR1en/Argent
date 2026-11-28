@@ -221,6 +221,8 @@ public final class FilmRenderer {
         var printParams = PrintParams(offset: settings.printOffset(densityRange: stock.densityRange,
                                                                    exposurePerUnit: stock.exposurePerUnit),
                                       lutSize: stock.print.size)
+        printParams.domainMin = SIMD4(stock.print.domainMin, 0)
+        printParams.domainMax = SIMD4(stock.print.domainMax, 1)
         if let monochrome = stock.monochrome {
             let weights = monochrome.weights(for: settings.monochromeFilter)
             negativeParams.silverR = weights.x
