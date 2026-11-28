@@ -11,9 +11,11 @@ struct SavePresetSheet: View {
     @State private var parts = PresetParts.all
     @State private var hasColor = false
     @State private var color = Color.accentColor
+    @State private var bakeToStock = false
     @State private var error: String?
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canBake: Bool { model.canMakeBakedStock(from: frame) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -23,21 +25,28 @@ struct SavePresetSheet: View {
                 Toggle("Tag color", isOn: $hasColor)
                 if hasColor { ColorPicker("Tag color", selection: $color, supportsOpacity: false).labelsHidden() }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Include").font(.headline)
-                part("Base Stock", .stock)
-                part("Film Settings", .filmControls)
-                part("Light", .light)
-                part("Presence", .presence)
-                part("Curves", .curves)
+            Toggle("Bake to Custom Stock", isOn: $bakeToStock)
+                .disabled(!canBake)
+            if bakeToStock {
+                Text("Opens the Stock Builder with this frame’s global look. Local edits and lens corrections are not baked in.")
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Include").font(.headline)
+                    part("Base Stock", .stock)
+                    part("Film Settings", .filmControls)
+                    part("Light", .light)
+                    part("Presence", .presence)
+                    part("Curves", .curves)
+                }
+                Text("Masks, removals and lens corrections are not saved.").foregroundStyle(.secondary)
             }
-            Text("Masks, removals and lens corrections are not saved.").foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save") { save() }.keyboardShortcut(.defaultAction)
-                    .disabled(trimmedName.isEmpty || parts.isEmpty || !model.canSavePreset(from: frame))
+                Button(bakeToStock ? "Continue…" : "Save") { save() }.keyboardShortcut(.defaultAction)
+                    .disabled(trimmedName.isEmpty || (bakeToStock ? !canBake : parts.isEmpty || !model.canSavePreset(from: frame)))
             }
         }
         .padding(24)
@@ -56,8 +65,13 @@ struct SavePresetSheet: View {
             [$0.redComponent, $0.greenComponent, $0.blueComponent].map { Float(min(max($0, 0), 1)) }
         } : nil
         do {
-            try store.save(model.makePreset(from: frame, name: trimmedName, includedParts: parts, canisterColor: rgb))
-            dismiss()
+            if bakeToStock {
+                try model.bakePresetAsStock(from: frame, name: trimmedName, canisterColor: rgb)
+            } else {
+                try store.save(model.makePreset(from: frame, name: trimmedName, includedParts: parts, canisterColor: rgb))
+                model.reloadLookPresets()
+                dismiss()
+            }
         } catch {
             self.error = error.localizedDescription
         }

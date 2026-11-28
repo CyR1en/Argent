@@ -30,7 +30,8 @@ import Testing
             flagStore: FlagStore(library: fixture.library),
             recipeLibrary: fixture.library,
             previewCache: fixture.folder.appendingPathComponent("Linear Previews"),
-            digestsFile: nil
+            digestsFile: nil,
+            presetStore: PresetStore(folder: fixture.folder.appendingPathComponent("Presets", isDirectory: true))
         )
         fixture.made.models.append(model)
         return model
@@ -133,6 +134,156 @@ import Testing
             #expect(model.currentStock?.id == "user-amber")
             #expect(model.missingRollStockID == nil)
             #expect(model.missingStockNotice == nil)
+        }
+    }
+
+    @Test func customImportsDoNotTakeAnUnusedBuiltInDigit() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let userStocks = fixture.folder.appendingPathComponent("UserStocks", isDirectory: true)
+            let model = Self.makeModel(fixture: fixture, userStocks: userStocks)
+            await model.open(fixture.roll)
+            let builtIn = try #require(model.films?.stocks.first)
+            let unusedDigit = model.builtInStockIndices.count + 1
+            try #require(unusedDigit <= 9)
+            let custom = Self.makeCustomStock(id: "user-amber", displayName: "Amber")
+            try #require(model.userStockStore).install(custom)
+            model.reloadUserStocks()
+            let customIndex = try #require(model.films?.stocks.firstIndex { $0.id == custom.id })
+            #expect(model.stockDigit(for: customIndex) == nil)
+            model.digitPressed(unusedDigit)
+            #expect(model.currentStock?.id == builtIn.id)
+            model.selectStock(customIndex)
+            model.digitPressed(1)
+            #expect(model.currentStock?.id == builtIn.id)
+        }
+    }
+
+    @Test func openingPresetImportsItAndBakingDoesNotSaveAnotherPreset() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let source = UserPreset(name: "Soft", canisterColor: [0.2, 0.3, 0.4], includedParts: .light)
+            let url = try sourceStore.save(source)
+            #expect(model.open([url]))
+            #expect(model.lookPresets.map(\.id) == [source.id])
+            #expect(model.lookPresets.first?.tagTint?.components == source.canisterColor)
+            guard case .library(_, let selection, false) = model.presetPresentation else {
+                Issue.record("Opening a preset should show it in the library.")
+                return
+            }
+            #expect(selection == source.id)
+            #expect(model.isSheetShown && model.menuState.isSheetShown)
+            model.presetPresentation = nil
+
+            await model.open(fixture.roll)
+            let frame = try #require(model.roll?.frames.first)
+            model.manualLoaded.insert(frame.url)
+            model.showSavePreset(from: frame)
+            #expect(!model.canBakeFrameAsStock(frame) && model.canMakeBakedStock(from: frame))
+            try model.bakePresetAsStock(from: frame, name: "Soft Stock", canisterColor: source.canisterColor)
+            guard case .builder(let builder) = model.presetPresentation else {
+                Issue.record("Baking from the save sheet should open the builder.")
+                return
+            }
+            #expect(builder.name == "Soft Stock")
+            #expect(builder.spec.canisterColor == source.canisterColor)
+            #expect(builder.spec.frameLook != nil)
+            #expect(try model.presetStore.loadAll().presets.map(\.id) == [source.id])
+        }
+    }
+
+    @Test func openingMultiplePresetsImportsEveryFileEvenIfOneAlreadyExists() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let first = UserPreset(name: "First")
+            let duplicate = UserPreset(name: "Duplicate")
+            let last = UserPreset(name: "Last")
+            try model.presetStore.save(duplicate)
+            let urls = try [first, duplicate, last].map { try sourceStore.save($0) }
+            #expect(model.open(urls))
+            #expect(Set(model.lookPresets.map(\.id)) == Set([first.id, duplicate.id, last.id]))
+            guard case .library(_, let selection, _) = model.presetPresentation else {
+                Issue.record("A partially successful batch should show the library.")
+                return
+            }
+            #expect(selection == first.id)
+            #expect(model.presetDocumentImportError?.contains("Duplicate") == true)
+        }
+    }
+
+    @Test func openingASecondPresetWhileTheLibraryIsOpenUpdatesIt() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let first = UserPreset(name: "First")
+            let second = UserPreset(name: "Second")
+            let firstURL = try sourceStore.save(first)
+            let secondURL = try sourceStore.save(second)
+            #expect(model.open([firstURL]))
+            #expect(model.isSheetShown && !model.canShowPresetLibrary)
+            #expect(model.open([firstURL, secondURL]))
+            #expect(model.lookPresets.map(\.id) == [first.id, second.id])
+            #expect(model.presetDocumentImportError?.contains("First") == true)
+            guard case .library(_, let selection, _) = model.presetPresentation else {
+                Issue.record("The library should remain open while importing.")
+                return
+            }
+            #expect(selection == first.id)
+        }
+    }
+
+    @Test func openingPresetTargetsOnlyTheVisibleRollSelection() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            await model.open(fixture.roll)
+            let frame = try #require(model.roll?.frames.first)
+            model.select(frame)
+            for page in [WorkspacePage.roll, .settings, .rolls] {
+                model.showWorkspacePage(page)
+                try #require(model.workspacePage == page)
+                try #require(model.selectedFrames == [frame])
+                let source = UserPreset(name: "New Preset")
+                let url = try sourceStore.save(source)
+                #expect(model.open([url]))
+                guard case .library(let targets, _, _) = model.presetPresentation else {
+                    Issue.record("Opening a preset should show the library.")
+                    return
+                }
+                #expect(targets == (page == .roll ? [frame] : []))
+                model.presetPresentation = nil
+            }
+        }
+    }
+
+    @Test func mixedStockDropKeepsRejectedPresetErrorOnTheStockSheet() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let preset = UserPreset(name: "Already Installed")
+            let presetURL = try model.presetStore.save(preset)
+            let newPreset = UserPreset(name: "New Preset")
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            let newURL = try sourceStore.save(newPreset)
+            let stockURL = fixture.folder.appendingPathComponent("Look.cube")
+            model.showWorkspacePage(.settings)
+            #expect(model.open([stockURL, presetURL, newURL]))
+            #expect(model.stockImportSource?.url == stockURL)
+            #expect(model.presetPresentation == nil)
+            #expect(model.presetDocumentImportError?.contains(preset.name) == true)
+
+            model.stockImportSource = nil
+            model.showPresetsAfterStockImport()
+            guard case .library(let targets, let selection, _) = model.presetPresentation else {
+                Issue.record("A mixed drop should show the imported preset after the stock sheet closes.")
+                return
+            }
+            #expect(targets.isEmpty && selection == newPreset.id)
+            #expect(model.presetDocumentImportError?.contains(preset.name) == true)
+
+            model.presetPresentation = nil
+            #expect(model.open([stockURL]))
+            #expect(model.presetDocumentImportError == nil)
         }
     }
 

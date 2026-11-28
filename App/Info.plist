@@ -30,6 +30,18 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Argent Preset</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>camera.argent.preset</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>Cube LUT</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -43,6 +55,23 @@
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>camera.argent.preset</string>
+			<key>UTTypeDescription</key>
+			<string>Argent Preset</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>argentpreset</string>
+				</array>
+			</dict>
+		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
 			<string>camera.argent.stock</string>

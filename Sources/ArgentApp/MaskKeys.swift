@@ -411,10 +411,20 @@ extension RollModel {
     /// A digit, from Flow's item or Stock's: Flow with the brush in hand, else the stock, asked of the live tool whichever item the
     /// menu's last state let fire (P0-S2 item 7). 0 has no stock.
     func digitPressed(_ digit: Int) {
+        guard !isSheetShown else { return }
         if maskEditor.tool == .brush {
             stepBrush { $0.flow(digit: digit) }
-        } else if (1...9).contains(digit), stockNames.indices.contains(digit - 1), workspacePage == .roll {
-            selectStock(digit - 1)
+        } else if (1...9).contains(digit), let index = builtInStockIndices[safe: digit - 1], workspacePage == .roll {
+            selectStock(index)
         }
+    }
+
+    var builtInStockIndices: [Int] {
+        let stocks = installedStocks
+        return stocks.indices.filter { !stocks[$0].isUserStock }
+    }
+
+    func stockDigit(for index: Int) -> Int? {
+        builtInStockIndices.prefix(9).firstIndex(of: index).map { $0 + 1 }
     }
 }

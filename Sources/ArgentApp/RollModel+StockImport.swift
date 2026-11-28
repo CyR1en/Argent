@@ -25,7 +25,7 @@ struct StockImportSource: Identifiable {
 
 extension RollModel {
     func chooseStockImport() {
-        guard !isSheetShown, presetPresentation == nil, userStockStore != nil, !isQuitting else { return }
+        guard canShowStockBuilder else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.allowedContentTypes = [.argentStock, .cubeLUT, UTType(filenameExtension: "cube") ?? .cubeLUT]
@@ -42,14 +42,19 @@ extension RollModel {
 
     @discardableResult
     func presentStockImport(_ source: StockImportSource) -> Bool {
-        guard !isSheetShown, presetPresentation == nil, userStockStore != nil, !isQuitting else { return false }
+        guard canShowStockBuilder else { return false }
+        presetDocumentImportError = nil
         stockImportSource = source
         return true
     }
 
     func chooseStockExport() {
-        guard !isSheetShown, presetPresentation == nil, !isQuitting, let store = userStockStore,
-              let stock = shownStock, stock.isUserStock else { return }
+        guard !isSheetShown, let stock = shownStock else { return }
+        chooseStockExport(stock)
+    }
+
+    func chooseStockExport(_ stock: Stock) {
+        guard !isQuitting, let store = userStockStore, stock.isUserStock else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.argentStock]
         panel.nameFieldStringValue = stock.displayName.replacingOccurrences(of: "/", with: "-") + ".argentstock"
@@ -66,6 +71,16 @@ extension RollModel {
                     self.message = "Could not export the stock: \(error.localizedDescription)"
                 }
             }
+        }
+    }
+
+    func deleteCustomStock(_ stock: Stock) {
+        guard !isQuitting, let store = userStockStore, stock.isUserStock else { return }
+        do {
+            try store.delete(id: stock.id)
+            reloadUserStocks()
+        } catch {
+            message = "Could not delete the stock: \(error.localizedDescription)"
         }
     }
 }

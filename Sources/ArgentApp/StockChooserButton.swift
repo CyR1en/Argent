@@ -32,7 +32,7 @@ struct StockChooserButton: View {
         .modifier(FrameOverrideIndicator(isOwn: isOwn))
         .disabled(model.stockNames.isEmpty)
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: isExpanded)
-        .help(Self.help(stockCount: model.stockNames.count, isFrame: frame != nil, isOwn: isOwn, roll: model.stockName))
+        .help(Self.help(stockCount: model.builtInStockIndices.count, isFrame: frame != nil, isOwn: isOwn, roll: model.stockName))
         .accessibilityLabel(frame == nil ? "Choose film stock" : "Choose film stock for this frame")
         .accessibilityValue((model.shownStockName ?? "None") + RollControlsView.ownership(ControlsScope(frame: frame), isOwn: isOwn)
                             + (isExpanded ? ", expanded" : ", collapsed"))
@@ -61,7 +61,7 @@ struct StockChooserButton: View {
     }
 }
 
-private struct FilmCanister: View {
+struct FilmCanister: View {
     let stockID: String?
     var canisterColor: Stock.CanisterColor? = nil
 
