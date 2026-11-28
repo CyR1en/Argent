@@ -102,36 +102,80 @@ import Testing
             try await AutoDecisionStateTests.open(fixture, in: model, through: gate)
             defer { AutoDecisionStateTests.close(model, gate) }
             let frames = try #require(model.roll?.frames)
-            let source = frames[0], target = frames[1]
+            let source = frames[0], target = frames[1], unchanged = frames[2]
             model.stockIndex = try #require(model.films?.stocks.firstIndex { $0.id == "toy" })
             let compressed = try #require(model.films?.stocks.firstIndex { $0.id == "compressed" })
             model.descriptors[target.url] = descriptor
+            model.descriptors[unchanged.url] = descriptor
             gate.openAll(frames)
             _ = try #require(await model.settledDecision())
             model.setStock(compressed, for: source)
+            model.setStock(compressed, for: unchanged)
             await model.prepareManualAdjustments(for: source)
             model.recordVisibleAutomatic(for: source, stock: compressed, aim: model.printAim(for: source),
                                          settings: model.settings(for: source, stock: compressed))
             model.setManualAdjustments(try ManualAdjustments(exposureEV: 0.5), for: source)
-            let oldAim = try #require(await model.settledDecision()?.aims[target.url])
-            #expect(model.manualEdits[target.url] == nil)
+            let before = try #require(await model.settledDecision())
+            let oldAim = try #require(before.aims[target.url])
+            let savedAim = try #require(before.aims[unchanged.url])
+            try #require(savedAim.burn > oldAim.burn)
+            #expect(model.manualEdits[target.url] == nil && model.manualEdits[unchanged.url] == nil)
+            model.descriptors[unchanged.url] = nil
 
             let report: PasteReport
             if usePreset {
                 let preset = model.makePreset(from: source, name: "Compressed", includedParts: [.stock, .light])
-                report = try #require(await model.applyPreset(preset, to: target)?.value)
+                report = try #require(await model.applyPreset(preset, to: [target, unchanged], batch: true)?.value)
             } else {
                 model.copyAdjustments(from: source)
                 let clipboard = try #require(model.adjustmentsClipboard)
-                report = try #require(await model.paste(clipboard, parts: .all, to: [target], batch: false)?.value)
+                report = try #require(await model.paste(clipboard, parts: .all, to: [target, unchanged], batch: true)?.value)
             }
 
-            #expect(report.pasted == [target.url])
+            #expect(report.pasted == [target.url, unchanged.url])
             let edit = try #require(model.manualEdits[target.url])
             let newAim = try #require(await model.settledDecision()?.aims[target.url])
             try #require(newAim.burn > oldAim.burn)
             #expect(edit.baseline.stockID == "compressed" && edit.baseline.origin == .auto)
             #expect(edit.baseline.aim == newAim)
+            #expect(model.manualEdits[unchanged.url]?.baseline.aim == savedAim)
+            try await model.flushManualSaves()
+        }
+    }
+
+    @Test func stockChangingPresetKeepsTheSavedAimWhileReopenedRollMeasurementsAreIncomplete() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            try AutoDecisionStateTests.writeToyStock("other", in: fixture.stocks)
+            let first = fixture.model(), gate = MeasurementGate()
+            try await AutoDecisionStateTests.open(fixture, in: first, through: gate)
+            let firstFrames = try #require(first.roll?.frames)
+            let stockID = try #require(first.currentStock?.id)
+            let newStockID = try #require(first.films?.stocks.first { $0.id != stockID }?.id)
+            gate.openAll(firstFrames)
+            let kept = try #require(await first.settledDecision())
+            await first.decisionSave?.value
+            AutoDecisionStateTests.close(first, gate)
+
+            let model = fixture.model(), waiting = MeasurementGate()
+            try await AutoDecisionStateTests.open(fixture, in: model, through: waiting)
+            defer { AutoDecisionStateTests.close(model, waiting) }
+            let frames = try #require(model.roll?.frames), target = frames[1]
+            let savedAim = try #require(kept.aims[target.url])
+            try #require(model.isBalanced && model.autoDecision?.revision == kept.revision)
+            try await waiting.waitUntilWaiting(for: frames.count)
+            let preset = UserPreset(name: "Other Stock", includedParts: [.stock, .light], baseStockID: newStockID,
+                                    adjustments: try ManualAdjustments(exposureEV: 0.5))
+            waiting.release(target.url)
+            let report = try #require(await model.applyPreset(preset, to: target)?.value)
+            #expect(report.pasted == [target.url])
+            try #require(model.analyses.count == 1)
+            let partialAim = try #require(RollSmoothing.aims(frames, analyses: model.analyses)[target.url])
+            try #require(partialAim.level != savedAim.level)
+            let edit = try #require(model.manualEdits[target.url])
+            #expect(edit.baseline.stockID == newStockID && edit.baseline.aim == savedAim)
+            waiting.openAll(frames)
+            let settled = try #require(await model.settledDecision())
+            #expect(settled.aims[target.url] == savedAim && model.manualEdits[target.url]?.baseline.aim == savedAim)
             try await model.flushManualSaves()
         }
     }
