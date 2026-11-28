@@ -123,11 +123,22 @@ import Testing
             #expect(reopened.missingStockReasons.count == 1)
             #expect(reopened.missingStockNotice?.contains("Velvet 200") == true)
 
+            // Frames following the missing roll stock cannot develop through the preview fallback.
+            let reopenedFirst = try #require(reopened.roll?.frames.first)
+            #expect(reopened.unavailableStockReason(for: reopenedFirst) != nil)
+
+            // Unrelated edits while previewing through fallback preserve the missing stock id in recipes.
+            reopened.setRatedAt(.oneStopUnder, for: reopenedFirst)
+            try await reopened.flushManualSaves()
+            let savedRecipe = RecipeStore.read(for: reopenedFirst, library: fixture.library)
+            #expect(savedRecipe?.stock.id == "user-velvet")
+
             // Choosing a stock explicitly clears the missing-stock state.
             let neutralIndex = try #require(reopened.films?.stocks.firstIndex(where: { $0.id == "argent-neutral" }))
             reopened.selectStock(neutralIndex)
             #expect(reopened.missingRollStockID == nil)
             #expect(reopened.missingStockNotice == nil)
+            #expect(reopened.unavailableStockReason(for: reopenedFirst) == nil)
         }
     }
 }

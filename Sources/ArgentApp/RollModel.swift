@@ -662,7 +662,7 @@ final class RollModel {
         var reasons: [String] = []
         if let rollReason = missingRollStockReason { reasons.append(rollReason) }
         if let roll {
-            for frame in roll.frames {
+            for frame in roll.frames where overrides[frame.url]?.stock != nil {
                 if let frameReason = unavailableStockReason(for: frame) {
                     reasons.append(frameReason)
                 }
@@ -715,14 +715,21 @@ final class RollModel {
 
     func stock(for frame: Frame) -> Stock? { films?.stocks[safe: stockIndex(for: frame)] }
 
-    /// Why `frame` cannot develop: its own stock is one the library does not have. The frame shows through the roll's stock
-    /// meanwhile, but a develop fails it rather than write its file through the roll's. `nil` while it has none of its own, or
-    /// its own is installed.
+    /// Why `frame` cannot develop: either its own stock or (when it follows the roll) the roll's saved stock
+    /// is not installed. The frame previews through a fallback meanwhile, but a develop fails it rather than
+    /// silently writing its file through the fallback stock. `nil` when its stock is installed.
     func unavailableStockReason(for frame: Frame) -> String? {
-        guard let id = overrides[frame.url]?.stock, let films, !films.stocks.contains(where: { $0.id == id }) else { return nil }
-        let recorded = manualRecipes[frame.url]?.stock
-        let name = recorded?.id == id ? recorded?.displayName ?? id : id
-        return "\(frame.name): its own stock, \(name), is not installed; choose another stock for it, or make it follow the roll"
+        if let id = overrides[frame.url]?.stock {
+            guard let films, !films.stocks.contains(where: { $0.id == id }) else { return nil }
+            let recorded = manualRecipes[frame.url]?.stock
+            let name = recorded?.id == id ? recorded?.displayName ?? id : id
+            return "\(frame.name): its own stock, \(name), is not installed; choose another stock for it, or make it follow the roll"
+        }
+        if let id = missingRollStockID {
+            let name = missingRollStockName ?? id
+            return "\(frame.name): the roll's stock, \(name), is not installed; choose another stock for the roll or reinstall \(name)"
+        }
+        return nil
     }
 
     func stockName(for frame: Frame) -> String? { stockNames[safe: stockIndex(for: frame)] }
