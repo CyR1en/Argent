@@ -64,6 +64,10 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
         public var strength: Float = 0.035
         public var greenShare: Float = 0.25
         public var radiusMicrometres: Float = 150
+
+        public static func strengthRange(inheriting stock: Stock?) -> ClosedRange<Float> {
+            0...max(0.08, (stock?.halation?.strength ?? 0) * 2)
+        }
     }
 
     public struct FrameLook: Codable, Equatable, Sendable {
@@ -104,7 +108,7 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
         grain.preset = stock.grain == nil ? .none : .inherited
         if let h = stock.halation {
             halation.enabled = true
-            halation.strength = min(h.strength, 0.08)
+            halation.strength = h.strength
             halation.greenShare = h.greenShare
             halation.radiusMicrometres = min(max(h.radiusMicrometres, 60), 350)
         }
@@ -123,6 +127,6 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
                               paperGrade: settings.paperGrade)
         grain.strength = min(max(settings.grain, 0), 2)
         halation.enabled = halation.enabled && settings.halation && settings.halationAmount > 0
-        if let h = stock.halation { halation.strength = min(h.strength * settings.halationAmount, 0.08) }
+        if let h = stock.halation { halation.strength = h.strength * settings.halationAmount }
     }
 }

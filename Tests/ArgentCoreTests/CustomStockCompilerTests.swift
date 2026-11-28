@@ -84,6 +84,22 @@ import Testing
         #expect(throws: StockError.self) { try compile(spec) }
     }
 
+    @Test func derivedAndBakedHalationPreserveStrongSourceProfiles() throws {
+        let profile = Stock.Halation(strength: 0.14, greenShare: 0.06, radiusMicrometres: 270)
+        let base = Stock(id: "cinestill800t", displayName: "CineStill 800T", status: "test", boxSpeed: 800,
+                         densityRange: 2, exposurePerUnit: SIMD3(repeating: 1), negative: .identity(size: 2),
+                         print: .identity(size: 2), halation: profile)
+        let derived = try compile(.init(derivedFrom: base), base: base)
+        #expect(derived.halation == profile)
+        for amount: Float in [1, 2] {
+            let spec = try CustomStockSpec(baking: base, settings: .init(halation: true, halationAmount: amount))
+            let baked = try compile(spec, base: base)
+            #expect(baked.halation?.strength == profile.strength * amount)
+            #expect(baked.halation?.greenShare == profile.greenShare)
+            #expect(baked.halation?.radiusMicrometres == profile.radiusMicrometres)
+        }
+    }
+
     @Test func bakedExposureMovesTheInputDomainInBothDirections() throws {
         let foundation = try compile(.init())
         let encoding = foundation.negative.encoding
