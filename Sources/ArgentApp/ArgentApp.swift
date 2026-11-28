@@ -113,6 +113,8 @@ struct MenuState: Equatable {
     var hasRoll = false
     /// The frame the frame view shows, while it is open.
     var openFrame: Frame?
+    var rollUsesOnlyMonochrome = false
+    var frameUsesMonochrome = false
     var frameIsOverridden = false
     var canResetManual = false
     var canSetDistortion = false
@@ -206,6 +208,8 @@ struct MenuState: Equatable {
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
     var actsOnRoll: Bool { page == .roll && !isSheetShown }
+    var canSetRollLabBalance: Bool { actsOnRoll && !rollUsesOnlyMonochrome }
+    var canSetFrameLabBalance: Bool { actsOnRoll && openFrame != nil && !frameUsesMonochrome }
     /// As `showsFrames`, with no dialog over the roll.
     var actsOnFrames: Bool { showsFrames && !isSheetShown }
 
@@ -368,7 +372,7 @@ struct ArgentCommands: Commands {
             Picker("Lab Balance", selection: Binding(get: { model.controls.labBalance }, set: { model.controls.labBalance = $0 })) {
                 labBalanceItems
             }
-            .disabled(!state.actsOnRoll)
+            .disabled(!state.canSetRollLabBalance)
             // Every frame's and develop's, as in the stock panel, the sheet's dock and the Develop page.
             Picker("Grain", selection: Binding(get: { model.output.grain }, set: { model.output.grain = $0 })) {
                 ForEach(OutputSettings.Grain.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -423,7 +427,7 @@ struct ArgentCommands: Commands {
                                                      set: { value in model.shownFrame.map { model.setLabBalance(value, for: $0) } })) {
                 labBalanceItems
             }
-            .disabled(state.openFrame == nil || !state.actsOnRoll)
+            .disabled(!state.canSetFrameLabBalance)
             Button("Reset to Current Auto") { model.shownFrame.map { model.resetManualAdjustments(for: $0) } }
                 .disabled(!state.canResetManual || !state.actsOnRoll)
             // The frame as shot, with none of Auto's corrections (docs/manual-development.md, "Starting

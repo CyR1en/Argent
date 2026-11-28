@@ -9,9 +9,14 @@ extension SequenceAims {
     struct FramePrint: Sendable {
         var exposureStops: Float
         var offsets: [SIMD3<Float>]
+        var filter: MonochromeFilter
+        var grade: PaperGrade
 
         init(stock: Stock, controls: RollControls, cast: SIMD3<Float>) {
-            exposureStops = controls.settings(for: stock, aim: PrintAim(level: 0, cast: cast)).exposureStops(boxSpeed: stock.boxSpeed)
+            let neutral = controls.settings(for: stock, aim: PrintAim(level: 0, cast: cast))
+            exposureStops = neutral.exposureStops(boxSpeed: stock.boxSpeed)
+            filter = neutral.monochromeFilter
+            grade = neutral.paperGrade
             offsets = Response.levels.map { level in
                 controls.settings(for: stock, aim: PrintAim(level: level, cast: cast))
                     .printOffset(densityRange: stock.densityRange, exposurePerUnit: stock.exposurePerUnit)
@@ -51,12 +56,10 @@ extension SequenceAims {
         /// `samples` weighted by `weights`, paired by index, each finite and its weight finite and
         /// above zero (`RenderedLink.points`).
         init(samples: [SIMD3<Float>], weights: [Float], print: FramePrint, stock: Stock) {
-            let encoding = stock.negative.encoding
             let gain = exp2(print.exposureStops)
             let dyes = samples.map { rgb in
                 let exposed = GamutCompression.compress(rgb * gain)
-                return stock.negative.sample(encoded: SIMD3(encoding.encode(exposed.x), encoding.encode(exposed.y),
-                                                            encoding.encode(exposed.z)))
+                return stock.negativeAmounts(exposed: exposed, filter: print.filter)
             }
             let total = weights.reduce(0, +)
             lightness = []
@@ -66,7 +69,7 @@ extension SequenceAims {
             for offset in print.offsets {
                 var sum: Float = 0, lost: Float = 0
                 for (dye, weight) in zip(dyes, weights) {
-                    let input = dye + offset
+                    let input = stock.paperAmounts(dye + offset, grade: print.grade)
                     let printed = stock.print.sample(encoded: input.clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1)))
                     sum += weight * SequenceAims.lightness((printed * Rec2020.luma).sum())
                     if input.min() < 0 || input.max() > 1 { lost += weight }

@@ -34,8 +34,7 @@ public struct LogEncoding: Sendable, Equatable {
     }
 }
 
-/// Mirrors `struct LUTParams` in the Metal source. Layout: three floats, a uint, and a
-/// float, 20 bytes.
+/// Mirrors `struct LUTParams` in the Metal source.
 public struct LUTParams: Sendable {
     public var logMin: Float
     public var logMax: Float
@@ -43,6 +42,9 @@ public struct LUTParams: Sendable {
     public var lutSize: UInt32
     /// Stops added to the scene's exposure before the log encoding. Rated at lands here.
     public var exposureStops: Float = 0
+    var silverR: Float = 0
+    var silverG: Float = 0
+    var silverB: Float = 0
 }
 
 public enum LUTError: Error, CustomStringConvertible {

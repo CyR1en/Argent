@@ -94,7 +94,8 @@ struct AdjustmentsClipboard: Equatable {
         if origin == .original { parts.insert(.light) }
         if !adjustments.masks.isEmpty { parts.insert(.masks) }
         if frameControls.ratedAt != nil || frameControls.labBalance != nil { parts.insert(.frameControls) }
-        if frameControls.stock != nil || frameControls.grain != nil || frameControls.halation != nil { parts.insert(.film) }
+        if frameControls.stock != nil || frameControls.grain != nil || frameControls.halation != nil
+            || frameControls.monochromeFilter != nil || frameControls.paperGrade != nil { parts.insert(.film) }
         return parts
     }
 
@@ -521,6 +522,8 @@ extension RollModel {
             own.stock = clipboard.frameControls.stock
             own.grain = clipboard.frameControls.grain
             own.halation = clipboard.frameControls.halation
+            own.monochromeFilter = clipboard.frameControls.monochromeFilter
+            own.paperGrade = clipboard.frameControls.paperGrade
         }
         let isEdit = !(values.isIdentity && origin == .auto)
         return .success(PastePlan(values: values, origin: origin, notes: notes, own: own, isEdit: isEdit, pins: isEdit && pins))

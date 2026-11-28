@@ -231,10 +231,13 @@ public struct Recipe: Sendable, Equatable, Codable {
         public var tone: PrintTone?
         /// Auto's own Presence finish (such as Neutral's polish); absent where it had none.
         public var autoPresence: AutoPresence?
+        public var monochromeFilter: MonochromeFilter?
+        public var paperGrade: PaperGrade?
 
         public init(ratedAt: Float?, labBalance: [Float], printExposure: Float, grain: String,
                     halation: String, halationAmount: Float? = nil, grainSeed: UInt32? = nil, sharpen: String? = nil,
-                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil, autoPresence: AutoPresence? = nil) {
+                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil, autoPresence: AutoPresence? = nil,
+                    monochromeFilter: MonochromeFilter? = nil, paperGrade: PaperGrade? = nil) {
             self.ratedAt = ratedAt
             self.labBalance = labBalance
             self.printExposure = printExposure
@@ -246,6 +249,8 @@ public struct Recipe: Sendable, Equatable, Codable {
             self.manual = manual?.adjustments.isIdentity == true ? nil : manual
             self.tone = tone?.isActive == true ? tone : nil
             self.autoPresence = autoPresence?.isActive == true ? autoPresence : nil
+            self.monochromeFilter = monochromeFilter == MonochromeFilter.none ? nil : monochromeFilter
+            self.paperGrade = paperGrade == .normal ? nil : paperGrade
         }
 
         public init(settings: DevelopSettings, grain: OutputSettings.Grain) {
@@ -255,7 +260,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                       halation: settings.halation ? "on" : "off", halationAmount: settings.halation ? settings.halationAmount : nil,
                       grainSeed: grain == .off ? nil : settings.grainSeed,
                       sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone,
-                      autoPresence: settings.autoPresence)
+                      autoPresence: settings.autoPresence,
+                      monochromeFilter: settings.monochromeFilter, paperGrade: settings.paperGrade)
         }
 
         public static func == (lhs: Render, rhs: Render) -> Bool {
@@ -265,6 +271,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                 && lhs.grainSeed == rhs.grainSeed && lhs.sharpen == rhs.sharpen
                 && (lhs.manual ?? .identity) == (rhs.manual ?? .identity) && lhs.tone == rhs.tone
                 && (lhs.autoPresence ?? .identity) == (rhs.autoPresence ?? .identity)
+                && (lhs.monochromeFilter ?? MonochromeFilter.none) == (rhs.monochromeFilter ?? MonochromeFilter.none)
+                && (lhs.paperGrade ?? .normal) == (rhs.paperGrade ?? .normal)
         }
 
         /// The render as a develop receipt keeps it (`Recipe.encoded()`).
@@ -281,7 +289,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                             grain: OutputSettings.Grain(rawValue: grain)?.amount ?? 0, grainSeed: grainSeed ?? 0,
                             halation: halation == "on", halationAmount: halationAmount ?? 1, sharpen: sharpen == "on",
                             manual: manual ?? .identity, tone: tone ?? .identity,
-                            autoPresence: autoPresence ?? .identity)
+                            autoPresence: autoPresence ?? .identity,
+                            monochromeFilter: monochromeFilter ?? .none, paperGrade: paperGrade ?? .normal)
         }
     }
 
@@ -577,7 +586,9 @@ public struct Recipe: Sendable, Equatable, Codable {
         guard format == Self.formatName else { throw ReadFailure.wrongFormat }
         guard (1...Self.currentVersion).contains(version) else { throw ReadFailure.unsupportedVersion(version) }
         guard version >= requiredVersion || (version == 1 && requiredVersion == 2) else {
-            throw ReadFailure.invalid(requiredVersion == 15 ? "Automatic Presence requires recipe version 15"
+            let version15Reason = requiresAutoPresenceVersion ? "Automatic Presence requires recipe version 15"
+                : "monochrome controls require recipe version 15"
+            throw ReadFailure.invalid(requiredVersion == 15 ? version15Reason
                                       : requiredVersion == 14 ? "a Halation amount requires recipe version 14"
                                       : requiredVersion == 13 ? "a frame's own stock or grain requires recipe version 13"
                                       : requiredVersion == 12 ? "a removal requires recipe version 12"
@@ -637,9 +648,12 @@ public struct Recipe: Sendable, Equatable, Codable {
     /// older build would print it at the stock's, and take a file developed at another amount for the one it makes. An
     /// amount written out as 1 is the stock's own, and requires nothing.
     public var requiredVersion: Int {
-        let renders = [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 }
-            + develops.map(\.render)
-        if renders.contains(where: { $0.autoPresence != nil }) { return 15 }
+        let renders = versionedRenders
+        if requiresAutoPresenceVersion { return 15 }
+        let controls = [roll, manual?.baseline.controls, heldManual?.baseline.controls].compactMap { $0 }
+        if frame.monochromeFilter != nil || frame.paperGrade != nil
+            || controls.contains(where: { $0.monochromeFilter != nil || $0.paperGrade != nil })
+            || renders.contains(where: { $0.monochromeFilter != nil || $0.paperGrade != nil }) { return 15 }
         if frame.halation != nil || renders.contains(where: { ($0.halationAmount ?? 1) != 1 }) { return 14 }
         if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let lenses = [manual?.adjustments.lens, heldManual?.adjustments.lens].compactMap { $0 }
@@ -664,6 +678,14 @@ public struct Recipe: Sendable, Equatable, Codable {
         let curves = [manual?.adjustments.curves, heldManual?.adjustments.curves].compactMap { $0 }
             + renders.compactMap { $0.manual?.adjustments.curves }
         return curves.contains(where: { !$0.isIdentity }) ? 3 : 2
+    }
+
+    private var versionedRenders: [Render] {
+        [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 } + develops.map(\.render)
+    }
+
+    private var requiresAutoPresenceVersion: Bool {
+        versionedRenders.contains { $0.autoPresence != nil }
     }
 
     /// The record in `data`, or `nil` when it cannot be read: for callers that treat an unreadable
@@ -692,6 +714,14 @@ extension Stock {
             hash.update(data: Data("halation".utf8))
             let values = [halation.strength, halation.greenShare, halation.radiusMicrometres]
             values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        }
+        if let monochrome {
+            hash.update(data: Data("silver-v1:\(monochrome.rawValue)".utf8))
+            let weights = MonochromeFilter.allCases.flatMap { filter -> [Float] in
+                let w = monochrome.weights(for: filter)
+                return [w.x, w.y, w.z]
+            }
+            weights.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }

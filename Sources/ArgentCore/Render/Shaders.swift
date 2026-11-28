@@ -31,6 +31,9 @@ enum ShaderSource {
         float midGray;
         uint  lutSize;
         float exposureStops;
+        float silverR;
+        float silverG;
+        float silverB;
     };
 
     struct PrintParams {
@@ -57,6 +60,7 @@ enum ShaderSource {
         float lumaB;
         float scalingAmount;
         uint  scalingRadius;
+        float silverContrast;
     };
 
     // ManualRenderSettings 2026-10-09-1, 2026-10-29-1 and 2026-11-06-1. The block mirrors
@@ -138,6 +142,11 @@ enum ShaderSource {
         // version-selected flag leaves recorded version-1 pixels unchanged.
         if (p.finiteOutput != 0) { rgb = clamp(rgb, float3(-65504.0f), float3(65504.0f)); }
         return half3(rgb);
+    }
+
+    static inline half3 silver_storage(half3 rgb, constant PrintParams &p) {
+        if (p.silverContrast == 0.0f || (rgb.r == rgb.g && rgb.g == rgb.b)) { return rgb; }
+        return half3(half(dot(float3(rgb), float3(0.2627f, 0.6780f, 0.0593f))));
     }
 
     static inline float manual_luminance(float3 rgb) {
@@ -249,6 +258,11 @@ enum ShaderSource {
     // 1 = logMax stops above. Matches LogEncoding in LUT3D.swift. exposureStops
     // shifts the negative's exposure before encoding, which is how Rated at arrives.
     static inline float3 encode_log(float3 linear, constant LUTParams &p) {
+        if (p.silverR > 0.0f) {
+            float gray = max(dot(compress_scene_gamut(linear), float3(p.silverR, p.silverG, p.silverB)), 1e-6f);
+            float stops = log2(gray / p.midGray) + p.exposureStops;
+            return float3(saturate((stops - p.logMin) / (p.logMax - p.logMin)));
+        }
         float3 v = max(compress_scene_gamut(linear), float3(1e-6f));
         float3 stops = log2(v / p.midGray) + p.exposureStops;
         return saturate((stops - p.logMin) / (p.logMax - p.logMin));
@@ -344,7 +358,15 @@ enum ShaderSource {
             uint3 index = uint3(clamp(film, 0.0f, 1.0f) * last + 0.5f);
             float3 sigma = float3(float(sigmas.read(uint2(index.r, 0)).r), float(sigmas.read(uint2(index.g, 0)).g),
                                   float(sigmas.read(uint2(index.b, 0)).b));
-            amounts += (a + b) * 0.70710678f * sigma * params.grainScale;
+            if (params.silverContrast > 0.0f) {
+                amounts.r += (a.r + b.r) * 0.70710678f * sigma.r * params.grainScale;
+            } else {
+                amounts += (a + b) * 0.70710678f * sigma * params.grainScale;
+            }
+        }
+        if (params.silverContrast > 0.0f) {
+            float silver = (amounts.r + params.offsetR - 0.5f) * params.silverContrast + 0.5f;
+            return sample_tetrahedral(lut, float3(saturate(silver), 0.0f, 0.0f), params.lutSize);
         }
         float3 offset = float3(params.offsetR, params.offsetG, params.offsetB);
         float3 density = saturate(amounts + offset);
@@ -366,7 +388,8 @@ enum ShaderSource {
         if (gid.x >= outTexture.get_width() || gid.y >= outTexture.get_height()) { return; }
         half4 pixel = inTexture.read(gid);
         float3 rgb = print_amounts(float3(pixel.rgb), float3(pixel.rgb), gid, lut, grainA, grainB, sigmas, params);
-        outTexture.write(half4(print_storage(tone_curves(manual_print(presence_print(rgb, presencePrint), manual), curves, curveParams), curveParams), pixel.a), gid);
+        half3 stored = print_storage(tone_curves(manual_print(presence_print(rgb, presencePrint), manual), curves, curveParams), curveParams);
+        outTexture.write(half4(silver_storage(stored, params), pixel.a), gid);
     }
 
     // The same with capture sharpening first (CaptureSharpening): two unsharp masks on a
@@ -429,7 +452,8 @@ enum ShaderSource {
         detail *= squared / max(squared + threshold * threshold, 1e-20f);
         half4 pixel = inTexture.read(gid);
         float3 rgb = print_amounts(float3(pixel.rgb) + detail, float3(pixel.rgb), gid, lut, grainA, grainB, sigmas, params);
-        outTexture.write(half4(print_storage(tone_curves(manual_print(presence_print(rgb, presencePrint), manual), curves, curveParams), curveParams), pixel.a), gid);
+        half3 stored = print_storage(tone_curves(manual_print(presence_print(rgb, presencePrint), manual), curves, curveParams), curveParams);
+        outTexture.write(half4(silver_storage(stored, params), pixel.a), gid);
     }
 
     // Grain noise tiles (GrainField). A counter hash gives each pixel and layer its own
