@@ -11,10 +11,26 @@ import Testing
         var state = MenuState()
         #expect(!state.canSetFrameLabBalance)
         state.openFrame = Frame(id: 0, url: URL(fileURLWithPath: "/tmp/frame.ARW"), info: ARWFrameInfo())
-        state.rollUsesMonochrome = true
+        state.rollUsesOnlyMonochrome = true
         #expect(!state.canSetRollLabBalance && state.canSetFrameLabBalance)
-        state.rollUsesMonochrome = false
+        state.rollUsesOnlyMonochrome = false
         state.frameUsesMonochrome = true
+        #expect(state.canSetRollLabBalance && !state.canSetFrameLabBalance)
+    }
+
+    @Test func monochromeRollWithAColorOverrideStillOffersLabBalance() throws {
+        let silver = try #require(MonochromeFilm.stocks.first)
+        let color = Stock(id: "color", displayName: "Color", status: "synthetic",
+                          boxSpeed: 400, densityRange: 1, negative: .identity(), print: .identity())
+        let folder = URL(fileURLWithPath: "/roll", isDirectory: true)
+        let frames = (0..<2).map { Frame(id: $0, url: folder.appendingPathComponent("\($0).ARW"), info: ARWFrameInfo()) }
+        let roll = Roll(folder: folder, frames: frames)
+        var state = MenuState(hasRoll: true, openFrame: frames[0], frameUsesMonochrome: true)
+        state.rollUsesOnlyMonochrome = RollModel.usesOnlyMonochrome(roll, defaultStock: silver) { _ in silver }
+        #expect(!state.canSetRollLabBalance)
+        state.rollUsesOnlyMonochrome = RollModel.usesOnlyMonochrome(roll, defaultStock: silver) {
+            $0 == frames[1] ? color : silver
+        }
         #expect(state.canSetRollLabBalance && !state.canSetFrameLabBalance)
     }
 

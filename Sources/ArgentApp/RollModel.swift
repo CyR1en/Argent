@@ -584,6 +584,15 @@ final class RollModel {
     /// The roll's stock, when stocks loaded.
     var currentStock: Stock? { films?.stocks[safe: stockIndex] }
 
+    var rollUsesOnlyMonochrome: Bool {
+        Self.usesOnlyMonochrome(roll, defaultStock: currentStock, stockForFrame: stock(for:))
+    }
+
+    static func usesOnlyMonochrome(_ roll: Roll?, defaultStock: Stock?, stockForFrame: (Frame) -> Stock?) -> Bool {
+        guard let roll, !roll.frames.isEmpty else { return defaultStock?.monochrome != nil }
+        return roll.frames.allSatisfy { stockForFrame($0)?.monochrome != nil }
+    }
+
     /// The stock the dock, the stock panel and the Stock menu show: the open frame's, else the roll's.
     var shownStockIndex: Int { shownFrame.map(stockIndex(for:)) ?? stockIndex }
     var shownStock: Stock? { films?.stocks[safe: shownStockIndex] }
@@ -1365,7 +1374,7 @@ final class RollModel {
     var menuState: MenuState {
         let open = shownFrame, selected = selectionFlag
         let developing = isDeveloping
-        return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesMonochrome: currentStock?.monochrome != nil,
+        return MenuState(hasRoll: roll != nil, openFrame: open, rollUsesOnlyMonochrome: rollUsesOnlyMonochrome,
                          frameUsesMonochrome: shownStock?.monochrome != nil, frameIsOverridden: open.map(isOverridden) ?? false,
                          canResetManual: open.map(canResetManual) == true,
                          canSetDistortion: open.map(canSetDistortion) == true,

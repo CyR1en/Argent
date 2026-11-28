@@ -113,7 +113,7 @@ struct MenuState: Equatable {
     var hasRoll = false
     /// The frame the frame view shows, while it is open.
     var openFrame: Frame?
-    var rollUsesMonochrome = false
+    var rollUsesOnlyMonochrome = false
     var frameUsesMonochrome = false
     var frameIsOverridden = false
     var canResetManual = false
@@ -208,7 +208,7 @@ struct MenuState: Equatable {
     var canCheckForUpdates = false
     /// The commands for the roll, its frames and the selection act: on the roll's page, with no dialog over it.
     var actsOnRoll: Bool { page == .roll && !isSheetShown }
-    var canSetRollLabBalance: Bool { actsOnRoll && !rollUsesMonochrome }
+    var canSetRollLabBalance: Bool { actsOnRoll && !rollUsesOnlyMonochrome }
     var canSetFrameLabBalance: Bool { actsOnRoll && openFrame != nil && !frameUsesMonochrome }
     /// As `showsFrames`, with no dialog over the roll.
     var actsOnFrames: Bool { showsFrames && !isSheetShown }

@@ -34,7 +34,7 @@ private struct RollDockLine: View {
             .disabled(model.roll == nil)
             .help("The roll's Rated at: \(ratedAtDescription). Every frame without its own develops at it.")
 
-            if model.currentStock?.monochrome == nil {
+            if !model.rollUsesOnlyMonochrome {
                 RollDockField(title: "Lab balance", value: model.controls.labBalance.title,
                               selection: labBalance, compact: compact) {
                     ForEach(RollControls.LabBalance.allCases, id: \.self) { balance in

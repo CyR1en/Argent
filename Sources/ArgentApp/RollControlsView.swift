@@ -52,7 +52,8 @@ struct RollControlsView: View {
                         filmChoice("Paper grade", values: PaperGrade.allCases, defaultValue: .normal,
                                    roll: \.paperGrade, own: \.paperGrade) { titles[$0.rawValue] }
                     }
-                } else {
+                }
+                if frame.map({ model.stock(for: $0)?.monochrome == nil }) ?? !model.rollUsesOnlyMonochrome {
                     setting("Lab balance") { LabBalanceControl(frame: frame) }
                 }
                 setting("Grain") { GrainControl(frame: frame) }
