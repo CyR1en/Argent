@@ -35,6 +35,19 @@ import Testing
         #expect(abs(hard[20] - soft[20]) < 0.003)
     }
 
+    @Test(arguments: MonochromeFilm.allCases)
+    func normalPaperPlacesGrayAndSeparatesDiffuseWhites(_ film: MonochromeFilm) throws {
+        let stock = try #require(MonochromeFilm.stocks.first { $0.monochrome == film })
+        let response = try PrintPatchResponse(stock: stock, settings: DevelopSettings())
+        func light(_ stops: Float) -> Float {
+            response.sample(SIMD3(repeating: 0.18 * exp2(stops)), baseStops: stops).rgb.x
+        }
+        #expect(abs(light(0) - 0.18) < 0.002)
+        #expect((0.8..<0.98).contains(light(2)))
+        #expect(light(2.25) > light(2) + 0.015)
+        #expect((0.007...0.025).contains(light(-3)))
+    }
+
     @Test func metalRendersNeutralPixelsAndColorIgnoresSilverControls() throws {
         let gpu = try GPU()
         let texture = try gpu.makeTexture(width: 3, height: 1)

@@ -18,12 +18,12 @@ public enum PaperGrade: Int, CaseIterable, Codable, Sendable {
 
     var contrast: Float {
         switch self {
-        case .soft: return 0.58
-        case .mediumSoft: return 0.76
+        case .soft: return 90 / 130
+        case .mediumSoft: return 90 / 110
         case .normal: return 1
-        case .mediumHard: return 1.25
-        case .hard: return 1.55
-        case .extraHard: return 1.9
+        case .mediumHard: return 90 / 70
+        case .hard: return 90 / 60
+        case .extraHard: return 90 / 50
         }
     }
 }
@@ -71,11 +71,21 @@ public enum MonochromeFilm: String, Sendable, CaseIterable {
         return min(max(0.5 + (density(logExposure: mid + stops * Self.logTwo) - density(logExposure: mid)) / Self.range, 0), 1)
     }
 
+    private static let paperDensitySpan: Float = 2.10
+    private static let paperBlack = pow(Float(10), -paperDensitySpan)
+
+    private static func paperLogit(reflectance: Float) -> Float {
+        log((reflectance - paperBlack) / (1 - reflectance))
+    }
+
+    private static let paperMid = paperLogit(reflectance: 0.18)
+    private static let paperSlope = (paperLogit(reflectance: pow(10, -0.04))
+        - paperLogit(reflectance: pow(10, -0.9 * paperDensitySpan))) / 0.90
+
     private static func paperLight(_ amount: Float) -> Float {
-        let t = min(max(amount, 0), 1)
-        // Inverse paper exposure through the silver image, with a soft black toe and white shoulder.
-        let u = pow(t, 1.89)
-        return u * u * (3 - 2 * u)
+        // Negative density removes the same amount of log exposure from the paper.
+        let densityFromMid = (amount - 0.5) * range
+        return paperBlack + (1 - paperBlack) / (1 + exp(-(paperMid + densityFromMid * paperSlope)))
     }
 
     private static func scalarTable(encoding: LogEncoding = LogEncoding(), sample: (Float) -> Float) -> LUT3D {
