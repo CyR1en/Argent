@@ -34,14 +34,52 @@ private func makeStock(id: String, displayName: String = "Test") -> Stock {
         let mildFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: mildWarm))
         #expect(abs(mildFix.redBlue - 0.55 * (0.30 - 0.12)) < 1e-4)
 
-        // Strong sunset warmth (130 mired = +1.24 stops) stays predominantly warm (> 74% kept),
-        // while keeping more warmth than film AutoBalance (which removes 0.57 stops).
+        // Strong sunset warmth stays intact; film AutoBalance still trims it.
         let sunset = AutoBalance.cast(redBlue: 1.24, greenMagenta: 0)
         let sunsetFix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: sunset))
         let remainingWarmth = 1.24 - sunsetFix.redBlue
-        #expect(sunsetFix.redBlue <= NeutralAuto.warmMoodLimit + 1e-5)
+        #expect(sunsetFix.redBlue == 0)
         #expect(remainingWarmth > 0.92)
         #expect(sunsetFix.redBlue < AutoBalance.axes(AutoBalance.correction(for: sunset)).redBlue)
+    }
+
+    @Test func warmCorrectionFadesOutWithoutDroppingTintCleanup() {
+        let knee = NeutralAuto.warmMoodKnee
+        let threshold = NeutralAuto.warmMoodThreshold
+        let atKnee = NeutralAuto.whiteBalanceCorrection(for: AutoBalance.cast(redBlue: knee, greenMagenta: 0))
+        let between = NeutralAuto.whiteBalanceCorrection(for: AutoBalance.cast(redBlue: (knee + threshold) / 2, greenMagenta: 0))
+        #expect(AutoBalance.axes(between).redBlue > 0)
+        #expect(AutoBalance.axes(between).redBlue < AutoBalance.axes(atKnee).redBlue)
+
+        let atThreshold = AutoBalance.cast(redBlue: threshold, greenMagenta: 0.20)
+        let fix = AutoBalance.axes(NeutralAuto.whiteBalanceCorrection(for: atThreshold))
+        #expect(fix.redBlue == 0)
+        #expect(abs(fix.greenMagenta - 0.60 * (0.20 - 0.06)) < 1e-4)
+        #expect(NeutralAuto.whiteBalanceCorrection(for: .zero) == .zero)
+    }
+
+    @Test func legacyWhiteBalanceKeepsItsRecordedDeadbandsSharesAndLimits() {
+        let cases: [(Float, Float, Float, Float)] = [
+            (0.10, -0.05, 0, 0),
+            (0.30, -0.20, 0.099, -0.084),
+            (-0.60, 0.30, -0.216, 0.144),
+            (-1.50, 0.80, -0.35, 0.25),
+        ]
+        for (redBlue, greenMagenta, expectedRedBlue, expectedGreenMagenta) in cases {
+            let cast = AutoBalance.cast(redBlue: redBlue, greenMagenta: greenMagenta)
+            let correction = AutoBalance.axes(NeutralAuto.legacyWhiteBalanceCorrection(for: cast))
+            #expect(abs(correction.redBlue - expectedRedBlue) < 1e-5)
+            #expect(abs(correction.greenMagenta - expectedGreenMagenta) < 1e-5)
+        }
+    }
+
+    @Test func sunsetStrengthPrintKeepsPlainNeutralWarmth() {
+        let neutral = makeStock(id: NeutralAuto.stockID, displayName: "Neutral")
+        // Red-blue cast measured on the public DSC09550 beach sunset.
+        let aim = PrintAim(level: -0.67, cast: AutoBalance.cast(redBlue: 0.776, greenMagenta: 0))
+        let auto = RollControls(labBalance: .auto).settings(for: neutral, aim: aim)
+        let plain = RollControls(labBalance: .neutral).settings(for: neutral, aim: aim)
+        #expect(auto.labBalance == plain.labBalance)
     }
 
     @Test func rollControlsRoutesNeutralWhiteBalanceWithoutChangingFilmStocks() {

@@ -3,9 +3,8 @@ import Foundation
 
 /// Auto-development rules specific to the Neutral digital stock (`argent-neutral`):
 ///
-/// - Mood-preserving white balance: removes unwanted green/magenta and cool casts cleanly while
-///   tapering warm red-blue correction above a golden-hour knee so warm light (such as sunsets)
-///   keeps its mood instead of being neutralized cold.
+/// - Mood-preserving white balance: removes unwanted green/magenta and cool casts, trims mild
+///   warmth, and leaves the red-blue balance of strongly warm light (such as sunsets) alone.
 /// - Subtle social-ready polish: adds a small Vibrance (+12) and Clarity (+8) lift when Neutral
 ///   develops in Auto mode; `PresencePrint` protects skin tones via its Oklab skin-hue mask.
 public enum NeutralAuto {
@@ -25,11 +24,12 @@ public enum NeutralAuto {
     /// bright blue skies do not warm sunny landscapes into yellow.
     public static let coolShare: Float = 0.45
     public static let coolLimit: Float = 0.35
-    /// Mild warm casts below `warmMoodKnee` stops are trimmed at `mildWarmShare`; stronger warm
-    /// casts (golden hour, sunset) taper smoothly toward `warmMoodLimit` so the scene stays warm.
+    /// Mild warm casts up to `warmMoodKnee` stops are trimmed at `mildWarmShare`. The correction
+    /// fades to zero at `warmMoodThreshold` stops so strong golden-hour and sunset light keeps
+    /// its red-blue balance.
     public static let mildWarmShare: Float = 0.55
     public static let warmMoodKnee: Float = 0.45
-    public static let warmMoodLimit: Float = 0.32
+    public static let warmMoodThreshold: Float = 0.75
 
     /// Subtle auto polish applied to Neutral when no manual edit overrides Presence.
     public static let polishVibrance: Float = 12
@@ -47,6 +47,40 @@ public enum NeutralAuto {
     /// variance inside its deadbands, cleans genuine fluorescent and cold casts gently without
     /// warming blue skies, trims mild indoor warmth, and preserves golden-hour / sunset warmth.
     public static func whiteBalanceCorrection(for cast: SIMD3<Float>) -> SIMD3<Float> {
+        let (redBlue, greenMagenta) = AutoBalance.axes(cast)
+        let gmExcess = max(abs(greenMagenta) - greenMagentaDeadband, 0)
+        let gmSign: Float = greenMagenta >= 0 ? 1 : -1
+        let gm = gmSign * min(greenMagentaShare * gmExcess, greenMagentaLimit)
+        let rb: Float
+        if abs(redBlue) <= redBlueDeadband {
+            rb = 0
+        } else if redBlue < 0 {
+            let coolExcess = -redBlue - redBlueDeadband
+            rb = -min(coolShare * coolExcess, coolLimit)
+        } else if redBlue <= warmMoodKnee {
+            rb = mildWarmShare * (redBlue - redBlueDeadband)
+        } else if redBlue < warmMoodThreshold {
+            let base = mildWarmShare * (warmMoodKnee - redBlueDeadband)
+            let t = (warmMoodThreshold - redBlue) / (warmMoodThreshold - warmMoodKnee)
+            rb = base * t * t * (3 - 2 * t)
+        } else {
+            rb = 0
+        }
+        return AutoBalance.cast(redBlue: rb, greenMagenta: gm)
+    }
+
+    /// Filtration and tuning frozen for edits pinned to the 2026-10-09-1 resolver.
+    static func legacyWhiteBalanceCorrection(for cast: SIMD3<Float>) -> SIMD3<Float> {
+        let greenMagentaDeadband: Float = 0.06
+        let greenMagentaShare: Float = 0.60
+        let greenMagentaLimit: Float = 0.25
+        let redBlueDeadband: Float = 0.12
+        let coolShare: Float = 0.45
+        let coolLimit: Float = 0.35
+        let mildWarmShare: Float = 0.55
+        let warmMoodKnee: Float = 0.45
+        let warmMoodLimit: Float = 0.32
+
         let (redBlue, greenMagenta) = AutoBalance.axes(cast)
         let gmExcess = max(abs(greenMagenta) - greenMagentaDeadband, 0)
         let gmSign: Float = greenMagenta >= 0 ? 1 : -1

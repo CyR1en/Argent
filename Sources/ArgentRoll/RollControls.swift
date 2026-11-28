@@ -88,11 +88,16 @@ public struct RollControls: Sendable, Equatable, Hashable, Codable {
     /// frame's cast (`AutoBalance.correction`) back to neutral density, as a lab's filtration
     /// does; Neutral prints the daylight reference, and Warm and Cool are a fixed step from it.
     public func settings(for stock: Stock, aim: PrintAim = PrintAim()) -> DevelopSettings {
+        settings(for: stock, aim: aim, neutralCorrection: NeutralAuto.whiteBalanceCorrection)
+    }
+
+    func settings(for stock: Stock, aim: PrintAim,
+                  neutralCorrection: (SIMD3<Float>) -> SIMD3<Float>) -> DevelopSettings {
         let ratedISO = stock.boxSpeed * exp2(-Float(ratedAt.stops))
         let filtration: SIMD3<Float>
         if labBalance == .auto {
             filtration = NeutralAuto.isNeutral(stock)
-                ? NeutralAuto.whiteBalanceCorrection(for: aim.cast)
+                ? neutralCorrection(aim.cast)
                 : AutoBalance.correction(for: aim.cast)
         } else {
             filtration = .zero
