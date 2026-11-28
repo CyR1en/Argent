@@ -183,7 +183,7 @@ public struct OutputSettings: Sendable, Equatable, Hashable, Codable {
 public struct Recipe: Sendable, Equatable, Codable {
     public static let fileExtension = "argent"
     public static let formatName = "camera.argent.recipe"
-    public static let currentVersion = 14
+    public static let currentVersion = 15
     /// Develops kept in the record, newest last.
     public static let keptDevelops = 20
 
@@ -579,7 +579,8 @@ public struct Recipe: Sendable, Equatable, Codable {
         guard format == Self.formatName else { throw ReadFailure.wrongFormat }
         guard (1...Self.currentVersion).contains(version) else { throw ReadFailure.unsupportedVersion(version) }
         guard version >= requiredVersion || (version == 1 && requiredVersion == 2) else {
-            throw ReadFailure.invalid(requiredVersion == 14 ? "a Halation amount requires recipe version 14"
+            throw ReadFailure.invalid(requiredVersion == 15 ? "monochrome controls require recipe version 15"
+                                      : requiredVersion == 14 ? "a Halation amount requires recipe version 14"
                                       : requiredVersion == 13 ? "a frame's own stock or grain requires recipe version 13"
                                       : requiredVersion == 12 ? "a removal requires recipe version 12"
                                       : requiredVersion == 11 ? "Vignetting requires recipe version 11"
@@ -639,6 +640,10 @@ public struct Recipe: Sendable, Equatable, Codable {
     public var requiredVersion: Int {
         let renders = [render, manual?.baseline.baseRender, heldManual?.baseline.baseRender].compactMap { $0 }
             + develops.map(\.render)
+        let controls = [roll, manual?.baseline.controls, heldManual?.baseline.controls].compactMap { $0 }
+        if frame.monochromeFilter != nil || frame.paperGrade != nil
+            || controls.contains(where: { $0.monochromeFilter != nil || $0.paperGrade != nil })
+            || renders.contains(where: { $0.monochromeFilter != nil || $0.paperGrade != nil }) { return 15 }
         if frame.halation != nil || renders.contains(where: { ($0.halationAmount ?? 1) != 1 }) { return 14 }
         if frame.stock != nil || frame.grain != nil || rollStock != nil { return 13 }
         let lenses = [manual?.adjustments.lens, heldManual?.adjustments.lens].compactMap { $0 }

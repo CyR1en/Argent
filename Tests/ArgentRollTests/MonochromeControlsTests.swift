@@ -4,6 +4,29 @@ import Testing
 @testable import ArgentRoll
 
 @Suite struct MonochromeControlsTests {
+    @Test func persistedSilverControlsRequireVersion15() throws {
+        let stock = try #require(MonochromeFilm.stocks.first)
+        let frame = Frame(id: 0, url: URL(fileURLWithPath: "/tmp/frame.ARW"), info: ARWFrameInfo())
+        func recipe(roll: RollControls = RollControls(), own: FrameControls = FrameControls()) -> Recipe {
+            Recipe(frame: frame, byteCount: 1, stock: stock, stockDigest: stock.digest, roll: roll, own: own)
+        }
+        let plain = recipe()
+        #expect(try Recipe.decodeStrict(plain.encoded(), readerVersion: 14) == plain)
+        for var record in [recipe(roll: RollControls(monochromeFilter: .red)),
+                           recipe(own: FrameControls(paperGrade: .hard)),
+                           recipe(own: FrameControls(monochromeFilter: MonochromeFilter.none, paperGrade: .normal))] {
+            #expect(record.version == 15)
+            #expect(try Recipe.decodeStrict(record.encoded()) == record)
+            #expect(throws: Recipe.ReadFailure.unsupportedVersion(15)) {
+                try Recipe.decodeStrict(record.encoded(), readerVersion: 14)
+            }
+            record.version = 14
+            #expect(throws: Recipe.ReadFailure.invalid("monochrome controls require recipe version 15")) {
+                try record.validate()
+            }
+        }
+    }
+
     @Test func controlsInheritIndividuallyAndRecipesKeepEffectiveSettings() throws {
         let decoder = JSONDecoder()
         let legacy = try decoder.decode(RollControls.self, from: Data(#"{"ratedAt":0,"labBalance":"auto"}"#.utf8))
