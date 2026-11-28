@@ -30,8 +30,34 @@ public enum StockError: Error, CustomStringConvertible {
 /// there, and the `.cube` otherwise. A schema 1 folder has only the `.cube` files.
 public struct Stock: Sendable {
     public static let manifestName = "stock.json"
+    /// Optional parametric builder specification stored beside `stock.json` for re-editable user stocks.
+    public static let specFileName = "spec.json"
+    /// Prefix required for all user-created or user-imported stock identifiers so they never shadow bundled stocks.
+    public static let userIDPrefix = "user-"
     /// The manifest schemas this build reads.
     public static let supportedSchemas = 1...2
+
+    /// Where the stock came from: shipped with Argent, built in the app's stock builder, or imported from a LUT/bundle.
+    public enum Origin: String, Sendable, Equatable, Hashable, Codable {
+        case bundled
+        case userBuilt
+        case userImported
+    }
+
+    /// Custom RGB tint (0...1 per channel) shown on the stock's canister icon in the dock.
+    public struct CanisterColor: Sendable, Equatable, Hashable, Codable {
+        public var red: Float
+        public var green: Float
+        public var blue: Float
+
+        public init(red: Float, green: Float, blue: Float) {
+            self.red = red
+            self.green = green
+            self.blue = blue
+        }
+
+        public var components: [Float] { [red, green, blue] }
+    }
 
     public let id: String
     /// The name the app shows: the film's own without its maker, for example "Portra 400".
@@ -44,6 +70,14 @@ public struct Stock: Sendable {
     /// How the profile behind the bake was made, for example `synthetic` or `datasheet`.
     /// Only a stock fitted to ground-truth scans is a look.
     public let status: String
+    /// Where this stock originated.
+    public let origin: Origin
+    /// Optional custom canister tint for the dock picker; `nil` falls back to the built-in palette.
+    public let canisterColor: CanisterColor?
+    /// Optional short description of the stock's look, used for custom stocks in tooltips and accessibility.
+    public let characterLine: String?
+    /// Whether a `spec.json` sits beside `stock.json`, allowing the stock to be reopened in the Stock Builder.
+    public let hasSpec: Bool
     /// The speed printed on the box, which the Negative LUT is baked at.
     public let boxSpeed: Float
     /// The Negative LUT stores the amount of each of the negative's dyes divided by this,
@@ -66,6 +100,8 @@ public struct Stock: Sendable {
     public let halation: Halation?
     public let monochrome: MonochromeFilm?
 
+    public var isUserStock: Bool { origin != .bundled }
+
     /// Halation as the profile gives it, a guess until a point source is shot on film
     /// (docs/M3-research.md section 4).
     public struct Halation: Sendable, Equatable {
@@ -86,10 +122,15 @@ public struct Stock: Sendable {
     public init(id: String, displayName: String, modelledFilm: String? = nil, status: String, boxSpeed: Float,
                 densityRange: Float, exposurePerUnit: SIMD3<Float> = SIMD3<Float>(repeating: 1), negative: LUT3D,
                 print: LUT3D, grain: GrainTable? = nil, halation: Halation? = nil, modelledPrint: String? = nil,
-                monochrome: MonochromeFilm? = nil) {
+                monochrome: MonochromeFilm? = nil, origin: Origin = .bundled, canisterColor: CanisterColor? = nil,
+                characterLine: String? = nil, hasSpec: Bool = false) {
         self.grain = grain
         self.halation = halation
         self.monochrome = monochrome
+        self.origin = origin
+        self.canisterColor = canisterColor
+        self.characterLine = characterLine
+        self.hasSpec = hasSpec
         self.id = id
         self.displayName = displayName
         self.modelledFilm = modelledFilm
@@ -102,7 +143,7 @@ public struct Stock: Sendable {
         self.print = print
     }
 
-    public static func load(from directory: URL) throws -> Stock {
+    public static func load(from directory: URL, origin: Origin = .bundled) throws -> Stock {
         let manifestURL = directory.appendingPathComponent(manifestName)
         let data: Data
         do {
@@ -160,6 +201,21 @@ public struct Stock: Sendable {
             halation = nil
         }
 
+        let canisterColor: CanisterColor?
+        if let color = manifest.canisterColor {
+            guard color.count == 3, color.allSatisfy({ $0.isFinite && (0...1).contains($0) }) else {
+                throw StockError.badValue("canisterColor must have three finite values in 0...1")
+            }
+            canisterColor = CanisterColor(red: color[0], green: color[1], blue: color[2])
+        } else {
+            canisterColor = nil
+        }
+
+        let characterLine = manifest.characterLine
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : $0 }
+        let hasSpec = FileManager.default.fileExists(atPath: directory.appendingPathComponent(specFileName).path)
+
         return Stock(
             id: manifest.id, displayName: manifest.displayName,
             modelledFilm: manifest.modelledFilm.flatMap { $0.isEmpty ? nil : $0 }, status: manifest.status,
@@ -168,7 +224,52 @@ public struct Stock: Sendable {
                                   size: manifest.negative.size, encoding: encoding, in: directory),
             print: try loadLUT(cube: manifest.print.file, binary: manifest.print.binary,
                                size: manifest.print.size, encoding: LogEncoding(), in: directory),
-            grain: grain, halation: halation, modelledPrint: manifest.modelledPrint)
+            grain: grain, halation: halation, modelledPrint: manifest.modelledPrint,
+            origin: origin, canisterColor: canisterColor, characterLine: characterLine, hasSpec: hasSpec)
+    }
+
+    /// Writes this stock as a schema-2 folder (`stock.json`, `negative.lut3d`, `print.lut3d`).
+    public func write(to directory: URL) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let negativeBinary = "negative.lut3d"
+        let printBinary = "print.lut3d"
+        try negative.binaryData().write(to: directory.appendingPathComponent(negativeBinary), options: .atomic)
+        try print.binaryData().write(to: directory.appendingPathComponent(printBinary), options: .atomic)
+
+        let manifest = Manifest(
+            schema: 2,
+            id: id,
+            displayName: displayName,
+            modelledFilm: modelledFilm,
+            modelledPrint: modelledPrint,
+            status: status,
+            boxSpeed: boxSpeed,
+            densityRange: densityRange,
+            canisterColor: canisterColor?.components,
+            characterLine: characterLine,
+            negative: .init(
+                file: "negative.cube",
+                binary: negativeBinary,
+                size: negative.size,
+                logEncoding: .init(
+                    stopsBelowMidGray: negative.encoding.stopsBelowMidGray,
+                    stopsAboveMidGray: negative.encoding.stopsAboveMidGray,
+                    midGray: negative.encoding.midGray
+                )
+            ),
+            print: .init(
+                file: "print.cube",
+                binary: printBinary,
+                size: print.size,
+                exposurePerUnit: [exposurePerUnit.x, exposurePerUnit.y, exposurePerUnit.z]
+            ),
+            grain: grain.map { .init(amounts: $0.amounts, sigma48: $0.sigma48) },
+            halation: halation.map { .init(strength: $0.strength, greenShare: $0.greenShare, radiusMicrometres: $0.radiusMicrometres) }
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(manifest).write(to: directory.appendingPathComponent(Self.manifestName), options: .atomic)
     }
 
     /// The one line that names the film the stock models, where the app names it at all
@@ -227,9 +328,9 @@ public struct Stock: Sendable {
         return directory.appendingPathComponent(file)
     }
 
-    private struct Manifest: Decodable {
-        struct Negative: Decodable {
-            struct Encoding: Decodable {
+    private struct Manifest: Codable {
+        struct Negative: Codable {
+            struct Encoding: Codable {
                 var stopsBelowMidGray: Float
                 var stopsAboveMidGray: Float
                 var midGray: Float
@@ -239,7 +340,7 @@ public struct Stock: Sendable {
             var size: Int
             var logEncoding: Encoding
         }
-        struct Print: Decodable {
+        struct Print: Codable {
             var file: String
             var binary: String?
             var size: Int
@@ -254,11 +355,13 @@ public struct Stock: Sendable {
         var status: String
         var boxSpeed: Float
         var densityRange: Float
-        struct Grain: Decodable {
+        var canisterColor: [Float]?
+        var characterLine: String?
+        struct Grain: Codable {
             var amounts: [[Float]]
             var sigma48: [[Float]]
         }
-        struct HalationEntry: Decodable {
+        struct HalationEntry: Codable {
             var strength: Float
             var greenShare: Float
             var radiusMicrometres: Float

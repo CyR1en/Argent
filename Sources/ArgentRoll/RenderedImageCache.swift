@@ -9,6 +9,9 @@ struct RenderedImageKey: Hashable, Sendable {
     let decode: String
     let stock: Int?
     let stockID: String?
+    /// SHA-256 digest of the stock's baked LUTs and tables (`Stock.digest`), so editing a custom stock
+    /// in place immediately misses any picture rendered with the previous version.
+    let stockDigest: String?
     let settings: DevelopSettings?
     /// The colour space the picture is encoded in. Not part of the slot, as settings are not, so a
     /// picture in a newly chosen space cancels and takes the place of the last one's.
@@ -23,22 +26,22 @@ struct RenderedImageKey: Hashable, Sendable {
     /// The decode identity before the settings-dependent scene suffix.
     var familyDecode: String? = nil
 
-    static func film(_ decode: String, stock: Int, stockID: String, settings: DevelopSettings, space: OutputSpace,
+    static func film(_ decode: String, stock: Int, stockID: String, stockDigest: String? = nil, settings: DevelopSettings, space: OutputSpace,
                      pixels: Int, frameSized: Bool = false, refined: Bool = false, familyDecode: String? = nil) -> Self {
         var settings = settings
         settings.manual = settings.manual.ignoringInactiveLensHue()
-        return Self(decode: decode, stock: stock, stockID: stockID, settings: settings, space: space, pixels: pixels,
+        return Self(decode: decode, stock: stock, stockID: stockID, stockDigest: stockDigest, settings: settings, space: space, pixels: pixels,
              frameSized: frameSized, renderVersion: RenderGraph.version(for: settings), refined: refined, familyDecode: familyDecode)
     }
 
     static func neutral(_ decode: String, space: OutputSpace, pixels: Int, refined: Bool = false, familyDecode: String? = nil) -> Self {
-        Self(decode: decode, stock: nil, stockID: nil, settings: nil, space: space, pixels: pixels,
+        Self(decode: decode, stock: nil, stockID: nil, stockDigest: nil, settings: nil, space: space, pixels: pixels,
              frameSized: true, renderVersion: nil, refined: refined, familyDecode: familyDecode)
     }
 
     var isManual: Bool { settings?.manual.adjustments.clearing(.lens).isIdentity == false }
     var family: Family {
-        Family(decode: familyDecode ?? decode, stock: stock, stockID: stockID, pixels: pixels, frameSized: frameSized)
+        Family(decode: familyDecode ?? decode, stock: stock, stockID: stockID, stockDigest: stockDigest, pixels: pixels, frameSized: frameSized)
     }
     var slot: Slot { Slot(family: family, manual: isManual) }
 
@@ -46,6 +49,7 @@ struct RenderedImageKey: Hashable, Sendable {
         let decode: String
         let stock: Int?
         let stockID: String?
+        let stockDigest: String?
         let pixels: Int
         let frameSized: Bool
     }
@@ -230,6 +234,15 @@ final class RenderedImageCache: @unchecked Sendable {
                 request.operation?.cancel()
                 requests.removeValue(forKey: slot)
             }
+        }
+    }
+
+    /// Drops every cached picture rendered through any stock in `stockIDs` and cancels matching in-flight requests.
+    func removeImages(forStockIDs stockIDs: Set<String>) {
+        guard !stockIDs.isEmpty else { return }
+        remove { key in
+            guard let id = key.stockID else { return false }
+            return stockIDs.contains(id)
         }
     }
 

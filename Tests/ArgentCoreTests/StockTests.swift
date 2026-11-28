@@ -299,4 +299,71 @@ import Testing
             break
         }
     }
+
+    @Test func readsOptionalCanisterColorCharacterLineAndSpecPresence() throws {
+        var manifest = ToyStock.manifest()
+        manifest["id"] = "user-warm-gold"
+        manifest["displayName"] = "Warm Gold"
+        manifest["canisterColor"] = [0.85, 0.65, 0.30]
+        manifest["characterLine"] = "  warm shadows, golden highlights  "
+        let directory = try ToyStock.write(manifest: manifest, binary: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try Data("{}".utf8).write(to: directory.appendingPathComponent(Stock.specFileName))
+
+        let stock = try Stock.load(from: directory, origin: .userBuilt)
+        #expect(stock.origin == .userBuilt)
+        #expect(stock.isUserStock)
+        #expect(stock.hasSpec)
+        #expect(stock.canisterColor == Stock.CanisterColor(red: 0.85, green: 0.65, blue: 0.30))
+        #expect(stock.characterLine == "warm shadows, golden highlights")
+    }
+
+    @Test func rejectsOutOfRangeCanisterColor() throws {
+        for badColor in [[1.2, 0.5, 0.5], [-0.1, 0.5, 0.5], [0.5, 0.5]] {
+            var manifest = ToyStock.manifest()
+            manifest["canisterColor"] = badColor
+            let directory = try ToyStock.write(manifest: manifest)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            #expect(throws: StockError.self) { try Stock.load(from: directory) }
+        }
+    }
+
+    @Test func writesAndReloadsASchema2StockFolder() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("argent-write-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let grain = GrainTable(amounts: [[0.1, 0.1, 0.1], [0.9, 0.9, 0.9]],
+                               sigma48: [[0.01, 0.012, 0.015], [0.02, 0.022, 0.025]])
+        let halation = Stock.Halation(strength: 0.02, greenShare: 0.3, radiusMicrometres: 160)
+        let original = Stock(
+            id: "user-roundtrip",
+            displayName: "Roundtrip 400",
+            status: "custom",
+            boxSpeed: 400,
+            densityRange: 3.1,
+            exposurePerUnit: SIMD3<Float>(1.1, 1.0, 0.95),
+            negative: LUT3D.identity(size: 5),
+            print: LUT3D.identity(size: 5),
+            grain: grain,
+            halation: halation,
+            origin: .userImported,
+            canisterColor: Stock.CanisterColor(red: 0.4, green: 0.6, blue: 0.8),
+            characterLine: "cool midtones, crisp shadows"
+        )
+        try original.write(to: directory)
+
+        let loaded = try Stock.load(from: directory, origin: .userImported)
+        #expect(loaded.id == original.id)
+        #expect(loaded.displayName == original.displayName)
+        #expect(loaded.status == original.status)
+        #expect(loaded.boxSpeed == original.boxSpeed)
+        #expect(loaded.densityRange == original.densityRange)
+        #expect(loaded.exposurePerUnit == original.exposurePerUnit)
+        #expect(loaded.grain == original.grain)
+        #expect(loaded.halation == original.halation)
+        #expect(loaded.canisterColor == original.canisterColor)
+        #expect(loaded.characterLine == original.characterLine)
+        #expect(!loaded.hasSpec)
+        #expect(loaded.negative.size == 5 && loaded.print.size == 5)
+    }
 }

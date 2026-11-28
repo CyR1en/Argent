@@ -423,12 +423,23 @@ final class RollModel {
     /// next frame that way is decoded ahead.
     private(set) var travel = 1
     /// The stocks' names in library order, empty when no stock could be loaded.
-    @ObservationIgnored let stockDigests: [String]
-    let stockNames: [String]
+    @ObservationIgnored var stockDigests: [String]
+    var stockNames: [String]
     /// Each stock's line naming the film it models ("After Kodak Portra 400: ..."), in the same
     /// order and of the same length. It is the help tag of the stock panel's tile and of
     /// the Stock menu's item, and the end of the chip's VoiceOver hint.
-    let stockAfterLines: [String?]
+    var stockAfterLines: [String?]
+    /// Incremented whenever the loaded stock list is reloaded (user stock added, edited, or deleted).
+    var stockVersion = 0
+    /// When the open roll's saved stock is not installed, its original id and recorded display name are
+    /// kept here while previews fall back to a neutral/default stock, so opening the roll never loses
+    /// which custom stock it belonged to.
+    var missingRollStockID: String?
+    var missingRollStockName: String?
+    var isMissingStockNoticeDismissed = false
+    @ObservationIgnored private let bundledStocksDirectory: URL?
+    @ObservationIgnored private let includeMonochromeStocks: Bool
+    @ObservationIgnored let userStocksDirectory: URL?
 
     @ObservationIgnored let thumbnails = ThumbnailLoader()
     /// The pixel sizes the contact sheet's and the stock panel's cells have asked thumbnails at,
@@ -486,7 +497,8 @@ final class RollModel {
     /// own, outside Application Support. `previewCache` keeps the sheet's decodes on disk and
     /// `digestsFile` the raws' SHA-256, both in Caches; tests give a folder of their own and no file,
     /// as `SourceDigests.shared` is the whole process's and a test's file would be every test's.
-    init(bookmarks: BookmarkStore = BookmarkStore(), stocksDirectory: URL? = nil, decisions: AutoDecisionStore = AutoDecisionStore(),
+    init(bookmarks: BookmarkStore = BookmarkStore(), stocksDirectory: URL? = nil,
+         userStocksDirectory: URL? = nil, decisions: AutoDecisionStore = AutoDecisionStore(),
          flagStore: FlagStore = FlagStore(), recipeLibrary: URL = RecipeStore.defaultLibrary,
          previewCache: URL = LinearDiskCache.defaultFolder, digestsFile: URL? = SourceDigests.defaultFile,
          developMemory: DevelopMemorySettings = .shared,
@@ -499,7 +511,14 @@ final class RollModel {
         self.recipeLibrary = recipeLibrary
         self.developMemory = developMemory
         let directory = stocksDirectory ?? Self.stocksDirectory()
-        let library = directory.map { StockLibrary.load(from: $0, includeMonochrome: stocksDirectory == nil) }
+        let resolvedUserStocks = userStocksDirectory
+            ?? (stocksDirectory == nil && !ProcessInfo.isRunningTests ? UserStockStore.defaultFolder : nil)
+        self.bundledStocksDirectory = directory
+        self.includeMonochromeStocks = stocksDirectory == nil
+        self.userStocksDirectory = resolvedUserStocks
+        let library = directory.map {
+            StockLibrary.load(from: $0, userDirectory: resolvedUserStocks, includeMonochrome: stocksDirectory == nil)
+        }
         for failure in library?.failures ?? [] {
             Self.log.error("stock \(failure.folder, privacy: .public) not loaded: \(failure.reason, privacy: .public)")
         }
@@ -578,7 +597,94 @@ final class RollModel {
     /// choosing the roll's makes follow the roll again; on the sheet the whole roll's.
     func selectStock(_ index: Int) {
         guard stockNames.indices.contains(index) else { return }
-        if let frame = shownFrame { setStock(index, for: frame) } else { stockIndex = index }
+        if let frame = shownFrame {
+            setStock(index, for: frame)
+        } else {
+            missingRollStockID = nil
+            missingRollStockName = nil
+            stockIndex = index
+        }
+    }
+
+    /// Store for user-created and user-imported stocks, when configured.
+    var userStockStore: UserStockStore? {
+        userStocksDirectory.map { UserStockStore(folder: $0) }
+    }
+
+    /// Reloads bundled and user stocks from disk, updating `films` in place without clearing decoded RAWs.
+    /// Preserves the active stock selection by id, recovers automatically if a missing roll stock was reinstalled,
+    /// and records `missingRollStockID` if the currently selected roll stock was removed.
+    @discardableResult
+    func reloadUserStocks() -> StockLibrary.LoadResult? {
+        guard let directory = bundledStocksDirectory else { return nil }
+        let previousRollID = missingRollStockID ?? currentStock?.id
+        let previousRollName = missingRollStockName ?? currentStock?.displayName
+        let library = StockLibrary.load(from: directory, userDirectory: userStocksDirectory,
+                                        includeMonochrome: includeMonochromeStocks)
+        for failure in library.failures {
+            Self.log.error("stock \(failure.folder, privacy: .public) not loaded: \(failure.reason, privacy: .public)")
+        }
+        let stocks = library.stocks
+        films?.reloadStocks(stocks)
+        stockDigests = stocks.map(\.digest)
+        stockNames = films?.stocks.map(\.displayName) ?? []
+        stockAfterLines = films?.stocks.map(\.afterLine) ?? []
+        if let previousRollID {
+            if let index = films?.stocks.firstIndex(where: { $0.id == previousRollID }) {
+                stockIndex = index
+                missingRollStockID = nil
+                missingRollStockName = nil
+            } else {
+                missingRollStockID = previousRollID
+                missingRollStockName = previousRollName
+                isMissingStockNoticeDismissed = false
+                stockIndex = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" })
+                    ?? films?.stocks.firstIndex(where: { $0.id == "kodak-portra-400" })
+                    ?? 0
+            }
+        } else {
+            stockIndex = min(stockIndex, max(0, stockNames.count - 1))
+        }
+        stockVersion &+= 1
+        return library
+    }
+
+    /// Why the open roll's own stock is unavailable, when it was saved with a stock that is not currently installed.
+    var missingRollStockReason: String? {
+        guard let id = missingRollStockID else { return nil }
+        let name = missingRollStockName ?? id
+        let fallback = currentStock?.displayName ?? "Neutral"
+        return "This roll's stock, \(name), is not installed; previewing with \(fallback). Choose another stock or reinstall \(name)."
+    }
+
+    /// All missing-stock reasons for the open roll (roll-level first, then any per-frame overrides).
+    var missingStockReasons: [String] {
+        var reasons: [String] = []
+        if let rollReason = missingRollStockReason { reasons.append(rollReason) }
+        if let roll {
+            for frame in roll.frames {
+                if let frameReason = unavailableStockReason(for: frame) {
+                    reasons.append(frameReason)
+                }
+            }
+        }
+        return reasons
+    }
+
+    /// Short non-blocking notice for missing roll or frame stocks, `nil` once dismissed or resolved.
+    var missingStockNotice: String? {
+        guard !isMissingStockNoticeDismissed else { return nil }
+        if let id = missingRollStockID {
+            let name = missingRollStockName ?? id
+            return "Stock \"\(name)\" is not installed — previewing with \(currentStock?.displayName ?? "Neutral")"
+        }
+        if let roll {
+            let count = roll.frames.count(where: { unavailableStockReason(for: $0) != nil })
+            if count > 0 {
+                return count == 1 ? "1 frame uses a stock that is not installed" : "\(count) frames use stocks that are not installed"
+            }
+        }
+        return nil
     }
 
     /// The roll's stock, when stocks loaded.
@@ -1248,7 +1354,20 @@ final class RollModel {
         thumbnails.removeAll()
         cellPixelSizes = []
         films?.removeAll()
-        if let id = restored.stockID, let index = films?.stocks.firstIndex(where: { $0.id == id }) { stockIndex = index }
+        missingRollStockID = nil
+        missingRollStockName = nil
+        isMissingStockNoticeDismissed = false
+        if let id = restored.stockID {
+            if let index = films?.stocks.firstIndex(where: { $0.id == id }) {
+                stockIndex = index
+            } else {
+                missingRollStockID = id
+                missingRollStockName = restored.stockDisplayName
+                if let neutral = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" }) {
+                    stockIndex = neutral
+                }
+            }
+        }
         controls = restored.controls ?? RollControls()
         overrides = restored.overrides
         // A frame developed before is printed as it was measured then.
