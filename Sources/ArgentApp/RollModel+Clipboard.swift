@@ -23,6 +23,9 @@ struct AdjustmentParts: OptionSet, Hashable, Sendable {
     /// The frame's own stock, grain and halation.
     static let film = AdjustmentParts(rawValue: 1 << 6)
 
+    static let stock = AdjustmentParts(rawValue: 1 << 7)
+    static let filmSettings = AdjustmentParts(rawValue: 1 << 8)
+
     static let all: AdjustmentParts = [.light, .presence, .curve, .masks, .lens, .frameControls, .film]
     /// One at a time, in the order Paste Only lists them, Presence after Light as the Light tab shows them.
     static let each: [AdjustmentParts] = [.light, .presence, .curve, .masks, .lens, .frameControls, .film]
@@ -375,8 +378,9 @@ extension RollModel {
     /// it is left as it was and counted. A paste asked for while another waits goes after it. The task gives what it came to, `nil`
     /// when the roll went or the app quit first.
     @discardableResult
-    func paste(_ clipboard: AdjustmentsClipboard, parts: AdjustmentParts, to frames: [Frame], batch: Bool) -> Task<PasteReport?, Never>? {
-        let carried = clipboard.carried(parts)
+    func paste(_ clipboard: AdjustmentsClipboard, parts: AdjustmentParts, to frames: [Frame], batch: Bool,
+               includingEmptyParts: Bool = false) -> Task<PasteReport?, Never>? {
+        let carried = includingEmptyParts ? parts : clipboard.carried(parts)
         guard !carried.isEmpty, !frames.isEmpty, !isScanning, !isQuitting, !isRestoringManual, frameMove == nil else { return nil }
         endGestures(on: frames)
         let generation = manualGeneration, previous = pasteTask
@@ -445,6 +449,12 @@ extension RollModel {
                                                     text: "Pasting adjustments… waiting for the roll to balance"))
             }
             _ = await settledDecision(priority: .veryHigh)
+            guard isCurrentPaste(generation) else { return nil }
+            let changed = frames.filter { changedAutoPinControls(clipboard, carried: carried, on: $0) != nil }
+            if !changed.isEmpty {
+                await prepareAutoDescriptors(for: changed, generation: balanceGeneration)
+                if !isBalanced { _ = await settledDecision(priority: .veryHigh) }
+            }
         }
         guard isCurrentPaste(generation) else { return nil }
         guard !isScanning, !isQuitting, !isRestoringManual else {
@@ -511,6 +521,12 @@ extension RollModel {
                 notes = given.notes
             }
         } catch { return .failure(PasteRefusal(why: error.localizedDescription)) }
+        let isEdit = !(values.isIdentity && origin == .auto)
+        return .success(PastePlan(values: values, origin: origin, notes: notes,
+                                  own: pastedControls(clipboard, carried: carried, on: frame), isEdit: isEdit, pins: isEdit && pins))
+    }
+
+    private func pastedControls(_ clipboard: AdjustmentsClipboard, carried: AdjustmentParts, on frame: Frame) -> FrameControls {
         // Each part of the frame's own controls carries its own alone: Rated At and Lab Balance leaves the frame's stock,
         // grain and halation as they are, and Film Stock, Grain and Halation its Rated at and Lab balance.
         var own = frameControls(frame)
@@ -518,21 +534,29 @@ extension RollModel {
             own.ratedAt = clipboard.frameControls.ratedAt
             own.labBalance = clipboard.frameControls.labBalance
         }
-        if carried.contains(.film) {
+        if carried.contains(.film) || carried.contains(.stock) {
             own.stock = clipboard.frameControls.stock
+        }
+        if carried.contains(.film) || carried.contains(.filmSettings) {
             own.grain = clipboard.frameControls.grain
             own.halation = clipboard.frameControls.halation
             own.monochromeFilter = clipboard.frameControls.monochromeFilter
             own.paperGrade = clipboard.frameControls.paperGrade
         }
-        let isEdit = !(values.isIdentity && origin == .auto)
-        return .success(PastePlan(values: values, origin: origin, notes: notes, own: own, isEdit: isEdit, pins: isEdit && pins))
+        return own
+    }
+
+    private func changedAutoPinControls(_ clipboard: AdjustmentsClipboard, carried: AdjustmentParts, on frame: Frame) -> FrameControls? {
+        guard pinning(clipboard, carried: carried, on: frame) == (.auto, true) else { return nil }
+        let own = pastedControls(clipboard, carried: carried, on: frame)
+        guard stockIndex(own: own) != stockIndex(for: frame) || own.applied(to: controls) != controls(for: frame) else { return nil }
+        return own
     }
 
     /// `frame` as the paste leaves it, its edit and its own Rated at and Lab balance, or why it cannot take the paste (rule 7): an
     /// issue, a held edit, a raw that changed or was not verified, a recipe unread, a measurement not made, a roll not settled for an
     /// Auto pin, or masks its compiler cannot take (rule 5).
-    private func pasted(_ clipboard: AdjustmentsClipboard, carried: AdjustmentParts, masks: PastedMasks?,
+    private func pasted(_ clipboard: AdjustmentsClipboard, carried: AdjustmentParts, masks: PastedMasks?, autoAims: [URL: PrintAim],
                         on frame: Frame) -> Result<(edit: ManualEdit?, own: FrameControls), PasteRefusal> {
         let url = frame.url
         func refuse(_ why: String) -> Result<(edit: ManualEdit?, own: FrameControls), PasteRefusal> { .failure(PasteRefusal(why: why)) }
@@ -574,7 +598,8 @@ extension RollModel {
             let index = stockIndex(own: plan.own), grain = plan.own.grain ?? output.grain
             guard let stock = films?.stocks[safe: index] else { return refuse("No stock is loaded.") }
             if plan.origin == .auto, !isBalanced { return refuse("The roll has not settled on its Auto yet.") }
-            let aim = plan.origin == .original ? PrintAim() : printAim(for: frame), controls = plan.own.applied(to: self.controls)
+            let aim = plan.origin == .original ? PrintAim() : autoAims[url] ?? printAim(for: frame)
+            let controls = plan.own.applied(to: self.controls)
             let base = try DevelopmentResolver.resolve(stock: stock, stockDigest: stockDigests[index], controls: controls, aim: aim,
                                                        manual: nil, grain: grain.amount, grainSeed: frame.grainSeed, sharpen: true,
                                                        origin: plan.origin)
@@ -601,12 +626,19 @@ extension RollModel {
         var states: [PasteUndoState] = [], written: [Frame] = [], masksBefore: [URL: [Mask]] = [:], own = overrides
         // The roll's frames are indexed by raw once because looking up each pasted frame would otherwise compare every pair in a large batch.
         let current = Dictionary((roll?.frames ?? []).map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+        var changed: [URL: FrameControls] = [:]
+        for asked in frames {
+            if let frame = current[asked.url], let own = changedAutoPinControls(clipboard, carried: carried, on: frame) {
+                changed[frame.url] = own
+            }
+        }
+        let aims = autoAims(applying: changed)
         for asked in frames {
             guard let frame = current[asked.url] else {
                 report.skipped.append(.init(frame: asked.url, name: asked.name, why: "It is no longer in the roll."))
                 continue
             }
-            switch pasted(clipboard, carried: carried, masks: masks, on: frame) {
+            switch pasted(clipboard, carried: carried, masks: masks, autoAims: aims, on: frame) {
             case .failure(let refusal):
                 report.skipped.append(.init(frame: frame.url, name: frame.name, why: refusal.why))
             case .success(let result):

@@ -268,7 +268,8 @@ import Testing
         let bench = try await RemoveBench()
         defer { bench.finish() }
         let ground = InspectorMenus.ground(of: .remove, frame: bench.frame, model: bench.model)
-        #expect(ground.titles == ["Copy Adjustments", "Paste Adjustments", "Paste Only", "—", "Reset Removals"])
+        #expect(ground.titles == ["Copy Adjustments", "Paste Adjustments", "Paste Only",
+                                 "Save Look as Preset…", "Look Presets…", "—", "Reset Removals"])
         let resets = InspectorMenus.resets(of: .remove, frame: bench.frame, model: bench.model)
         #expect(resets.map(\.id) == ["adjust.resetRemovals"] && resets.map(\.title) == ["Reset Removals"])
         // By the button's rule: something to delete, as the model says, on a frame that can be adjusted. The model has nothing

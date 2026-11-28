@@ -43,7 +43,8 @@ import Testing
         return states
     }
 
-    static let sheetRows = ["Open Frame", "Flag", "—", "Copy Adjustments", "Paste Adjustments", "Paste Only", "Paste to All Frames", "—",
+    static let sheetRows = ["Open Frame", "Flag", "—", "Copy Adjustments", "Paste Adjustments", "Paste Only",
+                            "Save Look as Preset…", "Look Presets…", "Paste to All Frames", "—",
                             "Reset", "—", "Develop This Frame…", "Show RAW in Finder", "Show Developed File in Finder"]
     /// The sheet's own last section: the frame leaves the roll (`FrameMenu.roll`).
     static let rollRows = ["—", "Move to Roll", "Remove from Roll…"]
@@ -82,6 +83,7 @@ import Testing
                               "frame.pasteOnly.curve": false,
                               "frame.pasteOnly.masks": false, "frame.pasteOnly.lens": false, "frame.pasteOnly.frameControls": false,
                               "frame.pasteOnly.film": false, "frame.pasteToShown": false,
+                              "frame.savePreset": model.canSavePreset(from: frames[1]), "frame.lookPresets": true,
                               "frame.reset": true, "frame.reset.auto": false, "frame.reset.roll": false,
                               "frame.develop": true, "frame.showRAW": true, "frame.showDeveloped": false,
                               "frames.move": true, "frames.move.new": true, "frames.remove": true])
@@ -127,7 +129,7 @@ import Testing
             model.holdReadingForDebug()
             let opening = states(frames[2])
             for id in ["frame.flag", "frame.copy", "frame.paste", "frame.pasteOnly", "frame.pasteOnly.light", "frame.pasteToShown",
-                       "frame.reset.auto", "frame.develop"] {
+                       "frame.savePreset", "frame.lookPresets", "frame.reset.auto", "frame.develop"] {
                 #expect(opening[id] == false, "\(id)")
             }
             #expect(opening["frame.showRAW"] == true)
@@ -335,7 +337,8 @@ import Testing
             try ContextMenuTests.click(.rightMouseDown, at: Self.point(ofCell: 3, in: collection), in: window)
             #expect(shown.noted == ["selection 3"])
             #expect(shown.rows.first == ["Open Frame ⌘\u{F701}", "Flag F", "—", "Copy Adjustments ⌥⌘C", "Paste Adjustments ⌥⌘V",
-                                         "Paste Only", "Paste to All Frames ⌥⇧⌘V", "—", "Reset", "—", "Develop This Frame…",
+                                         "Paste Only", "Save Look as Preset…", "Look Presets…", "Paste to All Frames ⌥⇧⌘V",
+                                         "—", "Reset", "—", "Develop This Frame…",
                                          "Show RAW in Finder", "Show Developed File in Finder", "—", "Move to Roll",
                                          "Remove from Roll… ⌘\(String(FrameKeys.remove.key).uppercased())"])
             // Its Flag is that frame's.

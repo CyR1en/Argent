@@ -161,6 +161,7 @@ final class RollModel {
     var editRevision: UInt64 = UInt64(Date().timeIntervalSince1970 * 1_000_000)
     var isRestoringManual = false
     var isQuitting = false
+    var presetPresentation: PresetPresentation?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
     let updates = UpdateController()
     var editLineage = UUID().uuidString

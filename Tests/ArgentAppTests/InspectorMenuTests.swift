@@ -512,7 +512,8 @@ import Testing
             for (tab, resets) in [(AdjustInspectorTab.light, ["Reset Light", "Reset Presence"]), (.curve, ["Reset Curves"]), (.masks, ["Reset Masks"]), (.lens, ["Distortion", "—", "Reset Lens"]),
                                   (.remove, ["Reset Removals"])] {
                 let ground = InspectorMenus.ground(of: tab, frame: bench.frame, model: bench.model)
-                #expect(ground.titles == ["Copy Adjustments", "Paste Adjustments", "Paste Only", "—"] + resets, "\(tab)")
+                #expect(ground.titles == ["Copy Adjustments", "Paste Adjustments", "Paste Only",
+                                          "Save Look as Preset…", "Look Presets…", "—"] + resets, "\(tab)")
                 // The photograph's rows: no batch paste, whose frames are not in view here.
                 #expect(ground.entry("frame.pasteToShown") == nil)
                 #expect(ground.entry("frame.pasteOnly")?.children.titles == AdjustmentParts.each.map(\.title))
