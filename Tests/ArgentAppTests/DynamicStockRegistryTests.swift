@@ -50,8 +50,10 @@ import Testing
             let v1 = Self.makeCustomStock(id: "user-amber", displayName: "Amber 400", boxSpeed: 400,
                                           characterLine: "warm amber tones")
             try store.save(v1, specData: Data("{}".utf8))
+            model.developPhase = .done
             model.reloadUserStocks()
 
+            #expect(model.developPhase == .done)
             #expect(model.stockNames.count == initialCount + 1)
             #expect(model.stockVersion == initialVersion + 1)
             let amberIndex = try #require(model.films?.stocks.firstIndex(where: { $0.id == "user-amber" }))
@@ -60,12 +62,22 @@ import Testing
             #expect(StockCharacter.line(for: model.currentStock) == "warm amber tones")
             let digestV1 = model.stockDigests[amberIndex]
 
+            // An unrelated stock sorting before the active stock changes its index, not the develop.
+            let unrelated = Self.makeCustomStock(id: "user-agate", displayName: "Agate 400")
+            try store.save(unrelated)
+            model.developPhase = .done
+            model.reloadUserStocks()
+            #expect(model.stockIndex == amberIndex + 1)
+            #expect(model.currentStock?.id == "user-amber")
+            #expect(model.developPhase == .done)
+
             // Edit the user stock in place: digest changes, selection stays on user-amber.
             let v2 = Self.makeCustomStock(id: "user-amber", displayName: "Amber 800", boxSpeed: 800)
             try store.save(v2, specData: Data("{}".utf8))
             model.reloadUserStocks()
 
             let updatedIndex = try #require(model.films?.stocks.firstIndex(where: { $0.id == "user-amber" }))
+            #expect(model.developPhase == .idle)
             #expect(model.stockIndex == updatedIndex)
             #expect(model.currentStock?.displayName == "Amber 800")
             #expect(model.stockDigests[updatedIndex] != digestV1)

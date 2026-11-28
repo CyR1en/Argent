@@ -77,7 +77,8 @@ final class RollModel {
     var importDirectory: URL?
     var isDropTargeted = false
     /// Index into `stockNames`, in library order; Portra 400 is the default.
-    var stockIndex = 0 { didSet { settingsChanged() } }
+    var stockIndex = 0 { didSet { if !isReindexingStocks { settingsChanged() } } }
+    @ObservationIgnored private var isReindexingStocks = false
     /// The roll's Rated at and Lab balance: box speed and Auto for a new roll, as its recipes
     /// left them for a roll developed before.
     var controls = RollControls() { didSet { settingsChanged() } }
@@ -619,8 +620,10 @@ final class RollModel {
     @discardableResult
     func reloadUserStocks() -> StockLibrary.LoadResult? {
         guard let directory = bundledStocksDirectory else { return nil }
-        let previousRollID = missingRollStockID ?? currentStock?.id
+        let previousActiveID = currentStock?.id
+        let previousRollID = missingRollStockID ?? previousActiveID
         let previousRollName = missingRollStockName ?? currentStock?.displayName
+        let previousDigests = Dictionary(uniqueKeysWithValues: zip(films?.stocks.map(\.id) ?? [], stockDigests))
         let library = StockLibrary.load(from: directory, userDirectory: userStocksDirectory,
                                         includeMonochrome: includeMonochromeStocks)
         for failure in library.failures {
@@ -631,21 +634,33 @@ final class RollModel {
         stockDigests = stocks.map(\.digest)
         stockNames = films?.stocks.map(\.displayName) ?? []
         stockAfterLines = films?.stocks.map(\.afterLine) ?? []
+        let nextIndex: Int
         if let previousRollID {
             if let index = films?.stocks.firstIndex(where: { $0.id == previousRollID }) {
-                stockIndex = index
+                nextIndex = index
                 missingRollStockID = nil
                 missingRollStockName = nil
             } else {
                 missingRollStockID = previousRollID
                 missingRollStockName = previousRollName
                 isMissingStockNoticeDismissed = false
-                stockIndex = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" })
+                nextIndex = films?.stocks.firstIndex(where: { $0.id == "argent-neutral" })
                     ?? films?.stocks.firstIndex(where: { $0.id == "kodak-portra-400" })
                     ?? 0
             }
         } else {
-            stockIndex = min(stockIndex, max(0, stockNames.count - 1))
+            nextIndex = min(stockIndex, max(0, stockNames.count - 1))
+        }
+        if nextIndex != stockIndex {
+            isReindexingStocks = true
+            stockIndex = nextIndex
+            isReindexingStocks = false
+        }
+        let activeID = currentStock?.id
+        let nextDigests = Dictionary(uniqueKeysWithValues: zip(stocks.map(\.id), stockDigests))
+        let referencedIDs = Set(overrides.values.compactMap(\.stock)).union([previousRollID, activeID].compactMap { $0 })
+        if previousActiveID != activeID || referencedIDs.contains(where: { previousDigests[$0] != nextDigests[$0] }) {
+            settingsChanged()
         }
         stockVersion &+= 1
         return library
