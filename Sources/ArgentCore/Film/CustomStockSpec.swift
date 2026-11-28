@@ -103,6 +103,16 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
 
     public init(base: Base = .neutral) { self.base = base }
 
+    public func defaultMonochromeMixer(inheriting stock: Stock?) -> SIMD3<Float>? {
+        switch base {
+        case .neutral: return nil
+        case .monochrome: return SIMD3(0.2627, 0.6780, 0.0593)
+        case .derived(let id):
+            guard let stock, stock.id == id else { return nil }
+            return stock.monochrome?.weights(for: frameLook?.monochromeFilter ?? .none)
+        }
+    }
+
     public init(derivedFrom stock: Stock) {
         self.init(base: .derived(stockID: stock.id))
         boxSpeed = min(max(stock.boxSpeed, 50), 3200)

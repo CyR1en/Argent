@@ -114,6 +114,24 @@ import Testing
         }
     }
 
+    @Test func mixerDefaultsMatchTheDerivedFilmAndBakedFilter() throws {
+        let base = try #require(MonochromeFilm.stocks.first)
+        let film = try #require(base.monochrome)
+        let derived = CustomStockSpec(derivedFrom: base)
+        #expect(derived.defaultMonochromeMixer(inheriting: base) == film.weights(for: .none))
+
+        let spec = try CustomStockSpec(baking: base, settings: .init(monochromeFilter: .red))
+        var mix = try #require(spec.defaultMonochromeMixer(inheriting: base))
+        #expect(mix == SIMD3(1, 0, 0))
+        mix.x = 0.8
+        var edited = spec
+        edited.monochromeMixer = mix
+        let input = SIMD3<Float>(0.3, 0.1, 0.7)
+        let before = try compile(spec, base: base).negativeAmounts(exposed: input, filter: .none)
+        let after = try compile(edited, base: base).negativeAmounts(exposed: input, filter: .none)
+        #expect(before == after)
+    }
+
     @Test func bakedSilverCurvesChangeLuminanceWithoutTintingThePaper() throws {
         let base = try #require(MonochromeFilm.stocks.first)
         let red = try ChannelCurve(points: [

@@ -38,7 +38,6 @@ struct StockBuilderSheet: View {
         if case .derived = spec.base { return base == nil }
         return false
     }
-    private var isMonochrome: Bool { spec.base == .monochrome || base?.monochrome != nil }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -201,11 +200,11 @@ struct StockBuilderSheet: View {
                     slider("\(hue.rawValue.capitalized) Saturation", shift.saturation, -1...1)
                 }
             }
-            if isMonochrome {
+            if let mixer = spec.defaultMonochromeMixer(inheriting: base) {
                 DisclosureGroup("Monochrome Mixer & Paper") {
                     ForEach(0..<3) { i in
                         let label = ["Red", "Green", "Blue"][i]
-                        slider("\(label) Mix", component($spec.monochromeMixer, i, default: SIMD3(0.2627, 0.6780, 0.0593)), 0...1)
+                        slider("\(label) Mix", component($spec.monochromeMixer, i, default: mixer), 0...1)
                         slider("\(label) Paper", component($spec.paperTone, i, default: SIMD3(repeating: 1)), 0...2)
                     }
                 }

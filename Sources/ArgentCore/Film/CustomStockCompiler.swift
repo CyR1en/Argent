@@ -8,16 +8,12 @@ public enum CustomStockCompiler {
                                size: Int = saveSize) throws -> Stock {
         guard (2...128).contains(size) else { throw LUTError.badSize(size) }
         let foundation: Stock?
-        let mixer: SIMD3<Float>?
         switch spec.base {
-        case .neutral: foundation = nil; mixer = nil
-        case .monochrome:
-            foundation = MonochromeFilm.stocks.first
-            mixer = spec.monochromeMixer ?? luma
+        case .neutral: foundation = nil
+        case .monochrome: foundation = MonochromeFilm.stocks.first
         case .derived(let stockID):
             guard let base, base.id == stockID else { throw StockError.badValue("Missing base stock: \(stockID)") }
             foundation = base
-            mixer = base.monochrome.map { spec.monochromeMixer ?? $0.weights(for: spec.frameLook?.monochromeFilter ?? .none) }
         }
         try validate(spec, foundation: foundation)
         let analytical = if case .derived = spec.base { false } else { true }
@@ -26,7 +22,10 @@ public enum CustomStockCompiler {
         let look = spec.frameLook
         let manual = look?.manual ?? .identity
         let curves = try spec.toneCurve?.compiled()
-        let weights = mixer.map { $0 / $0.sum() }
+        let weights = spec.defaultMonochromeMixer(inheriting: foundation).map {
+            let mixer = spec.monochromeMixer ?? $0
+            return mixer / mixer.sum()
+        }
         let layer = foundation?.negative ?? .identity(size: 2, encoding: encoding)
         let settings = DevelopSettings(ratedAt: look?.ratedAt, labBalance: look?.labBalance ?? .zero,
                                       printExposure: look?.printExposure ?? 0, manual: manual,
