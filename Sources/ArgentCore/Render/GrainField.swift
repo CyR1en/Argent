@@ -33,9 +33,9 @@ public final class GrainField: @unchecked Sendable {
     /// What a tile pair holds.
     private enum Key: Hashable {
         /// A develop's: its pitch in 5 percent steps, 0 for white noise.
-        case pitch(Int)
+        case pitch(Int, silver: Bool)
         /// A smaller picture's: its develop's long side and its own.
-        case resized(from: Int, to: Int)
+        case resized(from: Int, to: Int, silver: Bool)
     }
 
     public init(device: MTLDevice, queue: MTLCommandQueue) {
@@ -60,8 +60,12 @@ public final class GrainField: @unchecked Sendable {
     /// The two tiles for an output whose long side is `longSide` pixels, drawn at its own pitch: a
     /// develop's.
     public func tiles(longSide: Int) throws -> (MTLTexture, MTLTexture) {
-        let key = Self.bucket(longSide: longSide)
-        let found = try tiles(for: .pitch(key)) { (Self.developKernels(bucket: key), 1) }
+        try tiles(longSide: longSide, silver: false)
+    }
+
+    private func tiles(longSide: Int, silver: Bool) throws -> (MTLTexture, MTLTexture) {
+        let key = Self.bucket(longSide: longSide, silver: silver)
+        let found = try tiles(for: .pitch(key, silver: silver)) { (Self.developKernels(bucket: key, silver: silver), 1) }
         return (found.a, found.b)
     }
 
@@ -70,13 +74,13 @@ public final class GrainField: @unchecked Sendable {
     /// the develop's own at r(p). A smaller picture's noise has the statistics of the develop's grain
     /// area-resized to it (`GrainModel.resized`), so the picture and the develop resized to it carry the
     /// same grain (docs/manual-development-validation.md, "Grain tolerance, 2026-10-16").
-    public func tiles(longSide: Int, developLongSide: Int) throws -> (a: MTLTexture, b: MTLTexture, scale: Float) {
+    public func tiles(longSide: Int, developLongSide: Int, silver: Bool = false) throws -> (a: MTLTexture, b: MTLTexture, scale: Float) {
         guard developLongSide > longSide + 1 else {
-            let (a, b) = try tiles(longSide: longSide)
+            let (a, b) = try tiles(longSide: longSide, silver: silver)
             return (a, b, GrainModel.pixelRatio(longSide: longSide))
         }
-        return try tiles(for: .resized(from: developLongSide, to: longSide)) {
-            let develop = Self.developKernels(bucket: Self.bucket(longSide: developLongSide))
+        return try tiles(for: .resized(from: developLongSide, to: longSide, silver: silver)) {
+            let develop = Self.developKernels(bucket: Self.bucket(longSide: developLongSide, silver: silver), silver: silver)
             let resized = GrainModel.resized(kernels: develop, from: developLongSide, to: longSide)
             return (resized.kernels, GrainModel.pixelRatio(longSide: developLongSide) * resized.sigma)
         }
@@ -84,17 +88,21 @@ public final class GrainField: @unchecked Sendable {
 
     /// The pitch of an output `longSide` pixels long in 5 percent steps; 0, white noise, below a
     /// quarter-pixel cloud.
-    static func bucket(longSide: Int) -> Int {
+    static func bucket(longSide: Int, silver: Bool = false) -> Int {
         let pitch = GrainModel.pitchMicrometres(longSide: longSide)
-        let sigmas = GrainModel.cloudSigmasMicrometres.map { $0 / pitch }
+        let sigmas = cloudSigmas(silver: silver).map { $0 / pitch }
         return sigmas.max()! < 0.25 ? 0 : Int((log(pitch) / log(Self.pitchStep)).rounded())
     }
 
     /// A develop's kernels for a bucket: each cloud integrated over a pixel at the bucket's canonical pitch,
     /// so every request in a bucket gets the same grain, whatever frame came first.
-    static func developKernels(bucket: Int) -> [[Float]] {
+    static func developKernels(bucket: Int, silver: Bool = false) -> [[Float]] {
         let bucketPitch = pow(Self.pitchStep, Float(bucket))
-        return GrainModel.cloudSigmasMicrometres.map { bucket == 0 ? kernel(sigma: 0) : kernel(sigma: $0 / bucketPitch) }
+        return cloudSigmas(silver: silver).map { bucket == 0 ? kernel(sigma: 0) : kernel(sigma: $0 / bucketPitch) }
+    }
+
+    private static func cloudSigmas(silver: Bool) -> [Float] {
+        silver ? [4.5, 9] : GrainModel.cloudSigmasMicrometres
     }
 
     /// The pair kept for `key`, or one made from `spec`'s kernels and kept with its scale.
@@ -188,4 +196,3 @@ public final class GrainField: @unchecked Sendable {
         return weights.map { $0 / total }
     }
 }
-

@@ -13,7 +13,7 @@ struct ToneCurveParameters {
 
 /// Mirrors `struct PrintParams` in the Metal source. Layout: four floats or uints for the
 /// offset and the LUT, a float and five uints for grain, then two floats, a uint, three
-/// floats, a float and a uint for capture sharpening, 72 bytes.
+/// floats, a float and a uint for capture sharpening, and a float for silver paper contrast.
 public struct PrintParams: Sendable {
     /// Added to the negative's densities before the lookup, in the LUT's normalized units.
     public var offsetR: Float
@@ -38,6 +38,7 @@ public struct PrintParams: Sendable {
     public var lumaB: Float = 0
     public var scalingAmount: Float = 0
     public var scalingRadius: UInt32 = 0
+    var silverContrast: Float = 0
 
     public init(offset: SIMD3<Float>, lutSize: Int) {
         offsetR = offset.x

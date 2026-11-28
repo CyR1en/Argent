@@ -59,10 +59,15 @@ public struct RollControls: Sendable, Equatable, Hashable, Codable {
 
     public var ratedAt: RatedAt
     public var labBalance: LabBalance
+    public var monochromeFilter: MonochromeFilter?
+    public var paperGrade: PaperGrade?
 
-    public init(ratedAt: RatedAt = .boxSpeed, labBalance: LabBalance = .auto) {
+    public init(ratedAt: RatedAt = .boxSpeed, labBalance: LabBalance = .auto,
+                monochromeFilter: MonochromeFilter? = nil, paperGrade: PaperGrade? = nil) {
         self.ratedAt = ratedAt
         self.labBalance = labBalance
+        self.monochromeFilter = monochromeFilter
+        self.paperGrade = paperGrade
     }
 
     /// The render settings for `stock`, for a frame whose light auto development measured as
@@ -94,6 +99,13 @@ public struct RollControls: Sendable, Equatable, Hashable, Codable {
     func settings(for stock: Stock, aim: PrintAim,
                   neutralCorrection: (SIMD3<Float>) -> SIMD3<Float>) -> DevelopSettings {
         let ratedISO = stock.boxSpeed * exp2(-Float(ratedAt.stops))
+        if stock.monochrome != nil {
+            let stops = SIMD3<Float>(repeating: Float(ratedAt.stops) + aim.level)
+            return DevelopSettings(ratedAt: ratedAt == .boxSpeed ? nil : ratedISO,
+                                   labBalance: Self.grayCompensation(stock, exposureStops: stops),
+                                   tone: aim.tone, monochromeFilter: monochromeFilter ?? .none,
+                                   paperGrade: paperGrade ?? .normal)
+        }
         let filtration: SIMD3<Float>
         if labBalance == .auto {
             filtration = NeutralAuto.isNeutral(stock)
@@ -403,18 +415,26 @@ public struct FrameControls: Sendable, Equatable, Hashable, Codable {
     /// The frame's own Halation, 0 to 200 (`OutputSettings.halation`); `nil` takes the roll's. Absent from recipes
     /// written before a frame could have one.
     public var halation: Int?
+    public var monochromeFilter: MonochromeFilter?
+    public var paperGrade: PaperGrade?
 
     public init(ratedAt: RollControls.RatedAt? = nil, labBalance: RollControls.LabBalance? = nil,
-                stock: String? = nil, grain: OutputSettings.Grain? = nil, halation: Int? = nil) {
+                stock: String? = nil, grain: OutputSettings.Grain? = nil, halation: Int? = nil,
+                monochromeFilter: MonochromeFilter? = nil, paperGrade: PaperGrade? = nil) {
         self.ratedAt = ratedAt
         self.labBalance = labBalance
         self.stock = stock
         self.grain = grain
         self.halation = halation
+        self.monochromeFilter = monochromeFilter
+        self.paperGrade = paperGrade
     }
 
     /// True when the frame follows the roll in every control.
-    public var isEmpty: Bool { ratedAt == nil && labBalance == nil && stock == nil && grain == nil && halation == nil }
+    public var isEmpty: Bool {
+        ratedAt == nil && labBalance == nil && stock == nil && grain == nil && halation == nil
+            && monochromeFilter == nil && paperGrade == nil
+    }
 
     /// Gives the frame its own stock, by id, or follows the roll for `nil` or the roll's stock.
     public mutating func setStock(_ id: String?, roll: String?) {
@@ -435,7 +455,8 @@ public struct FrameControls: Sendable, Equatable, Hashable, Codable {
 
     /// What the frame develops with on a roll set to `roll`.
     public func applied(to roll: RollControls) -> RollControls {
-        RollControls(ratedAt: ratedAt ?? roll.ratedAt, labBalance: labBalance ?? roll.labBalance)
+        RollControls(ratedAt: ratedAt ?? roll.ratedAt, labBalance: labBalance ?? roll.labBalance,
+                     monochromeFilter: monochromeFilter ?? roll.monochromeFilter, paperGrade: paperGrade ?? roll.paperGrade)
     }
 
     /// Gives the frame its own Rated at, or follows the roll for `nil` or the roll's value.

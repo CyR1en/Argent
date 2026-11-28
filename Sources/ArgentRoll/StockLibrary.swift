@@ -20,19 +20,21 @@ public enum StockLibrary {
 
     /// Every stock folder under `directory`: the library's stocks in library order, then any
     /// others by id, so a stock baked for testing still shows up.
-    public static func load(from directory: URL) -> LoadResult {
+    public static func load(from directory: URL, includeMonochrome: Bool = false) -> LoadResult {
         let folders = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey],
                                                                     options: [.skipsHiddenFiles])) ?? []
-        var stocks: [Stock] = []
+        var stocks: [Stock] = includeMonochrome ? MonochromeFilm.stocks : []
         var failures: [(String, String)] = []
         for folder in folders where (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
             do {
-                stocks.append(try Stock.load(from: folder))
+                let stock = try Stock.load(from: folder)
+                if !stocks.contains(where: { $0.id == stock.id && $0.monochrome != nil }) { stocks.append(stock) }
             } catch {
                 failures.append((folder.lastPathComponent, "\(error)"))
             }
         }
-        let rank = { (id: String) in order.firstIndex(of: id) ?? order.count }
+        let ordered = includeMonochrome ? order + MonochromeFilm.stocks.map(\.id) : order
+        let rank = { (id: String) in ordered.firstIndex(of: id) ?? ordered.count }
         stocks.sort { (rank($0.id), $0.id) < (rank($1.id), $1.id) }
         return LoadResult(stocks: stocks, failures: failures.sorted { $0.0 < $1.0 })
     }

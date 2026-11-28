@@ -499,7 +499,7 @@ final class RollModel {
         self.recipeLibrary = recipeLibrary
         self.developMemory = developMemory
         let directory = stocksDirectory ?? Self.stocksDirectory()
-        let library = directory.map(StockLibrary.load(from:))
+        let library = directory.map { StockLibrary.load(from: $0, includeMonochrome: stocksDirectory == nil) }
         for failure in library?.failures ?? [] {
             Self.log.error("stock \(failure.folder, privacy: .public) not loaded: \(failure.reason, privacy: .public)")
         }

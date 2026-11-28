@@ -77,7 +77,7 @@ extension ShaderSource {
     private static let printEdits = [
         ("constant ToneCurveParameters &curveParams [[buffer(3)]],",
          "constant ToneCurveParameters &curveParams [[buffer(3)]], constant float4 *toneTable [[buffer(4)]], constant PrintToneTableInfo &toneInfo [[buffer(5)]],"),
-        ("curveParams), curveParams), pixel.a), gid);", "curveParams), curveParams), half(1.0f)), gid);"),
+        ("silver_storage(stored, params), pixel.a), gid);", "silver_storage(stored, params), half(1.0f)), gid);"),
     ]
 
     /// `name`'s kernel from `lut3D`, called `name_toned`, with `edits` made. Each edit must apply: a kernel that no longer

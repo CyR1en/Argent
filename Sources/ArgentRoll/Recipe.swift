@@ -229,10 +229,13 @@ public struct Recipe: Sendable, Equatable, Codable {
         public var manual: ManualRenderSettings?
         /// Auto's tone step; absent where it had none, as every render had before it existed.
         public var tone: PrintTone?
+        public var monochromeFilter: MonochromeFilter?
+        public var paperGrade: PaperGrade?
 
         public init(ratedAt: Float?, labBalance: [Float], printExposure: Float, grain: String,
                     halation: String, halationAmount: Float? = nil, grainSeed: UInt32? = nil, sharpen: String? = nil,
-                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil) {
+                    manual: ManualRenderSettings? = nil, tone: PrintTone? = nil,
+                    monochromeFilter: MonochromeFilter? = nil, paperGrade: PaperGrade? = nil) {
             self.ratedAt = ratedAt
             self.labBalance = labBalance
             self.printExposure = printExposure
@@ -243,6 +246,8 @@ public struct Recipe: Sendable, Equatable, Codable {
             self.sharpen = sharpen
             self.manual = manual?.adjustments.isIdentity == true ? nil : manual
             self.tone = tone?.isActive == true ? tone : nil
+            self.monochromeFilter = monochromeFilter == MonochromeFilter.none ? nil : monochromeFilter
+            self.paperGrade = paperGrade == .normal ? nil : paperGrade
         }
 
         public init(settings: DevelopSettings, grain: OutputSettings.Grain) {
@@ -251,7 +256,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                       printExposure: settings.printExposure, grain: grain.rawValue,
                       halation: settings.halation ? "on" : "off", halationAmount: settings.halation ? settings.halationAmount : nil,
                       grainSeed: grain == .off ? nil : settings.grainSeed,
-                      sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone)
+                      sharpen: settings.sharpen ? "on" : nil, manual: settings.manual, tone: settings.tone,
+                      monochromeFilter: settings.monochromeFilter, paperGrade: settings.paperGrade)
         }
 
         public static func == (lhs: Render, rhs: Render) -> Bool {
@@ -260,6 +266,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                 && lhs.halation == rhs.halation && (lhs.halationAmount ?? 1) == (rhs.halationAmount ?? 1)
                 && lhs.grainSeed == rhs.grainSeed && lhs.sharpen == rhs.sharpen
                 && (lhs.manual ?? .identity) == (rhs.manual ?? .identity) && lhs.tone == rhs.tone
+                && (lhs.monochromeFilter ?? .none) == (rhs.monochromeFilter ?? .none)
+                && (lhs.paperGrade ?? .normal) == (rhs.paperGrade ?? .normal)
         }
 
         /// The render as a develop receipt keeps it (`Recipe.encoded()`).
@@ -275,7 +283,8 @@ public struct Recipe: Sendable, Equatable, Codable {
                             printExposure: printExposure,
                             grain: OutputSettings.Grain(rawValue: grain)?.amount ?? 0, grainSeed: grainSeed ?? 0,
                             halation: halation == "on", halationAmount: halationAmount ?? 1, sharpen: sharpen == "on",
-                            manual: manual ?? .identity, tone: tone ?? .identity)
+                            manual: manual ?? .identity, tone: tone ?? .identity,
+                            monochromeFilter: monochromeFilter ?? .none, paperGrade: paperGrade ?? .normal)
         }
     }
 
@@ -682,6 +691,14 @@ extension Stock {
             hash.update(data: Data("halation".utf8))
             let values = [halation.strength, halation.greenShare, halation.radiusMicrometres]
             values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        }
+        if let monochrome {
+            hash.update(data: Data("silver-v1:\(monochrome.rawValue)".utf8))
+            let weights = MonochromeFilter.allCases.flatMap { filter -> [Float] in
+                let w = monochrome.weights(for: filter)
+                return [w.x, w.y, w.z]
+            }
+            weights.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }

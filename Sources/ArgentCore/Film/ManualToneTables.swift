@@ -117,7 +117,8 @@ public struct ManualToneTables: Sendable, Equatable {
             let transfer = xs.map { x in
                 let encoded = min(max((x - shift + encoding.stopsBelowMidGray) / encoding.range, 0), 1)
                 let negative = stock.negative.sample(encoded: SIMD3(repeating: encoded))
-                let density = (negative + offset).clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1))
+                let density = stock.paperAmounts(negative + offset, grade: settings.paperGrade)
+                    .clamped(lowerBound: .zero, upperBound: SIMD3(repeating: 1))
                 return ManualToneTables.lightness(ManualRenderSettings.luminance(stock.print.sample(encoded: density)))
             }
             lightness = transfer
