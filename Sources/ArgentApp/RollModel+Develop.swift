@@ -378,6 +378,7 @@ extension RollModel {
             defer { self.removalsResumeAfterDevelop() }
             self.trimForDevelop()
             let analyses = self.analyses, aims = settled.aims, autoRevision = settled.revision, sources = self.measuredFrom
+            let savedRollStockID = self.missingRollStockID ?? rollStock.id
             let jobs: [RollDeveloper.Job]
             do {
                 jobs = try await Task.detached(priority: .userInitiated) {
@@ -385,7 +386,7 @@ extension RollModel {
                         guard let (stock, digest) = stocks[frame.url] else { throw CancellationError() }
                         let recipe = try Recipe.make(
                             frame: frame, byteCount: RecipeStore.byteCount(of: frame.url), stock: stock, stockDigest: digest,
-                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: rollStock.id, analysis: analyses[frame.url],
+                            roll: controls, own: overrides[frame.url] ?? FrameControls(), rollStock: savedRollStockID, analysis: analyses[frame.url],
                             aim: aims[frame.url], grain: output.grain, halation: output.halation, sharpen: true,
                             previous: recipes[frame.url] ?? RecipeStore.checked(for: frame, library: library, check: .knownOnly)?.recipe,
                             manual: edits[frame.url], editRevision: revision, editLineage: recipes[frame.url]?.editLineage ?? lineages[frame.url] ?? lineage)
