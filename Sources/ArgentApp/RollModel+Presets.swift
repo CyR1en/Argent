@@ -36,6 +36,10 @@ extension RollModel {
 
     var canShowPresetLibrary: Bool { !isSheetShown && !isQuitting }
 
+    var presetTargetFrames: [Frame] {
+        workspacePage == .roll ? selectedFrames : []
+    }
+
     func reloadLookPresets() {
         if let result = try? presetStore.loadAll() { lookPresets = result.presets }
     }
@@ -62,7 +66,7 @@ extension RollModel {
         if let firstImportedID {
             reloadLookPresets()
             if showLibrary && failures.isEmpty {
-                showPresetLibrary(for: shownFrame.map { [$0] } ?? selectedFrames, selecting: firstImportedID)
+                showPresetLibrary(for: presetTargetFrames, selecting: firstImportedID)
             }
         }
         let failure = failures.isEmpty ? nil : "Could not import presets:\n" + failures.joined(separator: "\n")

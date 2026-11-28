@@ -228,6 +228,30 @@ import Testing
         }
     }
 
+    @Test func openingPresetTargetsOnlyTheVisibleRollSelection() async throws {
+        try await AutoDecisionStateTests.withRoll { fixture in
+            let model = Self.makeModel(fixture: fixture, userStocks: fixture.folder.appendingPathComponent("UserStocks"))
+            let sourceStore = PresetStore(folder: fixture.folder.appendingPathComponent("Shared Presets"))
+            await model.open(fixture.roll)
+            let frame = try #require(model.roll?.frames.first)
+            model.select(frame)
+            for page in [WorkspacePage.roll, .settings, .rolls] {
+                model.showWorkspacePage(page)
+                try #require(model.workspacePage == page)
+                try #require(model.selectedFrames == [frame])
+                let source = UserPreset(name: "New Preset")
+                let url = try sourceStore.save(source)
+                #expect(model.open([url]))
+                guard case .library(let targets, _, _) = model.presetPresentation else {
+                    Issue.record("Opening a preset should show the library.")
+                    return
+                }
+                #expect(targets == (page == .roll ? [frame] : []))
+                model.presetPresentation = nil
+            }
+        }
+    }
+
     @Test func missingRollStockFallsBackNonDestructivelyAndClearsOnManualSelection() async throws {
         try await AutoDecisionStateTests.withRoll { fixture in
             try AutoDecisionStateTests.writeToyStock("argent-neutral", in: fixture.stocks)

@@ -350,7 +350,7 @@ struct ArgentCommands: Commands {
         CommandMenu("Stock") {
             Button("Manage Custom Stocks & Presets…") {
                 openWindow(id: "main")
-                model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : [], managing: true)
+                model.showPresetLibrary(for: model.presetTargetFrames, managing: true)
             }
             .disabled(!state.canShowPresetLibrary)
             Button("New Custom Stock…") {
@@ -447,7 +447,7 @@ struct ArgentCommands: Commands {
                 if let frame = model.shownFrame ?? model.selectedFrame { model.bakeFrameAsStock(frame) }
             }
             .disabled(!state.actsOnRoll || state.isSeveralSelected || (model.shownFrame ?? model.selectedFrame).map(model.canBakeFrameAsStock) != true)
-            Button("Look Presets…") { model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : []) }
+            Button("Look Presets…") { model.showPresetLibrary(for: model.presetTargetFrames) }
                 .disabled(!state.canShowPresetLibrary)
             Divider()
             // One item whose title follows the frame, on the sheet and in the frame view. Plain F, as the
