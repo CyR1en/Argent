@@ -100,6 +100,13 @@ struct ContentView: View {
             }
         }
         .fileDialogDefaultDirectory(model.importDirectory)
+        .sheet(item: $model.presetPresentation) { presentation in
+            let store = PresetStore(folder: PresetStore.defaultFolder)
+            switch presentation {
+            case .save(let frame): SavePresetSheet(model: model, frame: frame, store: store)
+            case .library(let frames): PresetLibrarySheet(model: model, frames: frames, store: store)
+            }
+        }
     }
 
     /// The Develop page's panel shows with its page.

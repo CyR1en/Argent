@@ -111,7 +111,7 @@ import Testing
     @Test func thePhotographsMenuIsInThePlansOrder() async throws {
         try await withBench { bench in
             let menu = bench.photograph
-            #expect(menu.titles == ["Flag", "—", "Copy Adjustments", "Paste Adjustments", "Paste Only", "—",
+            #expect(menu.titles == ["Flag", "—", "Copy Adjustments", "Paste Adjustments", "Paste Only", "Save Look as Preset…", "Look Presets…", "—",
                                     "Split Compare", "Zoom to Fit", "Actual Size", "—", "New Mask", "—", "Reset", "—",
                                     "Develop This Frame…", "Show RAW in Finder", "Show Developed File in Finder"])
             #expect(menu.entry("frame.pasteOnly")?.children.titles == ["Light", "Presence", "Curve", "Masks", "Lens", "Rated At and Lab Balance",

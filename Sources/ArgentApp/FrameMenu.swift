@@ -127,6 +127,12 @@ import SwiftUI
                 model.pasteAdjustments(to: frame)
             },
             pasteOnly(for: frame, model: model),
+            .action("frame.savePreset", "Save Look as Preset…", isEnabled: model.canSavePreset(from: frame)) {
+                model.showSavePreset(from: frame)
+            },
+            .action("frame.lookPresets", "Look Presets…", isEnabled: !model.isScanning && !model.isQuitting) {
+                model.showPresetLibrary(for: [frame])
+            },
         ]
         if surface != .photograph {
             entries.append(.action("frame.pasteToShown", model.pasteToShownTitle, chord: ClipboardKeys.pasteToShown,

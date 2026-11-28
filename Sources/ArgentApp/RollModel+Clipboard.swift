@@ -23,6 +23,9 @@ struct AdjustmentParts: OptionSet, Hashable, Sendable {
     /// The frame's own stock, grain and halation.
     static let film = AdjustmentParts(rawValue: 1 << 6)
 
+    static let stock = AdjustmentParts(rawValue: 1 << 7)
+    static let filmSettings = AdjustmentParts(rawValue: 1 << 8)
+
     static let all: AdjustmentParts = [.light, .presence, .curve, .masks, .lens, .frameControls, .film]
     /// One at a time, in the order Paste Only lists them, Presence after Light as the Light tab shows them.
     static let each: [AdjustmentParts] = [.light, .presence, .curve, .masks, .lens, .frameControls, .film]
@@ -375,8 +378,9 @@ extension RollModel {
     /// it is left as it was and counted. A paste asked for while another waits goes after it. The task gives what it came to, `nil`
     /// when the roll went or the app quit first.
     @discardableResult
-    func paste(_ clipboard: AdjustmentsClipboard, parts: AdjustmentParts, to frames: [Frame], batch: Bool) -> Task<PasteReport?, Never>? {
-        let carried = clipboard.carried(parts)
+    func paste(_ clipboard: AdjustmentsClipboard, parts: AdjustmentParts, to frames: [Frame], batch: Bool,
+               includingEmptyParts: Bool = false) -> Task<PasteReport?, Never>? {
+        let carried = includingEmptyParts ? parts : clipboard.carried(parts)
         guard !carried.isEmpty, !frames.isEmpty, !isScanning, !isQuitting, !isRestoringManual, frameMove == nil else { return nil }
         endGestures(on: frames)
         let generation = manualGeneration, previous = pasteTask
@@ -518,8 +522,10 @@ extension RollModel {
             own.ratedAt = clipboard.frameControls.ratedAt
             own.labBalance = clipboard.frameControls.labBalance
         }
-        if carried.contains(.film) {
+        if carried.contains(.film) || carried.contains(.stock) {
             own.stock = clipboard.frameControls.stock
+        }
+        if carried.contains(.film) || carried.contains(.filmSettings) {
             own.grain = clipboard.frameControls.grain
             own.halation = clipboard.frameControls.halation
             own.monochromeFilter = clipboard.frameControls.monochromeFilter

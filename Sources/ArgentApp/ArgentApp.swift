@@ -405,6 +405,13 @@ struct ArgentCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: .command)
                 .disabled(state.openFrame == nil || !state.actsOnRoll)
             Divider()
+            Button("Save Look as Preset…") {
+                if let frame = model.selectedFrame { model.showSavePreset(from: frame) }
+            }
+            .disabled(!state.actsOnRoll || state.isSeveralSelected || model.selectedFrame.map(model.canSavePreset) != true)
+            Button("Look Presets…") { model.showPresetLibrary(for: state.actsOnRoll ? model.selectedFrames : []) }
+                .disabled(state.isShowingOnboarding)
+            Divider()
             // One item whose title follows the frame, on the sheet and in the frame view. Plain F, as the
             // number keys switch stocks: a focused text field takes the key first, and so does the
             // curve graph, which keeps F as it keeps its own keys (CurveGraphView.keyDown). A key held
