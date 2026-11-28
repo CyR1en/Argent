@@ -84,6 +84,7 @@ import Testing
                               "frame.pasteOnly.masks": false, "frame.pasteOnly.lens": false, "frame.pasteOnly.frameControls": false,
                               "frame.pasteOnly.film": false, "frame.pasteToShown": false,
                               "frame.savePreset": model.canSavePreset(from: frames[1]), "frame.lookPresets": true,
+                              "frame.bakeStock": model.canBakeFrameAsStock(frames[1]),
                               "frame.reset": true, "frame.reset.auto": false, "frame.reset.roll": false,
                               "frame.develop": true, "frame.showRAW": true, "frame.showDeveloped": false,
                               "frames.move": true, "frames.move.new": true, "frames.remove": true])
@@ -129,7 +130,7 @@ import Testing
             model.holdReadingForDebug()
             let opening = states(frames[2])
             for id in ["frame.flag", "frame.copy", "frame.paste", "frame.pasteOnly", "frame.pasteOnly.light", "frame.pasteToShown",
-                       "frame.savePreset", "frame.lookPresets", "frame.reset.auto", "frame.develop"] {
+                       "frame.savePreset", "frame.bakeStock", "frame.lookPresets", "frame.reset.auto", "frame.develop"] {
                 #expect(opening[id] == false, "\(id)")
             }
             #expect(opening["frame.showRAW"] == true)

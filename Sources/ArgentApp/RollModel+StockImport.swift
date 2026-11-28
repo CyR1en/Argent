@@ -42,7 +42,7 @@ extension RollModel {
 
     @discardableResult
     func presentStockImport(_ source: StockImportSource) -> Bool {
-        guard stockImportSource == nil, presetPresentation == nil, userStockStore != nil, !isQuitting else { return false }
+        guard !isSheetShown, presetPresentation == nil, userStockStore != nil, !isQuitting else { return false }
         stockImportSource = source
         return true
     }

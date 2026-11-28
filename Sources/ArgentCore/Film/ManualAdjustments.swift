@@ -459,7 +459,11 @@ public struct ManualRenderSettings: Sendable, Equatable, Hashable, Codable {
     /// extrema. Absent signal stays absent; signed channels share a positive RGB gain.
     public func applyingScene(to rgb: SIMD3<Float>, baseLog2: Float, tables: ManualToneTables?) throws -> SIMD3<Float> {
         precondition(tables != nil || !needsToneTables, "\(version)'s tone controls need their tables")
-        let p = try parameters(tables: tables)
+        return applyingScene(to: rgb, baseLog2: baseLog2, tables: tables, parameters: try parameters(tables: tables))
+    }
+
+    func applyingScene(to rgb: SIMD3<Float>, baseLog2: Float, tables: ManualToneTables?,
+                       parameters p: ManualCurveParameters) -> SIMD3<Float> {
         guard p.sceneActive != 0 else { return rgb }
         let exposed = rgb * p.exposureGain
         if p.sceneTables != 0 {
@@ -484,9 +488,14 @@ public struct ManualRenderSettings: Sendable, Equatable, Hashable, Codable {
     /// white 1 +/-0.20, so even opposed extremes leave a positive scale of at least 0.76.
     /// A neutral toe guard avoids amplifying chroma noise or flipping signed RGB at black.
     public func applyingPrint(to rgb: SIMD3<Float>) throws -> SIMD3<Float> {
-        let p = try parameters
+        let curves = adjustments.curves.hasEffect ? try adjustments.curves.compiled() : nil
+        return applyingPrint(to: rgb, parameters: try parameters, curves: curves)
+    }
+
+    func applyingPrint(to rgb: SIMD3<Float>, parameters p: ManualCurveParameters,
+                       curves: CompiledToneCurves?) -> SIMD3<Float> {
         guard p.printActive != 0 else {
-            return adjustments.curves.hasEffect ? try adjustments.curves.compiled().applying(to: rgb) : rgb
+            return curves?.applying(to: rgb) ?? rgb
         }
         let luminance = Self.luminance(rgb)
         let curve = Self.contrastCurve(luminance, exponent: p.contrastSlope)
@@ -500,7 +509,7 @@ public struct ManualRenderSettings: Sendable, Equatable, Hashable, Codable {
         let endpointGain: Float = luminance > 0 ? p.blackEndpoint * blend / luminance : 0
         let print = rgb * (span * contrastGain + endpointGain)
             + SIMD3<Float>(repeating: p.blackEndpoint * (1 - blend))
-        return adjustments.curves.hasEffect ? try adjustments.curves.compiled().applying(to: print) : print
+        return curves?.applying(to: print) ?? print
     }
 
     public static func luminance(_ rgb: SIMD3<Float>) -> Float {

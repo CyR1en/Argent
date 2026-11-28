@@ -175,6 +175,17 @@ private struct StockSample: View {
             .contentShape(shape)
         }
         .buttonStyle(StockSampleStyle())
+        .contextMenu {
+            if let stock = model.films?.stocks[safe: index] {
+                if stock.isUserStock, stock.hasSpec {
+                    Button("Edit Custom Stock…") { model.editCustomStock(stock) }
+                        .disabled(!model.canShowStockBuilder)
+                } else if !stock.isUserStock {
+                    Button("Create Custom Stock from \(stock.displayName)…") { model.showStockBuilder(from: stock) }
+                        .disabled(!model.canShowStockBuilder)
+                }
+            }
+        }
         .onHover { hovered = $0 }
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: hovered)
         .animation(reduceMotion ? nil : Graphite.Motion.quick, value: current)

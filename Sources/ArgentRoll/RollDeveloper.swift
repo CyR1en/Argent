@@ -633,7 +633,8 @@ public final class RollDeveloper: @unchecked Sendable {
         // A frame's masks in every format: the margin was set on frames without them.
         let masks = DevelopBudget.maskCost(settings: recipe.render.settings, width: size.width, height: size.height)
         // Presence's analysis is made and let go inside the film passes, as the masks' coverage is, so it is weighed with them.
-        let presence = DevelopBudget.presenceCost(settings: recipe.render.settings, width: size.width, height: size.height)
+        let presence = DevelopBudget.presenceCost(settings: recipe.render.settings, width: size.width, height: size.height,
+                                                  stockPresence: renderer.stock.scenePresence)
         // Its removals' patches, which the stage's source holds unpacked from the frame's decode to its render: no more than that
         // source keeps, and nothing for a frame with none.
         let patchesNeeded = removals.filter(\.isOn).patches

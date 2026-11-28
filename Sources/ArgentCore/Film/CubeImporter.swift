@@ -137,7 +137,7 @@ public enum CubeImporter {
         return (low + high) * 0.5
     }()
 
-    private static func neutralDisplay(_ scene: SIMD3<Float>) -> SIMD3<Float> {
+    static func neutralDisplay(_ scene: SIMD3<Float>) -> SIMD3<Float> {
         let y = 0.2627 * scene.x + 0.6780 * scene.y + 0.0593 * scene.z
         let out = rawNeutralTone(neutralMidGrayGain * y)
         let scaled = scene * (out / y)

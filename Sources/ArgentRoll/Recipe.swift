@@ -705,6 +705,12 @@ extension Stock {
         hash.update(data: print.binaryData())
         let numbers = [boxSpeed, densityRange, exposurePerUnit.x, exposurePerUnit.y, exposurePerUnit.z]
         numbers.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        if hasSpec {
+            let encoding = negative.encoding
+            let values = [encoding.stopsBelowMidGray, encoding.stopsAboveMidGray, encoding.midGray]
+            hash.update(data: Data("builder-log-encoding-v1".utf8))
+            values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        }
         if let grain {
             hash.update(data: Data("grain".utf8))
             let rows = zip(grain.amounts, grain.sigma48).flatMap { $0 + $1 }
@@ -722,6 +728,12 @@ extension Stock {
                 return [w.x, w.y, w.z]
             }
             weights.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
+        }
+        if monochromeGrain { hash.update(data: Data("monochrome-grain-v1".utf8)) }
+        if let scenePresence {
+            hash.update(data: Data("stock-presence:\(scenePresence.version)".utf8))
+            let values = [scenePresence.texture, scenePresence.clarity, scenePresence.dehaze, scenePresenceReference ?? 0]
+            values.withUnsafeBufferPointer { hash.update(bufferPointer: UnsafeRawBufferPointer($0)) }
         }
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }

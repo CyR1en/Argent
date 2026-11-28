@@ -130,6 +130,9 @@ import SwiftUI
             .action("frame.savePreset", "Save Look as Preset…", isEnabled: model.canSavePreset(from: frame)) {
                 model.showSavePreset(from: frame)
             },
+            .action("frame.bakeStock", "Bake Frame as Stock…", isEnabled: model.canBakeFrameAsStock(frame)) {
+                model.bakeFrameAsStock(frame)
+            },
             .action("frame.lookPresets", "Look Presets…", isEnabled: !model.isScanning && !model.isQuitting) {
                 model.showPresetLibrary(for: [frame])
             },

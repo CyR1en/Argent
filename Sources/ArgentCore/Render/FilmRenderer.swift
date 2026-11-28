@@ -223,6 +223,7 @@ public final class FilmRenderer {
                                       lutSize: stock.print.size)
         printParams.domainMin = SIMD4(stock.print.domainMin, 0)
         printParams.domainMax = SIMD4(stock.print.domainMax, 1)
+        printParams.monochromeGrain = stock.monochromeGrain ? 1 : 0
         if let monochrome = stock.monochrome {
             let weights = monochrome.weights(for: settings.monochromeFilter)
             negativeParams.silverR = weights.x
@@ -238,7 +239,7 @@ public final class FilmRenderer {
             let longSide = max(frame.width, frame.height)
             let (a, b, scale) = try gpu.grainField.tiles(longSide: longSide,
                                                          developLongSide: GrainModel.developLongSide(longSide: longSide, scale: frame.scale),
-                                                         silver: stock.monochrome != nil)
+                                                         silver: stock.monochrome != nil || stock.monochromeGrain)
             grain = GrainInputs(tileA: a, tileB: b, sigmas: sigmas)
             let seed = settings.grainSeed
             printParams.grainScale = settings.grain * GrainModel.amount * scale
@@ -398,7 +399,7 @@ public final class FilmRenderer {
     func presenceInputs(_ frame: LinearFrame, settings: DevelopSettings, exposureStops: Float,
                         printOffset: SIMD3<Float>) throws -> PresenceRenderInputs {
         try settings.autoPresence.presence.validateSupportedVersion()
-        let presence = settings.effectivePresence
+        let presence = effectivePresence(for: settings)
         guard !presence.isIdentity else { return .bypass }
         let constants = try PresenceConstants.required(presence.version)
         var inputs = PresenceRenderInputs.bypass
@@ -408,7 +409,7 @@ public final class FilmRenderer {
             let weights = parts.isDisjoint(with: [.clarity, .texture]) ? nil
                 : try presenceWeights(settings, constants: constants, exposureStops: exposureStops, printOffset: printOffset)
             inputs.scene = try PresenceScene.inputs(presence: presence, exposureEV: settings.manual.adjustments.exposureEV,
-                                                    referenceStops: settings.presenceReferenceStops,
+                                                    referenceStops: presenceReference(for: settings),
                                                     constants: constants, analysis: analysis, weights: weights)
         }
         if presence.acts(in: .print) {
@@ -417,10 +418,19 @@ public final class FilmRenderer {
         return inputs
     }
 
+    public func effectivePresence(for settings: DevelopSettings) -> Presence {
+        stock.scenePresence?.combined(with: settings.effectivePresence) ?? settings.effectivePresence
+    }
+
+    private func presenceReference(for settings: DevelopSettings) -> Float {
+        settings.effectivePresence.acts(in: .scene) ? settings.presenceReferenceStops
+            : stock.scenePresenceReference ?? settings.presenceReferenceStops
+    }
+
     /// Presence's tone weights for `settings` on this stock, from the cache when the transfer's inputs and the constants are unchanged.
     func presenceWeights(_ settings: DevelopSettings, constants: PresenceConstants, exposureStops: Float,
                          printOffset: SIMD3<Float>) throws -> (tables: PresenceToneWeights, buffer: MTLBuffer) {
-        let key = PresenceWeightsKey(referenceStops: settings.presenceReferenceStops, exposureStops: exposureStops,
+        let key = PresenceWeightsKey(referenceStops: presenceReference(for: settings), exposureStops: exposureStops,
                                      printOffset: printOffset, version: constants.version, paperGrade: settings.paperGrade)
         toneLock.lock(); defer { toneLock.unlock() }
         if let cached = presenceWeightsCache, cached.key == key { return (cached.tables, cached.buffer) }

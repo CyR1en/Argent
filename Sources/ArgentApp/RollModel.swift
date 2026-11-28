@@ -164,6 +164,7 @@ final class RollModel {
     var isQuitting = false
     var presetPresentation: PresetPresentation?
     var stockImportSource: StockImportSource?
+    var stockBuilder: StockBuilderPresentation?
     /// Sparkle 2 over-the-air updater; inactive until `AppDelegate.attach(_:)` starts it in eligible builds.
     let updates = UpdateController()
     var editLineage = UUID().uuidString
@@ -318,7 +319,9 @@ final class RollModel {
     private(set) var isAskingToDevelop = false
     /// A modal sheet is up over the workspace (Quick Develop, the mask models' licence screen, or onboarding): keys and menus leave
     /// the roll and frame under it alone.
-    var isSheetShown: Bool { isAskingToDevelop || maskModels.isShown || onboarding.isPresented || stockImportSource != nil }
+    var isSheetShown: Bool {
+        isAskingToDevelop || maskModels.isShown || onboarding.isPresented || stockImportSource != nil || stockBuilder != nil
+    }
     /// The launch sweep removing any orphaned `.install-*` folders beside the downloaded models, awaited before a download starts.
     @ObservationIgnored var maskModelStagingSweep: Task<Void, Never>?
     /// An in-flight Settings removal of downloaded mask models, awaited before a new download starts or on quit.
@@ -1565,6 +1568,7 @@ final class RollModel {
                          isShowingMaskModels: maskModels.isShown,
                          isShowingOnboarding: onboarding.isPresented,
                          isShowingStockImport: stockImportSource != nil,
+                         isShowingStockBuilder: stockBuilder != nil,
                          canImportStock: canManageStocks,
                          canExportStock: canManageStocks && shownStock?.isUserStock == true,
                          canCheckForUpdates: updates.canCheckForUpdates)

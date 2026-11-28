@@ -25,7 +25,7 @@ public struct LogEncoding: Sendable, Equatable {
     public var range: Float { stopsBelowMidGray + stopsAboveMidGray }
 
     public func encode(_ linear: Float) -> Float {
-        let stops = log2(max(linear, 1e-6) / midGray)
+        let stops = log2(max(linear, min(1e-6, decode(0))) / midGray)
         return min(max((stops + stopsBelowMidGray) / range, 0), 1)
     }
 

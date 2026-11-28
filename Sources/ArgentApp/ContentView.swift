@@ -112,6 +112,9 @@ struct ContentView: View {
                 ImportStockSheet(model: model, source: source, store: store, frame: model.shownFrame ?? model.selectedFrame)
             }
         }
+        .sheet(item: $model.stockBuilder) { presentation in
+            if let store = model.userStockStore { StockBuilderSheet(model: model, store: store, presentation: presentation) }
+        }
     }
 
     /// The Develop page's panel shows with its page.
