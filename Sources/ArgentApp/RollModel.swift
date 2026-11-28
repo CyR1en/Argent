@@ -767,7 +767,7 @@ final class RollModel {
     /// Gives `frame` its own stock, by index in library order; `nil` or the roll's makes it follow the roll.
     func setStock(_ index: Int?, for frame: Frame) {
         var own = frameControls(frame)
-        own.setStock(index.flatMap { films?.stocks[safe: $0]?.id }, roll: currentStock?.id)
+        own.setStock(index.flatMap { films?.stocks[safe: $0]?.id }, roll: missingRollStockID ?? currentStock?.id)
         overrides[frame.url] = own.isEmpty ? nil : own
     }
 
