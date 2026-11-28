@@ -203,7 +203,12 @@ import Testing
             let urls = try [first, duplicate, last].map { try sourceStore.save($0) }
             #expect(model.open(urls))
             #expect(Set(model.lookPresets.map(\.id)) == Set([first.id, duplicate.id, last.id]))
-            #expect(model.message?.contains("Duplicate") == true)
+            guard case .library(_, let selection, _) = model.presetPresentation else {
+                Issue.record("A partially successful batch should show the library.")
+                return
+            }
+            #expect(selection == first.id)
+            #expect(model.presetDocumentImportError?.contains("Duplicate") == true)
         }
     }
 

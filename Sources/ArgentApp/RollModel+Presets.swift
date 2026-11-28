@@ -65,7 +65,7 @@ extension RollModel {
         }
         if let firstImportedID {
             reloadLookPresets()
-            if showLibrary && failures.isEmpty {
+            if showLibrary {
                 showPresetLibrary(for: presetTargetFrames, selecting: firstImportedID)
             }
         }
