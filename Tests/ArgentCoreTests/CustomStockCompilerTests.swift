@@ -134,6 +134,30 @@ import Testing
         #expect(toned.x > toned.y && toned.y > toned.z)
     }
 
+    @Test func bakedNeutralCarriesTheCombinedAutoAndManualPresence() throws {
+        let base = Stock(id: "neutral", displayName: "Neutral", status: "test", boxSpeed: 400,
+                         densityRange: 2, exposurePerUnit: SIMD3(repeating: 1), negative: .identity(size: 2),
+                         print: .identity(size: 2))
+        let polish = try Presence([.clarity: 8, .vibrance: 12])
+        let color = SIMD3<Float>(0.625, 0.3125, 0.1875)
+        for edit: Float in [0, 5] {
+            let presence = try Presence([.clarity: edit, .vibrance: edit])
+            let manual = try ManualRenderSettings(adjustments: .init(presence: presence), referenceStops: 0.5)
+            let settings = DevelopSettings(manual: manual, autoPresence: .init(presence: polish, referenceStops: 0.25))
+            let recipe = try CustomStockSpec(baking: base, settings: settings)
+            let spec = try JSONDecoder().decode(CustomStockSpec.self, from: JSONEncoder().encode(recipe))
+            let baked = try compile(spec, base: base)
+            #expect(baked.scenePresence?.clarity == 8 + edit)
+            #expect(baked.scenePresenceReference == (edit == 0 ? 0.25 : 0.5))
+            #expect(baked.scenePresence?.vibrance == 0)
+            let parameters = try PresencePrint.parameters(settings.effectivePresence,
+                                                          constants: PresenceConstants.required(presence.version), stockID: base.id)
+            let expected = PresencePrint.applying(to: color, parameters: parameters)
+            #expect(expected != color)
+            #expect(baked.print.sample(encoded: color) == expected)
+        }
+    }
+
     @Test func bakeCarriesLightCurvesPresenceAndFilmSettings() throws {
         let foundation = try compile(.init())
         let curves = try ToneCurves(tone: ChannelCurve(points: [

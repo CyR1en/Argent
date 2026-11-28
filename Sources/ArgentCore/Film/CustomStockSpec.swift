@@ -77,6 +77,8 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
         public let labBalance: SIMD3<Float>
         public let monochromeFilter: MonochromeFilter
         public let paperGrade: PaperGrade
+        public let effectivePresence: Presence?
+        public let presenceReferenceStops: Float?
     }
 
     public var base: Base
@@ -124,7 +126,9 @@ public struct CustomStockSpec: Codable, Equatable, Sendable {
                                               version: settings.manual.version)
         frameLook = FrameLook(manual: manual, ratedAt: settings.ratedAt, printExposure: settings.printExposure,
                               labBalance: settings.labBalance, monochromeFilter: settings.monochromeFilter,
-                              paperGrade: settings.paperGrade)
+                              paperGrade: settings.paperGrade,
+                              effectivePresence: settings.autoPresence.isActive ? settings.effectivePresence : nil,
+                              presenceReferenceStops: settings.autoPresence.isActive ? settings.presenceReferenceStops : nil)
         grain.strength = min(max(settings.grain, 0), 2)
         halation.enabled = halation.enabled && settings.halation && settings.halationAmount > 0
         if let h = stock.halation { halation.strength = h.strength * settings.halationAmount }

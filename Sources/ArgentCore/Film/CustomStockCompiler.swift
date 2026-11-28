@@ -38,7 +38,7 @@ public enum CustomStockCompiler {
         let sceneParameters = try manual.parameters(tables: tables)
         let inputEncoding = negativeInputEncoding(encoding, scene: sceneParameters, tables: tables, rating: rating)
         let printParameters = try manual.parameters
-        let presence = manual.adjustments.presence
+        let presence = look?.effectivePresence ?? manual.adjustments.presence
         let printPresence = presence.acts(in: .print)
             ? try PresencePrint.parameters(presence, constants: PresenceConstants.required(presence.version), stockID: foundation?.id ?? id)
             : .bypass
@@ -95,7 +95,8 @@ public enum CustomStockCompiler {
                         || (spec.grain.preset == .inherited && foundation?.monochromeGrain == true),
                      scenePresence: combinedPresence.isIdentity ? nil : combinedPresence,
                      scenePresenceReference: combinedPresence.isIdentity ? nil
-                        : scenePresence.isIdentity ? foundation?.scenePresenceReference : manual.referenceStops)
+                        : scenePresence.isIdentity ? foundation?.scenePresenceReference
+                        : look?.presenceReferenceStops ?? manual.referenceStops)
     }
 
     private static let luma = SIMD3<Float>(0.2627, 0.6780, 0.0593)
