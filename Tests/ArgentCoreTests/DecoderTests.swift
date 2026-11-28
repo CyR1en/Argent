@@ -502,6 +502,36 @@ import Testing
     private static let uncompressed = sample.deletingLastPathComponent()
         .appendingPathComponent("ILCE-7M4_DSC06673_FullFrame-Raw-Uncompressed.ARW")
 
+    private static let compressed = sample.deletingLastPathComponent()
+        .appendingPathComponent("ILCE-7M4_DSC06677_FullFrame-Raw-Compressed.ARW")
+
+    @Test(.enabled(if: [AppleRawDecoderTests.uncompressed, AppleRawDecoderTests.compressed].allSatisfy {
+        FileManager.default.fileExists(atPath: $0.path)
+    }))
+    func raw8RecoversClippedSkyWithoutMagenta() throws {
+        let decoder = AppleRawDecoder(gpu: try GPU())
+        var options = DecodeOptions()
+        options.lensCorrection = false
+        // Sensor-clipped sky patches, in full-size coordinates from the top left.
+        for (file, left, top) in [(Self.uncompressed, 5546, 90), (Self.compressed, 616, 10)] {
+            let frame = try decoder.decode(file, options: options)
+            let side = 8
+            try #require(frame.width >= left + side && frame.height >= top + side)
+            let patch = MTLRegionMake2D(left, frame.height - top - side, side, side)
+            var pixels = [Float16](repeating: 0, count: side * side * 4)
+            pixels.withUnsafeMutableBytes {
+                frame.texture.getBytes($0.baseAddress!, bytesPerRow: side * 8, from: patch, mipmapLevel: 0)
+            }
+            var rgb = SIMD3<Float>.zero
+            for i in stride(from: 0, to: pixels.count, by: 4) {
+                rgb += SIMD3(Float(pixels[i]), Float(pixels[i + 1]), Float(pixels[i + 2]))
+            }
+            rgb /= Float(side * side)
+            #expect(rgb.min() > 2, "recovered sky should retain scene-linear headroom: \(file.lastPathComponent) \(rgb)")
+            #expect(rgb.max() - rgb.min() < 0.05 * rgb.max(), "clipped sky should be near-neutral: \(file.lastPathComponent) \(rgb)")
+        }
+    }
+
     /// RAW 9 decodes made two at once through one GPU, each in a Core Image context of its own as the
     /// previews make them, are each a lone decode's bits. Rendered into command buffers of the GPU's one
     /// queue, such decodes came back with a tile of RAW 9's network black or garbled: on the uncompressed
